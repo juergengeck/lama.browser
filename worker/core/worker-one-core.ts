@@ -193,18 +193,41 @@ class WorkerOneCore {
 
       // Initialize minimal LLM Manager and AI Assistant Model for browser
       console.log('[WorkerOneCore] Initializing LLM Manager (browser mode)...')
+
+      // Create stub models for browser (since browser can't connect to Ollama)
+      const stubModels = new Map([
+        ['stub-model-1', {
+          id: 'stub-model-1',
+          name: 'Stub Model 1',
+          provider: 'browser',
+          isLoaded: true
+        }],
+        ['stub-model-2', {
+          id: 'stub-model-2',
+          name: 'Stub Model 2',
+          provider: 'browser',
+          isLoaded: true
+        }]
+      ])
+
       // Simple browser-compatible llmManager stub
       this.llmManager = {
         isInitialized: true,
         defaultModelId: null,
-        models: new Map(),
+        models: stubModels,
         async init() { return true },
-        async discoverModels() { return [] },
-        getAvailableModels() { return [] },
-        getModel(id: string) { return null },
+        async discoverModels() { return Array.from(stubModels.values()) },
+        getAvailableModels() { return Array.from(stubModels.values()) },
+        getModel(id: string) { return stubModels.get(id) || null },
+        getDefaultModel() {
+          return this.defaultModelId ? stubModels.get(this.defaultModelId) : null
+        },
         setDefaultModel(modelId: string) {
-          this.defaultModelId = modelId
-          return true
+          if (stubModels.has(modelId)) {
+            this.defaultModelId = modelId
+            return true
+          }
+          return false
         }
       }
 
