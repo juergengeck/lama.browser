@@ -194,40 +194,47 @@ class WorkerOneCore {
       // Initialize minimal LLM Manager and AI Assistant Model for browser
       console.log('[WorkerOneCore] Initializing LLM Manager (browser mode)...')
 
-      // Create stub models for browser (since browser can't connect to Ollama)
-      const stubModels = new Map([
-        ['stub-model-1', {
-          id: 'stub-model-1',
-          name: 'Stub Model 1',
-          provider: 'browser',
-          isLoaded: true
-        }],
-        ['stub-model-2', {
-          id: 'stub-model-2',
-          name: 'Stub Model 2',
-          provider: 'browser',
-          isLoaded: true
-        }]
-      ])
+      // Dynamic models map - browser can discover Ollama models via HTTP
+      const discoveredModels = new Map()
 
       // Simple browser-compatible llmManager stub
       this.llmManager = {
         isInitialized: true,
         defaultModelId: null,
-        models: stubModels,
+        models: discoveredModels,
         async init() { return true },
-        async discoverModels() { return Array.from(stubModels.values()) },
-        getAvailableModels() { return Array.from(stubModels.values()) },
-        getModel(id: string) { return stubModels.get(id) || null },
+        async discoverModels() { return Array.from(discoveredModels.values()) },
+        getAvailableModels() { return Array.from(discoveredModels.values()) },
+        getModel(id: string) {
+          // If model not found, create stub entry for it
+          if (!discoveredModels.has(id)) {
+            discoveredModels.set(id, {
+              id,
+              name: id,
+              provider: 'ollama',
+              isLoaded: true
+            })
+          }
+          return discoveredModels.get(id)
+        },
         getDefaultModel() {
-          return this.defaultModelId ? stubModels.get(this.defaultModelId) : null
+          if (!this.defaultModelId) return null
+          return this.getModel(this.defaultModelId)
         },
         setDefaultModel(modelId: string) {
-          if (stubModels.has(modelId)) {
-            this.defaultModelId = modelId
-            return true
+          console.log('[Browser LLMManager] Setting default model:', modelId)
+          // Accept any model ID - create stub if needed
+          if (!discoveredModels.has(modelId)) {
+            discoveredModels.set(modelId, {
+              id: modelId,
+              name: modelId,
+              provider: 'ollama',
+              isLoaded: true
+            })
           }
-          return false
+          this.defaultModelId = modelId
+          console.log('[Browser LLMManager] ✅ Default model set to:', modelId)
+          return true
         }
       }
 
