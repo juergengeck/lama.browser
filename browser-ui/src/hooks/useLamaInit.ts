@@ -34,17 +34,9 @@ export function useLamaInit() {
         const initialized = browserInit.isInitialized()
         const currentUser = browserInit.getCurrentUser()
         
-        // If already authenticated, connect the bridge
+        // Model is already initialized via browserInit
         if (currentUser) {
-          const appModel = browserInit.getAppModel()
-          
-          if (appModel) {
-            console.log('[useLamaInit] Connecting lamaBridge to existing session...')
-            const { lamaBridge } = await import('@/bridge/lama-bridge')
-            
-            lamaBridge.setAppModel(appModel)
-            console.log('[useLamaInit] ✅ lamaBridge connected for existing session')
-          }
+          console.log('[useLamaInit] User already authenticated, Model ready')
         }
         
         setState({
@@ -90,20 +82,8 @@ export function useLamaInit() {
           hint: password // Store password hint for auto-login
         }))
         
-        // Connect lamaBridge to the proper AppModel
-        const appModel = browserInit.getAppModel()
-        
-        if (appModel) {
-          console.log('[useLamaInit] Connecting lamaBridge to AppModel...')
-          // Import and set up bridge
-          const { lamaBridge } = await import('@/bridge/lama-bridge')
-          
-          // Connect the bridge with the full AppModel
-          lamaBridge.setAppModel(appModel)
-          console.log('[useLamaInit] ✅ lamaBridge connected to AppModel')
-        } else {
-          console.warn('[useLamaInit] No AppModel available for bridge connection')
-        }
+        // Model is already connected via browserInit
+        console.log('[useLamaInit] Model initialized and ready')
         
         setState(prev => ({
           ...prev,

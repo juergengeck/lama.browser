@@ -56,11 +56,11 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
     name: topic.name,
     participants: topic.participants,
     participantCount: topic.participants.length,
-    lastMessage: '',
+    lastMessage: topic.lastMessage || '',
     lastMessageTime: new Date(topic.lastActivity),
-    modelName: undefined,
-    hasAIParticipant: false,
-    isAITopic: false
+    modelName: topic.aiModelId,
+    hasAIParticipant: topic.isAITopic || false,
+    isAITopic: topic.isAITopic || false
   }))
 
   // Handle responsive behavior on window resize

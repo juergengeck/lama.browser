@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { lamaBridge } from '@/bridge/lama-bridge'
+import { useModel } from '@/model/index.js'
 import { Brain, Download, CheckCircle, Circle, Cpu, Zap, MessageSquare, Code, Key, AlertTriangle } from 'lucide-react'
 
 interface ModelInfo {
@@ -22,6 +22,7 @@ interface ModelInfo {
 }
 
 export function AISettingsView() {
+  const model = useModel()
   const [models, setModels] = useState<ModelInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({})
@@ -35,9 +36,19 @@ export function AISettingsView() {
   }, [])
 
   const loadModels = async () => {
+    if (!model.initialized) {
+      console.log('[AISettingsView] Skipping - model not initialized')
+      setLoading(false)
+      return
+    }
+
     try {
       setLoading(true)
-      const modelList = await lamaBridge.getAvailableModels()
+      const result = await model.llmHandler.getAvailableModels()
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Failed to load models')
+      }
+      const modelList = result.data
       console.log('[AISettingsView] Loaded models:', modelList)
       modelList.forEach((m: ModelInfo) => {
         console.log(`[AISettingsView] Model ${m.id}: modelType=${m.modelType}, isLoaded=${m.isLoaded}, size=${m.size}`)
@@ -51,10 +62,12 @@ export function AISettingsView() {
   }
 
   const handleLoadModel = async (modelId: string) => {
+    if (!model.initialized) return
+
     setLoadingStates(prev => ({ ...prev, [modelId]: true }))
     try {
-      const success = await lamaBridge.loadModel(modelId)
-      if (success) {
+      const result = await model.llmHandler.loadModel({ modelId })
+      if (result.success) {
         await loadModels() // Refresh the list
       }
     } catch (error) {
@@ -65,9 +78,11 @@ export function AISettingsView() {
   }
 
   const handleSetDefault = async (modelId: string) => {
+    if (!model.initialized) return
+
     try {
-      const success = await lamaBridge.setDefaultModel(modelId)
-      if (success) {
+      const result = await model.llmHandler.setDefaultModel({ modelId })
+      if (result.success) {
         await loadModels() // Refresh the list
       }
     } catch (error) {
@@ -325,19 +340,31 @@ export function AISettingsView() {
         <div className="border-t pt-4">
           <h4 className="font-medium mb-3">Quick Actions</h4>
           <div className="grid grid-cols-2 gap-2">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
-              onClick={() => lamaBridge.getBestModelForTask('coding').then(console.log)}
+              onClick={async () => {
+                if (!model.initialized) return
+                const result = await model.llmHandler.getBestModelForTask({ task: 'coding' })
+                if (result.success) {
+                  console.log('[AISettingsView] Best for coding:', result.data)
+                }
+              }}
               className="flex items-center space-x-2"
             >
               <Code className="h-4 w-4" />
               <span>Best for Coding</span>
             </Button>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="sm"
-              onClick={() => lamaBridge.getBestModelForTask('reasoning').then(console.log)}
+              onClick={async () => {
+                if (!model.initialized) return
+                const result = await model.llmHandler.getBestModelForTask({ task: 'reasoning' })
+                if (result.success) {
+                  console.log('[AISettingsView] Best for reasoning:', result.data)
+                }
+              }}
               className="flex items-center space-x-2"
             >
               <Brain className="h-4 w-4" />

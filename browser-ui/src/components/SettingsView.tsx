@@ -42,7 +42,6 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { useModel } from '@/model/ModelContext'
-import { lamaBridge } from '@/bridge/lama-bridge'
 
 interface NetworkSettings {
   relayServer: string
@@ -197,12 +196,10 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
   const loadModels = async () => {
     try {
       setLoadingModels(true)
-      const modelList = await lamaBridge.getAvailableModels()
-      console.log('[SettingsView] Loaded models:', modelList)
-      modelList.forEach((m: ModelInfo) => {
-        console.log(`[SettingsView] Model ${m.id}: modelType=${m.modelType}, isLoaded=${m.isLoaded}, size=${m.size}`)
-      })
-      setModels(modelList)
+      // TODO: Implement getAvailableModels via Model
+      // For now, use the LLM configs from storage
+      console.log('[SettingsView] Loading models - TODO: implement via Model')
+      setModels([])
     } catch (error) {
       console.error('Failed to load models:', error)
     } finally {
@@ -213,10 +210,8 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
   const handleLoadModel = async (modelId: string) => {
     setLoadingStates(prev => ({ ...prev, [modelId]: true }))
     try {
-      const success = await lamaBridge.loadModel(modelId)
-      if (success) {
-        await loadModels()
-      }
+      // TODO: Implement loadModel via Model
+      console.log('[SettingsView] Load model - TODO: implement via Model:', modelId)
     } catch (error) {
       console.error('Failed to load model:', error)
     } finally {
@@ -226,10 +221,8 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
 
   const handleSetDefault = async (modelId: string) => {
     try {
-      const success = await lamaBridge.setDefaultModel(modelId)
-      if (success) {
-        await loadModels()
-      }
+      // TODO: Implement setDefaultModel via Model
+      console.log('[SettingsView] Set default model - TODO: implement via Model:', modelId)
     } catch (error) {
       console.error('Failed to set default model:', error)
     }

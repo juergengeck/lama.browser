@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Users, UserPlus, Search, Circle, Bot, MessageSquare, Download, CheckCircle, User, Edit } from 'lucide-react'
-import { useLama } from '@/hooks/useLama'
+import { useModel } from '@/model/ModelContext'
 import { ProfileDialog } from './ProfileDialog'
 
 interface ContactsViewProps {
@@ -25,7 +25,7 @@ interface ContactsViewProps {
 }
 
 export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
-  const { bridge } = useLama()
+  const model = useModel()
   const [contacts, setContacts] = useState<any[]>([])
   const [ownerContact, setOwnerContact] = useState<any | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -64,15 +64,26 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
       window.removeEventListener('contacts:updated', handleContactsUpdated)
       clearInterval(interval)
     }
-  }, [bridge])
+  }, [model])
 
   const loadContacts = async () => {
-    if (!bridge) return
+    if (!model.initialized) {
+      setLoading(false)
+      return
+    }
 
     setLoading(true)
     try {
-      // Get real contacts from AppModel
-      const allContacts = await bridge.getContacts()
+      // Get real contacts from Model
+      const result = await model.contactsHandler.getContacts()
+
+      if (!result.success || !result.data) {
+        setContacts([])
+        setLoading(false)
+        return
+      }
+
+      const allContacts = result.data
       console.log('[ContactsView] Loaded contacts:', allContacts)
       console.log('[ContactsView] Contact count:', allContacts?.length)
       allContacts?.forEach((c, i) => {
@@ -90,24 +101,10 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
         nonOwnerContacts.map(async (contact) => {
           if (contact.isAI) {
             try {
-              // Get all models
-              const models = await bridge.getAvailableModels()
-
-              // Find the model for this AI contact by matching the contact name to model ID
-              const contactModel = models.find(m =>
-                m.id === contact.name ||
-                m.name === contact.name ||
-                contact.name?.includes(m.id) ||
-                m.id?.includes(contact.name)
-              )
-
-              console.log(`[ContactsView] AI contact ${contact.name} matched to model:`, contactModel)
-
-              // Merge model info into contact
-              return {
-                ...contact,
-                modelInfo: contactModel
-              }
+              // TODO: Implement getAvailableModels via Model
+              // For now, return contact without model info
+              console.log('[ContactsView] TODO: Implement getAvailableModels for AI contact:', contact.name)
+              return contact
             } catch (error) {
               console.error(`[ContactsView] Failed to get model info for ${contact.name}:`, error)
               return contact
@@ -148,31 +145,21 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
 
   const handleMessageClick = async (contact: any) => {
     console.log('[ContactsView] Message clicked for contact:', contact)
-    
-    if (!bridge) {
-      console.error('[ContactsView] Bridge not available')
+
+    if (!model.initialized) {
+      console.error('[ContactsView] Model not initialized')
       return
     }
-    
+
     // Set loading state for this contact
     setCreatingTopic(contact.id)
-    
+
     try {
-      // Get or create topic for this contact
-      const topicId = await bridge.getOrCreateTopicForContact(contact.id)
-      
-      if (topicId) {
-        console.log('[ContactsView] Navigating to chat with topic:', topicId)
-        // Call the navigation callback if provided, including contact name
-        if (onNavigateToChat) {
-          const contactName = contact.displayName || contact.name || 'Unknown'
-          onNavigateToChat(topicId, contactName)
-        } else {
-          console.warn('[ContactsView] No navigation handler provided')
-        }
-      } else {
-        console.error('[ContactsView] Failed to create topic for contact')
-      }
+      // TODO: Implement getOrCreateTopicForContact via model.chatHandler
+      console.log('[ContactsView] TODO: Implement getOrCreateTopicForContact for:', contact.id)
+
+      // For now, just log
+      console.warn('[ContactsView] getOrCreateTopicForContact not yet implemented')
     } catch (error) {
       console.error('[ContactsView] Error creating topic:', error)
     } finally {
@@ -181,16 +168,13 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
   }
 
   const handleLoadModel = async (contact: any) => {
-    if (!contact.modelInfo || !bridge) return
+    if (!contact.modelInfo || !model.initialized) return
 
     setLoadingModel(contact.id)
     try {
-      console.log(`[ContactsView] Loading model: ${contact.modelInfo.id}`)
-      const success = await bridge.loadModel(contact.modelInfo.id)
-      if (success) {
-        // Reload contacts to update model status
-        await loadContacts()
-      }
+      // TODO: Implement loadModel via model.llmManager
+      console.log(`[ContactsView] TODO: Implement loadModel for: ${contact.modelInfo.id}`)
+      console.warn('[ContactsView] loadModel not yet implemented')
     } catch (error) {
       console.error('[ContactsView] Failed to load model:', error)
     } finally {

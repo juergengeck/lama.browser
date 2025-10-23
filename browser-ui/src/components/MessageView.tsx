@@ -11,7 +11,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Loader2 } from 'lucide-react'
 import './MessageView.css'
-import { lamaBridge } from '@/bridge/lama-bridge'
+import { useModel } from '@/model/index.js'
 
 // TODO: Replace with proper types from worker messages
 type Message = {
@@ -66,6 +66,7 @@ export function MessageView({
   subjectsJustAppeared = false,
   chatHeaderRef
 }: MessageViewProps) {
+  const model = useModel()
   console.log('[MessageView] 🎨 Rendering with', messages.length, 'messages')
   if (messages.length > 0) {
     console.log('[MessageView] First message:', messages[0])
@@ -101,14 +102,18 @@ export function MessageView({
   // Load contact names
   useEffect(() => {
     const loadContactNames = async () => {
+      if (!model.initialized) return
+
       try {
-        const contacts = await lamaBridge.getPeerList()
+        const result = await model.contactsHandler.getContacts()
+        if (!result.success || !result.data) return
+
         const names: Record<string, string> = {}
 
         // Map contact IDs to names
-        for (const contact of contacts) {
+        for (const contact of result.data) {
           if (contact.id) {
-            names[contact.id] = contact.name || 'Unknown'
+            names[contact.id] = contact.name || contact.displayName || 'Unknown'
           }
         }
 
@@ -126,6 +131,10 @@ export function MessageView({
   // Track user scroll position
   const handleScroll = () => {
     if (!scrollAreaRef.current) return
+
+    // Don't track scroll position during streaming - content growth triggers scroll events
+    const isStreaming = isAIProcessing || aiStreamingContent
+    if (isStreaming) return
 
     const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight
@@ -168,6 +177,14 @@ export function MessageView({
     hasScrolledInitiallyRef.current = false
     setIsUserScrolledUp(false)
   }, [topicId])
+
+  // Reset scroll tracking when streaming starts
+  useEffect(() => {
+    const isStreaming = isAIProcessing || aiStreamingContent
+    if (isStreaming) {
+      setIsUserScrolledUp(false)
+    }
+  }, [isAIProcessing, aiStreamingContent])
 
   // Auto-scroll to bottom when new messages arrive or during streaming
   useEffect(() => {

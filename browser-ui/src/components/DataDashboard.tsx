@@ -6,10 +6,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ObjectHierarchyView } from '@/components/ObjectHierarchyView'
-import { 
-  HardDrive, 
-  Cloud, 
-  Smartphone, 
+import { useModel } from '@/model/index.js'
+import {
+  HardDrive,
+  Cloud,
+  Smartphone,
   Monitor,
   Activity,
   Database,
@@ -72,6 +73,7 @@ interface DataDashboardProps {
 }
 
 export function DataDashboard({ onNavigate, showHierarchyView = false }: DataDashboardProps) {
+  const model = useModel()
   const [instances, setInstances] = useState<LAMAInstance[]>([])
   const [replicationEvents, setReplicationEvents] = useState<ReplicationEvent[]>([])
   const [dataStats, setDataStats] = useState<DataStats>({
@@ -116,15 +118,12 @@ export function DataDashboard({ onNavigate, showHierarchyView = false }: DataDas
   
   // Get actual object counts from browser's ONE.CORE
   const getActualDataStats = async () => {
+    if (!model.initialized) {
+      console.log('[DataDashboard] Model not initialized')
+      return null
+    }
+
     try {
-      // Access the browser's ONE.CORE instance via lama bridge
-      const lamaBridge = (window as any).lamaBridge
-      if (!lamaBridge || !lamaBridge.appModel) {
-        console.log('[DataDashboard] No lamaBridge or appModel available')
-        return null
-      }
-      
-      const appModel = lamaBridge.appModel
       const stats: DataStats = {
         totalObjects: 0,
         totalSize: 0,
@@ -135,32 +134,33 @@ export function DataDashboard({ onNavigate, showHierarchyView = false }: DataDas
         versions: 0,
         recentActivity: 0
       }
-      
+
       // Count messages from current conversations
       try {
-        // Get conversations from lamaBridge
-        const conversations = await lamaBridge.getConversations?.()
-        if (conversations && Array.isArray(conversations)) {
+        // Get conversations from Model
+        const convsResult = await model.chatHandler.getConversations()
+        if (convsResult.success && convsResult.data) {
+          const conversations = convsResult.data
           stats.conversations = conversations.length
-          
+
           // Count messages in each conversation
           for (const conv of conversations) {
             try {
-              const messages = await lamaBridge.getMessages(conv.id)
-              if (messages && Array.isArray(messages)) {
-                stats.messages += messages.length
+              const messagesResult = await model.chatHandler.getMessages({ topicId: conv.id })
+              if (messagesResult.success && messagesResult.data) {
+                stats.messages += messagesResult.data.length
               }
             } catch (e) {
               console.log('[DataDashboard] Error getting messages for conversation:', conv.id, e)
             }
           }
         }
-        
+
         // Also check the default conversation
         try {
-          const defaultMessages = await lamaBridge.getMessages('default')
-          if (defaultMessages && Array.isArray(defaultMessages)) {
-            stats.messages += defaultMessages.length
+          const defaultMessagesResult = await model.chatHandler.getMessages({ topicId: 'default' })
+          if (defaultMessagesResult.success && defaultMessagesResult.data) {
+            stats.messages += defaultMessagesResult.data.length
             if (!stats.conversations) {
               stats.conversations = 1 // At least the default conversation
             }
@@ -171,28 +171,30 @@ export function DataDashboard({ onNavigate, showHierarchyView = false }: DataDas
       } catch (e) {
         console.log('[DataDashboard] Error counting messages:', e)
       }
-      
+
       // Count contacts
-      if (appModel.leuteModel) {
-        const contacts = await appModel.getContacts?.()
-        if (contacts) {
-          stats.contacts = contacts.length
+      try {
+        const contactsResult = await model.contactsHandler.getContacts()
+        if (contactsResult.success && contactsResult.data) {
+          stats.contacts = contactsResult.data.length
         }
+      } catch (e) {
+        console.log('[DataDashboard] Error counting contacts:', e)
       }
-      
+
       // Get storage estimate for size
       const storageEstimate = await navigator.storage?.estimate()
       if (storageEstimate) {
         stats.totalSize = storageEstimate.usage || 0
       }
-      
+
       stats.totalObjects = stats.messages + stats.files + stats.contacts + stats.conversations
-      
+
       // Send stats to main process
       if (window.electronAPI?.invoke) {
         await window.electronAPI.invoke('lama:updateDataStats', stats)
       }
-      
+
       return stats
     } catch (e) {
       console.error('[DataDashboard] Failed to get actual data stats:', e)

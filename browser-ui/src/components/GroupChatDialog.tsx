@@ -1,7 +1,7 @@
 /**
  * GroupChatDialog - Browser Platform
  *
- * Uses Model handlers from chat.core via lamaBridge.
+ * Uses Model handlers from chat.core.
  * - Loading contacts through model.contactsHandler
  * - Group chat creation through model.chatHandler
  *

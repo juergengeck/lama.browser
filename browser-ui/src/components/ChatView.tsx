@@ -87,14 +87,21 @@ export const ChatView = memo(function ChatView({
     setAiStreamingContent('')
   }, [conversationId])
 
-  // Check if welcome message is still being generated on mount
+  // Check if welcome message is still being generated on mount or when messages load
   useEffect(() => {
-    // If there are no messages and this is a new AI conversation, show spinner
-    if (messages.length === 0 && isInitiallyProcessing) {
+    // If there are no messages and this is an AI conversation, show spinner immediately
+    // This covers the case where welcome message generation is in progress
+    if (messages.length === 0 && hasAIParticipant && !loading) {
+      console.log('[ChatView] No messages in AI topic - showing spinner for welcome generation')
       setIsAIProcessing(true)
-      console.log('[ChatView] Setting AI processing on mount for new conversation')
+      onProcessingChange?.(true)
+    } else if (messages.length > 0 && isAIProcessing) {
+      // Messages arrived - clear the spinner
+      console.log('[ChatView] Messages arrived - clearing welcome spinner')
+      setIsAIProcessing(false)
+      onProcessingChange?.(false)
     }
-  }, []) // Only on mount
+  }, [messages.length, hasAIParticipant, loading]) // Watch for message arrival
 
   // Listen for AI streaming events via window custom events (Browser Direct)
   useEffect(() => {
@@ -267,9 +274,11 @@ export const ChatView = memo(function ChatView({
   
   const handleClearConversation = async () => {
     if (confirm('Clear all messages in this conversation? This cannot be undone.')) {
-      await lamaBridge.clearConversation(conversationId)
+      // TODO: Implement clearConversation via model.chatHandler
+      console.log('[ChatView] TODO: Implement clearConversation for:', conversationId)
+      // When implemented: await model.chatHandler.clearConversation({ conversationId })
       // Reload the page to reset everything
-      window.location.reload()
+      // window.location.reload()
     }
   }
 

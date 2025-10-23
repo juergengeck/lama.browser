@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useModel } from '@/model/index.js'
 import {
   ChevronRight,
   ChevronDown,
@@ -44,6 +45,7 @@ interface ObjectHierarchyViewProps {
 }
 
 export function ObjectHierarchyView({ onNavigate, onBack }: ObjectHierarchyViewProps) {
+  const model = useModel()
   const [hierarchy, setHierarchy] = useState<ObjectInfo[]>([])
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -56,22 +58,22 @@ export function ObjectHierarchyView({ onNavigate, onBack }: ObjectHierarchyViewP
   }, [])
 
   const fetchObjectHierarchy = async () => {
+    if (!model.initialized) {
+      console.log('[ObjectHierarchy] Model not initialized')
+      setLoading(false)
+      setHierarchy([])
+      return
+    }
+
     setLoading(true)
     try {
-      const lamaBridge = (window as any).lamaBridge
-      if (!lamaBridge || !lamaBridge.appModel) {
-        console.error('[ObjectHierarchy] No lamaBridge available')
-        setHierarchy([])
-        return
-      }
-
       // Get total size first
       const storageEstimate = await navigator.storage?.estimate()
       const totalBytes = storageEstimate?.usage || 0
       setTotalSize(totalBytes)
 
       const hierarchyData: ObjectInfo[] = []
-      
+
       // Messages hierarchy
       const messageData: ObjectInfo = {
         type: 'Messages',
@@ -80,12 +82,15 @@ export function ObjectHierarchyView({ onNavigate, onBack }: ObjectHierarchyViewP
         percentage: 0,
         children: []
       }
-      
+
       try {
-        // Get all conversations
-        const conversations = await lamaBridge.getConversations?.() || []
-        const defaultMessages = await lamaBridge.getMessages('default') || []
-        
+        // Get all conversations from Model
+        const convsResult = await model.chatHandler.getConversations()
+        const conversations = (convsResult.success && convsResult.data) ? convsResult.data : []
+
+        const defaultMsgsResult = await model.chatHandler.getMessages({ topicId: 'default' })
+        const defaultMessages = (defaultMsgsResult.success && defaultMsgsResult.data) ? defaultMsgsResult.data : []
+
         if (defaultMessages.length > 0) {
           const convSize = estimateObjectSize(defaultMessages)
           messageData.children?.push({
@@ -97,9 +102,10 @@ export function ObjectHierarchyView({ onNavigate, onBack }: ObjectHierarchyViewP
           messageData.count += defaultMessages.length
           messageData.size += convSize
         }
-        
+
         for (const conv of conversations) {
-          const messages = await lamaBridge.getMessages(conv.id) || []
+          const messagesResult = await model.chatHandler.getMessages({ topicId: conv.id })
+          const messages = (messagesResult.success && messagesResult.data) ? messagesResult.data : []
           if (messages.length > 0) {
             const convSize = estimateObjectSize(messages)
             messageData.children?.push({
@@ -115,10 +121,10 @@ export function ObjectHierarchyView({ onNavigate, onBack }: ObjectHierarchyViewP
       } catch (e) {
         console.error('[ObjectHierarchy] Error fetching messages:', e)
       }
-      
+
       messageData.percentage = totalBytes > 0 ? (messageData.size / totalBytes) * 100 : 0
       if (messageData.count > 0) hierarchyData.push(messageData)
-      
+
       // Contacts hierarchy
       const contactData: ObjectInfo = {
         type: 'Contacts',
@@ -127,15 +133,16 @@ export function ObjectHierarchyView({ onNavigate, onBack }: ObjectHierarchyViewP
         percentage: 0,
         children: []
       }
-      
+
       try {
-        const contacts = await lamaBridge.appModel?.getContacts?.() || []
-        
+        const contactsResult = await model.contactsHandler.getContacts()
+        const contacts = (contactsResult.success && contactsResult.data) ? contactsResult.data : []
+
         // Separate by type
         const me = contacts.filter((c: any) => c.isMe)
         const ai = contacts.filter((c: any) => c.isAI)
         const humans = contacts.filter((c: any) => !c.isMe && !c.isAI)
-        
+
         if (me.length > 0) {
           const meSize = estimateObjectSize(me)
           contactData.children?.push({
@@ -146,7 +153,7 @@ export function ObjectHierarchyView({ onNavigate, onBack }: ObjectHierarchyViewP
           })
           contactData.size += meSize
         }
-        
+
         if (ai.length > 0) {
           const aiSize = estimateObjectSize(ai)
           contactData.children?.push({
@@ -157,7 +164,7 @@ export function ObjectHierarchyView({ onNavigate, onBack }: ObjectHierarchyViewP
           })
           contactData.size += aiSize
         }
-        
+
         if (humans.length > 0) {
           const humanSize = estimateObjectSize(humans)
           contactData.children?.push({
@@ -168,12 +175,12 @@ export function ObjectHierarchyView({ onNavigate, onBack }: ObjectHierarchyViewP
           })
           contactData.size += humanSize
         }
-        
+
         contactData.count = contacts.length
       } catch (e) {
         console.error('[ObjectHierarchy] Error fetching contacts:', e)
       }
-      
+
       contactData.percentage = totalBytes > 0 ? (contactData.size / totalBytes) * 100 : 0
       if (contactData.count > 0) hierarchyData.push(contactData)
       

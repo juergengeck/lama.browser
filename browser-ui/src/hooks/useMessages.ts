@@ -59,7 +59,40 @@ export function useMessages({
       })
 
       if (response.success && response.messages) {
-        setMessages(response.messages as Message[])
+        const newMessages = response.messages as Message[]
+
+        // Merge with existing messages instead of replacing
+        // Deduplicate by message ID (hash)
+        setMessages(prev => {
+          const messageMap = new Map<string, Message>()
+
+          // Add existing messages first
+          prev.forEach(msg => {
+            if (msg.id) {
+              messageMap.set(msg.id, msg)
+            }
+          })
+
+          // Add/update with new messages (overwrites duplicates)
+          newMessages.forEach(msg => {
+            if (msg.id) {
+              messageMap.set(msg.id, msg)
+            }
+          })
+
+          // Convert back to array and sort by timestamp
+          const merged = Array.from(messageMap.values())
+          merged.sort((a, b) => a.timestamp - b.timestamp)
+
+          console.log('[useMessages] Merged messages:', {
+            prevCount: prev.length,
+            newCount: newMessages.length,
+            mergedCount: merged.length
+          })
+
+          return merged
+        })
+
         setHasMore(response.hasMore || false)
         setOffset(0) // Reset pagination
       } else {
@@ -134,6 +167,34 @@ export function useMessages({
   useEffect(() => {
     refreshMessages()
   }, [refreshMessages])
+
+  // Listen to channel updates for this topic
+  useEffect(() => {
+    if (!model.initialized) return
+
+    console.log(`[useMessages] Setting up channel listener for topic ${topicId}`)
+
+    // Subscribe to channel updates for this topic
+    const unsubscribe = model.channelManager.onUpdated(async (
+      channelInfoIdHash,
+      channelId,
+      channelOwner,
+      timeOfEarliestChange,
+      data
+    ) => {
+      // Check if this update is for our topic
+      if (channelId === topicId) {
+        console.log(`[useMessages] Channel update for topic ${topicId} - refreshing messages`)
+        // Refresh messages to get the latest (will merge with existing)
+        await refreshMessages()
+      }
+    })
+
+    return () => {
+      console.log(`[useMessages] Cleaning up channel listener for topic ${topicId}`)
+      unsubscribe()
+    }
+  }, [model.initialized, model.channelManager, topicId, refreshMessages])
 
   // Auto-refresh if enabled
   useEffect(() => {

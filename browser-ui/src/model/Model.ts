@@ -84,6 +84,9 @@ import {KeywordAccessStateRecipe} from '@lama/core/one-ai/recipes/KeywordAccessS
 import {WordCloudSettingsRecipe} from '@lama/core/one-ai/recipes/WordCloudSettingsRecipe';
 import {LLMRecipe} from '@lama/core/recipes/LLMRecipe';
 
+// LAMA core models (LLM object management)
+import {LLMObjectManager} from '@lama/core/models/LLMObjectManager';
+
 // Browser platform adapters
 import {browserOllamaValidator, browserConfigManager} from '../../../adapters/browser-llm-config';
 import {BrowserLLMPlatform} from '../../../adapters/browser-llm-platform';
@@ -163,6 +166,15 @@ export default class Model {
         );
         this.llmConfigHandler = new LLMConfigHandler(this, browserOllamaValidator, browserConfigManager);
 
+        // LLMObjectManager - platform-agnostic LLM object management using ONE.core abstractions
+        this.llmObjectManager = new LLMObjectManager(
+            {
+                storeVersionedObject,
+                createAccess
+            }
+            // No federation group for browser (optional parameter)
+        );
+
         // LAMA handlers (AI-related)
         this.aiHandler = new AIHandler(this);
 
@@ -175,7 +187,7 @@ export default class Model {
             llmManager: this.llmManager,
             platform: llmPlatform,
             stateManager: undefined, // Optional - not used in browser
-            llmObjectManager: undefined, // Optional - not used in browser
+            llmObjectManager: this.llmObjectManager, // Platform-agnostic LLM object manager
             contextEnrichmentService: undefined, // Optional - not used in browser
             topicAnalysisModel: undefined, // Will be set during init()
             topicGroupManager: this.topicGroupManager,
@@ -422,6 +434,7 @@ export default class Model {
 
     // LLM services
     public llmManager: LLMManager;
+    public llmObjectManager: LLMObjectManager;
 }
 
 // Global model instance (following one.leute pandorasModel pattern)

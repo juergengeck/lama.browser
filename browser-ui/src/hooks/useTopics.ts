@@ -15,6 +15,9 @@ export interface Topic {
   createdBy: any // SHA256IdHash<Person>
   created: number
   lastActivity: number
+  lastMessage?: string // Preview of the last message
+  isAITopic?: boolean // Whether this topic has an AI participant
+  aiModelId?: string // LLM model ID if this is an AI topic
 }
 
 interface UseTopicsReturn {

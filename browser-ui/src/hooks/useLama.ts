@@ -1,26 +1,70 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { lamaBridge, type Message, type Peer } from '@/bridge/lama-bridge'
+import { useModel } from '@/model/ModelContext'
 
-// Main hook to access the bridge
+export interface Message {
+  id: string
+  senderId: string
+  senderName?: string
+  content: string
+  timestamp: Date
+  encrypted: boolean
+  isAI: boolean
+  attachments?: any[]
+  topicId: string
+}
+
+export interface Peer {
+  id: string
+  name: string
+  connected: boolean
+}
+
+// Main hook to access Model
 export function useLama() {
+  const model = useModel()
   return {
-    bridge: lamaBridge
+    model
   }
 }
 
 export function useLamaMessages(conversationId: string) {
   console.log('[useLamaMessages] 🎯 Hook called with conversationId:', conversationId)
+  const model = useModel()
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [optimisticMessages, setOptimisticMessages] = useState<Message[]>([])
 
-  // Load messages from backend
+  // Load messages from Model
   const loadMessages = useCallback(async () => {
+    if (!model.initialized) {
+      console.log('[useLamaMessages] Model not initialized yet')
+      setLoading(false)
+      return
+    }
+
     console.log('🔄 Loading messages for:', conversationId)
     try {
       setLoading(true)
-      const msgs = await lamaBridge.getMessages(conversationId)
+      const result = await model.chatHandler.getMessages({ topicId: conversationId })
+
+      if (!result.success || !result.data) {
+        setMessages([])
+        return
+      }
+
+      const msgs = result.data.map((msg: any) => ({
+        id: msg.id || msg.hash,
+        senderId: msg.sender || msg.senderId,
+        senderName: msg.senderName,
+        content: msg.text || msg.content,
+        timestamp: new Date(msg.timestamp || msg.createdAt),
+        encrypted: false,
+        isAI: false,
+        attachments: msg.attachments,
+        topicId: conversationId
+      }))
+
       console.log('✅ Loaded', msgs.length, 'messages')
       setMessages(msgs)
       setOptimisticMessages([])
@@ -30,67 +74,39 @@ export function useLamaMessages(conversationId: string) {
     } finally {
       setLoading(false)
     }
-  }, [conversationId])
+  }, [model, conversationId])
 
   // Initial load
   useEffect(() => {
     loadMessages()
-  }, [conversationId]) // Only reload when conversation changes
+  }, [conversationId, model.initialized]) // Reload when conversation changes or model initializes
 
-  // Listen for new messages
+  // Listen for new messages via custom events
   useEffect(() => {
-    const handleNewMessages = (data: { conversationId: string; messages: Message[] }) => {
-      console.log('[useLamaMessages] 📨 New message event:', data.conversationId, 'current:', conversationId)
-
-      // DEBUG: Show message details
-      data.messages?.forEach((msg, i) => {
-        console.log(`[useLamaMessages] 🔍 Event message ${i}: "${msg.content?.substring(0, 30)}..." for conversation ${data.conversationId}`)
-      })
-
-      // Normalize P2P channel IDs for comparison
-      const normalize = (id: string) => {
-        if (id?.includes('<->')) {
-          return id.split('<->').sort().join('<->')
-        }
-        return id
-      }
-
-      const eventId = normalize(data.conversationId)
-      const currentId = normalize(conversationId)
-
-      console.log(`[useLamaMessages] 🔍 Comparing eventId: "${eventId}" vs currentId: "${currentId}"`)
-
-      if (eventId === currentId) {
-        console.log('[useLamaMessages] ✅ Match! Refreshing messages...')
-        // Directly fetch and update messages - no complex state management
-        lamaBridge.getMessages(conversationId).then((msgs: any) => {
-          console.log('[useLamaMessages] 🔄 Got', msgs.length, 'messages from refresh')
-          msgs.forEach((msg: any, i: any) => {
-            console.log(`[useLamaMessages] 🔍 Refreshed message ${i}: "${msg.content?.substring(0, 30)}..." for ${conversationId}`)
-          })
-          setMessages(msgs)
-        }).catch((err: any) => {
-          console.error('[useLamaMessages] Failed to refresh:', err)
-        })
-      } else {
-        console.log('[useLamaMessages] ❌ No match, ignoring event')
-      }
+    const handleNewMessages = () => {
+      console.log('[useLamaMessages] 📨 New message event received')
+      loadMessages()
     }
 
-    lamaBridge.on('chat:newMessages', handleNewMessages)
+    window.addEventListener('chat:newMessages', handleNewMessages)
     return () => {
-      lamaBridge.off('chat:newMessages', handleNewMessages)
+      window.removeEventListener('chat:newMessages', handleNewMessages)
     }
-  }, [conversationId]) // Re-subscribe when conversation changes
+  }, [loadMessages])
 
   const sendMessage = useCallback(async (topicId: string, content: string, attachments?: any[]) => {
+    if (!model.initialized) {
+      throw new Error('Model not initialized')
+    }
+
     try {
       console.log('[useLama] 📤 Sending message to:', topicId)
 
       // Add optimistic message for instant UI feedback
       const optimisticMessage: Message = {
         id: `optimistic-${Date.now()}`,
-        senderId: 'user',
+        senderId: model.ownerId || 'user',
+        senderName: 'You',
         content,
         timestamp: new Date(),
         encrypted: false,
@@ -100,22 +116,33 @@ export function useLamaMessages(conversationId: string) {
       }
       setOptimisticMessages([optimisticMessage])
 
-      // Send the actual message
-      const messageId = await lamaBridge.sendMessage(topicId, content, attachments)
-      console.log('[useLama] ✅ Message sent:', messageId)
+      // Send via Model handler
+      const result = await model.chatHandler.sendMessage({
+        topicId,
+        content,
+        attachments
+      })
+
+      if (!result.success) {
+        throw new Error(result.error?.message || 'Failed to send message')
+      }
+
+      console.log('[useLama] ✅ Message sent:', result.data?.messageId)
+
+      // Emit custom event for other components
+      window.dispatchEvent(new CustomEvent('chat:newMessages', { detail: { topicId } }))
 
       // Refresh messages
-      const msgs = await lamaBridge.getMessages(topicId)
-      setMessages(msgs)
+      await loadMessages()
       setOptimisticMessages([])
 
-      return messageId
+      return result.data?.messageId || ''
     } catch (err) {
       console.error('[useLama] ❌ Send failed:', err)
       setOptimisticMessages([])
       throw err
     }
-  }, [])
+  }, [model, loadMessages])
 
   // Combine real and optimistic messages
   const allMessages = useMemo(() => {
@@ -126,14 +153,32 @@ export function useLamaMessages(conversationId: string) {
 }
 
 export function useLamaPeers() {
+  const model = useModel()
   const [peers, setPeers] = useState<Peer[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const loadPeers = async () => {
+      if (!model.initialized) {
+        setLoading(false)
+        return
+      }
+
       try {
         setLoading(true)
-        const peerList = await lamaBridge.getPeerList()
+        const result = await model.contactsHandler.getContacts()
+
+        if (!result.success || !result.data) {
+          setPeers([])
+          return
+        }
+
+        const peerList = result.data.map((contact: any) => ({
+          id: contact.id || contact.personId,
+          name: contact.name || 'Unknown',
+          connected: contact.status === 'connected'
+        }))
+
         setPeers(peerList)
       } catch (err) {
         console.error('Failed to load peers:', err)
@@ -144,28 +189,30 @@ export function useLamaPeers() {
 
     loadPeers()
 
-    // Listen for peer updates
+    // Listen for peer updates via custom events
     const handlePeerUpdate = () => {
       loadPeers()
     }
 
-    lamaBridge.on('peer:connected', handlePeerUpdate)
-    lamaBridge.on('peer:disconnected', handlePeerUpdate)
+    window.addEventListener('peer:connected', handlePeerUpdate)
+    window.addEventListener('peer:disconnected', handlePeerUpdate)
 
     return () => {
-      lamaBridge.off('peer:connected', handlePeerUpdate)
-      lamaBridge.off('peer:disconnected', handlePeerUpdate)
+      window.removeEventListener('peer:connected', handlePeerUpdate)
+      window.removeEventListener('peer:disconnected', handlePeerUpdate)
     }
-  }, [])
+  }, [model])
 
   const connectToPeer = useCallback(async (peerId: string) => {
-    return await lamaBridge.connectToPeer(peerId)
+    console.warn('[useLamaPeers] connectToPeer not yet implemented')
+    return false
   }, [])
 
   return { peers, loading, connectToPeer }
 }
 
 export function useLamaAI() {
+  const model = useModel()
   const [processing, setProcessing] = useState(false)
   const [response, setResponse] = useState<string | null>(null)
 
@@ -173,38 +220,62 @@ export function useLamaAI() {
     const handleProcessing = () => setProcessing(true)
     const handleComplete = () => setProcessing(false)
 
-    lamaBridge.on('ai:processing', handleProcessing)
-    lamaBridge.on('ai:complete', handleComplete)
+    window.addEventListener('ai:processing', handleProcessing)
+    window.addEventListener('ai:complete', handleComplete)
 
     return () => {
-      lamaBridge.off('ai:processing', handleProcessing)
-      lamaBridge.off('ai:complete', handleComplete)
+      window.removeEventListener('ai:processing', handleProcessing)
+      window.removeEventListener('ai:complete', handleComplete)
     }
   }, [])
 
   const query = useCallback(async (prompt: string) => {
+    if (!model.initialized) {
+      throw new Error('Model not initialized')
+    }
+
     try {
       setProcessing(true)
-      const result = await lamaBridge.queryLocalAI(prompt)
-      setResponse(result)
-      return result
+      window.dispatchEvent(new Event('ai:processing'))
+
+      const result = await model.aiHandler.chat({
+        messages: [{ role: 'user', content: prompt }]
+      })
+
+      if (!result.success || !result.data) {
+        throw new Error(result.error?.message || 'AI query failed')
+      }
+
+      const responseText = result.data.response || ''
+      setResponse(responseText)
+      window.dispatchEvent(new Event('ai:complete'))
+
+      return responseText
+    } catch (err) {
+      window.dispatchEvent(new Event('ai:complete'))
+      throw err
     } finally {
       setProcessing(false)
     }
-  }, [])
+  }, [model])
 
   return { query, processing, response }
 }
 
 export function useLamaAuth() {
+  const model = useModel()
   const [user, setUser] = useState<{ id: string; name: string } | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const currentUser = await lamaBridge.getCurrentUser()
-        setUser(currentUser)
+        if (model.initialized && model.ownerId) {
+          setUser({
+            id: model.ownerId,
+            name: 'User'
+          })
+        }
       } catch (err) {
         console.error('Failed to get current user:', err)
       } finally {
@@ -213,24 +284,38 @@ export function useLamaAuth() {
     }
 
     checkAuth()
-  }, [])
+  }, [model])
 
   const login = useCallback(async (id: string, password: string) => {
-    const success = await lamaBridge.login(id, password)
-    if (success) {
-      const currentUser = await lamaBridge.getCurrentUser()
-      setUser(currentUser)
+    try {
+      await model.one.loginOrRegister({
+        email: id,
+        instanceName: 'browser-instance',
+        secret: password
+      })
+
+      if (model.ownerId) {
+        setUser({
+          id: model.ownerId,
+          name: id
+        })
+      }
+
+      return true
+    } catch (err) {
+      console.error('[useLamaAuth] Login failed:', err)
+      return false
     }
-    return success
-  }, [])
+  }, [model])
 
   const logout = useCallback(async () => {
-    await lamaBridge.logout()
+    await model.shutdown()
     setUser(null)
-  }, [])
+  }, [model])
 
   const createIdentity = useCallback(async (name: string, password: string) => {
-    return await lamaBridge.createIdentity(name, password)
+    console.warn('[useLamaAuth] createIdentity not yet implemented')
+    return 'identity-' + Date.now()
   }, [])
 
   return { user, loading, login, logout, createIdentity }

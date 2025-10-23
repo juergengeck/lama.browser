@@ -16,7 +16,7 @@ import { subjectService } from '@/services/subjects/SubjectService'
 import { attachmentService } from '@/services/attachments/AttachmentService'
 import type { MessageAttachment } from '@/types/attachments'
 import { EnhancedMessageInput } from './chat/EnhancedMessageInput'
-import { lamaBridge } from '@/bridge/lama-bridge'
+import { useModel } from '@/model/index.js'
 
 interface SubjectChatViewProps {
   conversationId: string
@@ -31,6 +31,7 @@ export const SubjectChatView: React.FC<SubjectChatViewProps> = ({
   llmContactId,
   participantName = 'Chat'
 }) => {
+  const model = useModel()
   const {
     messages,
     mediaItems,
@@ -84,9 +85,12 @@ export const SubjectChatView: React.FC<SubjectChatViewProps> = ({
         
         // Add Subject context to prompt
         const enhancedPrompt = `${context}\n\nUser: ${text}`
-        
+
         // Get LLM response
-        const response = await lamaBridge.queryLocalAI(enhancedPrompt)
+        const result = await model.aiHandler.chat({
+          messages: [{ role: 'user', content: enhancedPrompt }]
+        })
+        const response = result.success ? result.data?.response || '' : ''
         
         // Process response with Subject extraction
         await processLLMResponse(response, llmContactId)

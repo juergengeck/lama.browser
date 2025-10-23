@@ -9,6 +9,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { useModel } from '@/model/index.js'
 import {
   ChevronRight,
   ChevronDown,
@@ -45,6 +46,7 @@ interface ObjectHierarchyDialogProps {
 }
 
 export function ObjectHierarchyDialog({ open, onOpenChange, totalSize, onNavigate }: ObjectHierarchyDialogProps) {
+  const model = useModel()
   const [hierarchy, setHierarchy] = useState<ObjectInfo[]>([])
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -56,17 +58,17 @@ export function ObjectHierarchyDialog({ open, onOpenChange, totalSize, onNavigat
   }, [open])
 
   const fetchObjectHierarchy = async () => {
+    if (!model.initialized) {
+      console.log('[ObjectHierarchy] Model not initialized')
+      setLoading(false)
+      setHierarchy([])
+      return
+    }
+
     setLoading(true)
     try {
-      const lamaBridge = (window as any).lamaBridge
-      if (!lamaBridge || !lamaBridge.appModel) {
-        console.error('[ObjectHierarchy] No lamaBridge available')
-        setHierarchy([])
-        return
-      }
-
       const hierarchyData: ObjectInfo[] = []
-      
+
       // Messages hierarchy
       const messageData: ObjectInfo = {
         type: 'Messages',
@@ -75,12 +77,15 @@ export function ObjectHierarchyDialog({ open, onOpenChange, totalSize, onNavigat
         percentage: 0,
         children: []
       }
-      
+
       try {
         // Get all conversations
-        const conversations = await lamaBridge.getConversations?.() || []
-        const defaultMessages = await lamaBridge.getMessages('default') || []
-        
+        const convsResult = await model.chatHandler.getConversations()
+        const conversations = (convsResult.success && convsResult.data) ? convsResult.data : []
+
+        const defaultMsgsResult = await model.chatHandler.getMessages({ topicId: 'default' })
+        const defaultMessages = (defaultMsgsResult.success && defaultMsgsResult.data) ? defaultMsgsResult.data : []
+
         if (defaultMessages.length > 0) {
           const convSize = estimateObjectSize(defaultMessages)
           messageData.children?.push({
@@ -92,9 +97,10 @@ export function ObjectHierarchyDialog({ open, onOpenChange, totalSize, onNavigat
           messageData.count += defaultMessages.length
           messageData.size += convSize
         }
-        
+
         for (const conv of conversations) {
-          const messages = await lamaBridge.getMessages(conv.id) || []
+          const messagesResult = await model.chatHandler.getMessages({ topicId: conv.id })
+          const messages = (messagesResult.success && messagesResult.data) ? messagesResult.data : []
           if (messages.length > 0) {
             const convSize = estimateObjectSize(messages)
             messageData.children?.push({
@@ -110,10 +116,10 @@ export function ObjectHierarchyDialog({ open, onOpenChange, totalSize, onNavigat
       } catch (e) {
         console.error('[ObjectHierarchy] Error fetching messages:', e)
       }
-      
+
       messageData.percentage = totalSize > 0 ? (messageData.size / totalSize) * 100 : 0
       if (messageData.count > 0) hierarchyData.push(messageData)
-      
+
       // Contacts hierarchy
       const contactData: ObjectInfo = {
         type: 'Contacts',
@@ -122,9 +128,10 @@ export function ObjectHierarchyDialog({ open, onOpenChange, totalSize, onNavigat
         percentage: 0,
         children: []
       }
-      
+
       try {
-        const contacts = await lamaBridge.appModel?.getContacts?.() || []
+        const contactsResult = await model.contactsHandler.getContacts()
+        const contacts = (contactsResult.success && contactsResult.data) ? contactsResult.data : []
         
         // Separate by type
         const me = contacts.filter((c: any) => c.isMe)
