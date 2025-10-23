@@ -23,7 +23,7 @@ This guide provides step-by-step instructions for testing the keyword detail pre
 ### Starting the App
 
 ```bash
-cd /Users/gecko/src/lama.electron
+cd /Users/gecko/src/lama.browser
 npm run dev
 ```
 

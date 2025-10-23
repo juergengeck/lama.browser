@@ -1,6 +1,6 @@
 # Tasks: Context-Aware Knowledge Sharing Proposals
 
-**Input**: Design documents from `/Users/gecko/src/lama.electron/specs/019-above-the-chat/`
+**Input**: Design documents from `/Users/gecko/src/lama.browser/specs/019-above-the-chat/`
 **Prerequisites**: plan.md, research.md, data-model.md, contracts/ipc-proposals.json, quickstart.md
 
 ## Execution Flow (main)
@@ -35,10 +35,10 @@
 - **renderer**: Browser renderer process (`/electron-ui/`)
 
 ## Path Conventions (LAMA Electron)
-- **Main process**: `/Users/gecko/src/lama.electron/main/`
-- **Renderer process**: `/Users/gecko/src/lama.electron/electron-ui/src/`
-- **Tests**: `/Users/gecko/src/lama.electron/tests/integration/proposals/`
-- **Specs**: `/Users/gecko/src/lama.electron/specs/019-above-the-chat/`
+- **Main process**: `/Users/gecko/src/lama.browser/main/`
+- **Renderer process**: `/Users/gecko/src/lama.browser/electron-ui/src/`
+- **Tests**: `/Users/gecko/src/lama.browser/tests/integration/proposals/`
+- **Specs**: `/Users/gecko/src/lama.browser/specs/019-above-the-chat/`
 
 ---
 

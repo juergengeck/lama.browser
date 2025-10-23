@@ -1,4 +1,4 @@
-# LAMA Electron Architecture
+# LAMA Browser Architecture
 
 ## Core Principle
 
@@ -583,7 +583,7 @@ The app integrates MCP for tool use:
 // MCP Server Initialization
 const fsTransport = new StdioClientTransport({
   command: 'npx',
-  args: ['-y', '@modelcontextprotocol/server-filesystem', '/Users/gecko/src/lama.electron']
+  args: ['-y', '@modelcontextprotocol/server-filesystem', '/Users/gecko/src/lama.browser']
 })
 
 // Tool Registration

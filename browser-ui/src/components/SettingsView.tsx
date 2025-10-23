@@ -1,0 +1,1573 @@
+/**
+ * SettingsView - Browser Platform
+ *
+ * TODO: This component needs significant migration work for browser platform.
+ * Many features use Electron IPC and need worker message handlers:
+ * - AI model configuration (ai:discoverClaudeModels, llm:getConfig, llm:updateConfig)
+ * - Crypto key management (crypto:getKeys, crypto:export)
+ * - Contact management (contacts:list)
+ * - Data statistics (iom:getDataStats)
+ *
+ * For Phase 3 MVP, basic settings are available. Full feature parity in Phase 10.
+ */
+
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Settings, User, Shield, Globe, Cpu, HardDrive,
+  Moon, Sun, Save, RefreshCw, LogOut, Brain, Download, CheckCircle, Circle, Zap, MessageSquare, Code, Key, AlertTriangle, Users, Trash2, Database, Hash, Clock, Package, Eye, ChevronDown, ChevronRight, Copy, FileText, Monitor, Smile, Frown, Angry, Wind, Sparkles, Coffee, Target, Minus
+} from 'lucide-react'
+import { Progress } from '@/components/ui/progress'
+import { sessionStorage } from '@/services/session-storage'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import InstancesView from './InstancesView'
+import { MCPSettings } from './settings/MCPSettings'
+import { StorageQuota } from './Settings/StorageQuota'
+import { DataCleanup } from './Settings/DataCleanup'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { useModel } from '@/model/ModelContext'
+import { lamaBridge } from '@/bridge/lama-bridge'
+
+interface NetworkSettings {
+  relayServer: string
+  port: number
+  udpPort: number
+  enableP2P: boolean
+  enableRelay: boolean
+  eddaDomain?: string
+}
+
+interface SettingsViewProps {
+  onLogout?: () => void
+  onNavigate?: (tab: string, conversationId?: string, section?: string) => void
+}
+
+interface ModelInfo {
+  id: string
+  name: string
+  description: string
+  provider: string
+  modelType: string
+  capabilities: string[]
+  contextLength: number
+  size: number
+  isLoaded: boolean
+  isDefault: boolean
+}
+
+interface SystemObject {
+  id: string
+  type: string
+  hash: string
+  size: number
+  created: Date
+  lastModified: Date
+  metadata?: Record<string, any>
+}
+
+export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
+  const model = useModel()
+  const [models, setModels] = useState<ModelInfo[]>([])
+  const [loadingModels, setLoadingModels] = useState(true)
+  const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({})
+  const [claudeApiKey, setClaudeApiKey] = useState('')
+  const [showApiKey, setShowApiKey] = useState(false)
+  const [apiKeyStatus, setApiKeyStatus] = useState<'unconfigured' | 'testing' | 'valid' | 'invalid'>('unconfigured')
+  const [ollamaUrl, setOllamaUrl] = useState('http://localhost:11434')
+  const [ollamaStatus, setOllamaStatus] = useState<'unconfigured' | 'testing' | 'valid' | 'invalid'>('unconfigured')
+  const [currentMood, setCurrentMood] = useState<string | null>(null)
+  const [savingMood, setSavingMood] = useState(false)
+
+  // System objects state
+  const [systemObjects, setSystemObjects] = useState<{
+    keys: SystemObject[]
+    metadata: SystemObject[]
+    crdt: SystemObject[]
+  }>({
+    keys: [],
+    metadata: [],
+    crdt: []
+  })
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({})
+  const [loadingSystemObjects, setLoadingSystemObjects] = useState(false)
+  const [loadingDataStats, setLoadingDataStats] = useState(false)
+  const [dataStats, setDataStats] = useState({
+    totalObjects: 0,
+    totalSize: 0,
+    messages: 0,
+    files: 0,
+    contacts: 0,
+    conversations: 0,
+    versions: 0,
+    recentActivity: 0,
+    messagesSize: 0,
+    filesSize: 0,
+    systemSize: 0,
+    modelsSize: 0
+  })
+  const [settings, setSettings] = useState({
+    profile: {
+      name: 'Test User',
+      id: 'user-1',
+      publicKey: '0x1234...abcd'
+    },
+    network: {
+      relayServer: 'wss://comm10.dev.refinio.one',
+      port: 443,  // WSS default port
+      udpPort: 8080,  // For P2P UDP connections
+      enableP2P: true,
+      enableRelay: true,
+      eddaDomain: 'lama.one'
+    },
+    ai: {
+      modelPath: '/models/llama-7b.gguf',
+      contextSize: 2048,
+      temperature: 0.7
+    },
+    privacy: {
+      autoEncrypt: true,
+      saveHistory: true,
+      shareAnalytics: false
+    },
+    appearance: {
+      theme: 'dark'
+    }
+  })
+
+  const [hasChanges, setHasChanges] = useState(false)
+
+  useEffect(() => {
+    loadModels()
+    loadClaudeApiKey()
+    loadOllamaConfig()
+    loadSystemObjects()
+    loadDataStats()
+
+    // Load LAMA domain from localStorage
+    const savedDomain = localStorage.getItem('lama-domain')
+    if (savedDomain) {
+      setSettings(prev => ({
+        ...prev,
+        network: { ...prev.network, eddaDomain: savedDomain }
+      }))
+    }
+
+    // Handle navigation to specific section
+    const scrollToSection = window.sessionStorage.getItem('settings-scroll-to')
+    if (scrollToSection === 'system-objects') {
+      // Clear the navigation flag
+      window.sessionStorage.removeItem('settings-scroll-to')
+      
+      // Expand the system objects sections and scroll to it
+      setExpandedSections({
+        keys: true,
+        metadata: true, 
+        crdt: true
+      })
+      
+      // Scroll after a short delay to allow DOM to update
+      setTimeout(() => {
+        const systemObjectsElement = document.getElementById('system-objects-section')
+        if (systemObjectsElement) {
+          systemObjectsElement.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'start' 
+          })
+        }
+      }, 100)
+    }
+  }, [])
+
+  const loadModels = async () => {
+    try {
+      setLoadingModels(true)
+      const modelList = await lamaBridge.getAvailableModels()
+      console.log('[SettingsView] Loaded models:', modelList)
+      modelList.forEach((m: ModelInfo) => {
+        console.log(`[SettingsView] Model ${m.id}: modelType=${m.modelType}, isLoaded=${m.isLoaded}, size=${m.size}`)
+      })
+      setModels(modelList)
+    } catch (error) {
+      console.error('Failed to load models:', error)
+    } finally {
+      setLoadingModels(false)
+    }
+  }
+
+  const handleLoadModel = async (modelId: string) => {
+    setLoadingStates(prev => ({ ...prev, [modelId]: true }))
+    try {
+      const success = await lamaBridge.loadModel(modelId)
+      if (success) {
+        await loadModels()
+      }
+    } catch (error) {
+      console.error('Failed to load model:', error)
+    } finally {
+      setLoadingStates(prev => ({ ...prev, [modelId]: false }))
+    }
+  }
+
+  const handleSetDefault = async (modelId: string) => {
+    try {
+      const success = await lamaBridge.setDefaultModel(modelId)
+      if (success) {
+        await loadModels()
+      }
+    } catch (error) {
+      console.error('Failed to set default model:', error)
+    }
+  }
+
+  const loadSystemObjects = async () => {
+    setLoadingSystemObjects(true)
+    try {
+      // Fetch real keys and certificates from IPC handlers
+      const [keysResult, certsResult] = await Promise.all([
+        window.electronAPI?.invoke('crypto:getKeys'),
+        window.electronAPI?.invoke('crypto:getCertificates')
+      ])
+      
+      const keys = []
+      const certificates = []
+      
+      if (keysResult?.success && keysResult.data) {
+        // Process keys from crypto handler
+        keysResult.data.forEach(key => {
+          keys.push({
+            id: key.id,
+            type: key.type,
+            hash: key.fingerprint || 'sha256:' + key.id.slice(0, 32),
+            size: key.size || 256,
+            created: new Date(key.created),
+            lastModified: new Date(key.modified),
+            metadata: {
+              algorithm: key.algorithm,
+              filename: key.filename,
+              isPrivate: key.isPrivate,
+              pemData: key.pemData
+            }
+          })
+        })
+      }
+      
+      if (certsResult?.success && certsResult.data) {
+        // Process certificates from crypto handler
+        certsResult.data.forEach(cert => {
+          certificates.push({
+            id: cert.id,
+            type: cert.type,
+            hash: cert.fingerprint || 'sha256:' + cert.id.slice(0, 32),
+            size: cert.size || 1024,
+            created: new Date(cert.validFrom),
+            lastModified: new Date(cert.validFrom),
+            metadata: {
+              subject: cert.subject,
+              issuer: cert.issuer,
+              validTo: new Date(cert.validTo),
+              serialNumber: cert.serialNumber
+            }
+          })
+        })
+      }
+      
+      // Add certificates to keys array (they're both crypto objects)
+      const allCryptoObjects = [...keys, ...certificates]
+      
+      // Get metadata and CRDT objects via IPC (future enhancement)
+      
+      const mockSystemObjects = {
+        keys: allCryptoObjects.length > 0 ? allCryptoObjects : [
+          {
+            id: 'no-keys',
+            type: 'No Keys Found',
+            hash: 'sha256:def456...',
+            size: 2048,
+            created: new Date(Date.now() - 86400000 * 30),
+            lastModified: new Date(Date.now() - 86400000 * 10),
+            metadata: { algorithm: 'X25519', usage: 'encryption' }
+          },
+          {
+            id: 'signing-cert',
+            type: 'Certificate',
+            hash: 'sha256:ghi789...',
+            size: 1024,
+            created: new Date(Date.now() - 86400000 * 30),
+            lastModified: new Date(Date.now() - 86400000 * 30),
+            metadata: { issuer: 'self-signed', validity: '365 days' }
+          }
+        ],
+        metadata: [
+          {
+            id: 'contact-index',
+            type: 'Contact Index',
+            hash: 'sha256:jkl012...',
+            size: 4096,
+            created: new Date(Date.now() - 86400000 * 20),
+            lastModified: new Date(Date.now() - 3600000),
+            metadata: { entries: 5, version: 2 }
+          },
+          {
+            id: 'message-index',
+            type: 'Message Index',
+            hash: 'sha256:mno345...',
+            size: 8192,
+            created: new Date(Date.now() - 86400000 * 15),
+            lastModified: new Date(Date.now() - 7200000),
+            metadata: { messages: 1, conversations: 1, version: 3 }
+          },
+          {
+            id: 'schema-registry',
+            type: 'Schema Registry',
+            hash: 'sha256:pqr678...',
+            size: 2048,
+            created: new Date(Date.now() - 86400000 * 30),
+            lastModified: new Date(Date.now() - 86400000 * 25),
+            metadata: { schemas: 12, version: 1 }
+          }
+        ],
+        crdt: [
+          {
+            id: 'vector-clock',
+            type: 'Vector Clock',
+            hash: 'sha256:stu901...',
+            size: 512,
+            created: new Date(Date.now() - 86400000 * 10),
+            lastModified: new Date(Date.now() - 300000),
+            metadata: { nodes: 1, clock: 47, operations: 15 }
+          },
+          {
+            id: 'operation-log',
+            type: 'Operation Log',
+            hash: 'sha256:vwx234...',
+            size: 16384,
+            created: new Date(Date.now() - 86400000 * 10),
+            lastModified: new Date(Date.now() - 300000),
+            metadata: { operations: 23, size_mb: 0.016, head: 'op-23' }
+          },
+          {
+            id: 'conflict-resolution',
+            type: 'Conflict Resolution',
+            hash: 'sha256:yza567...',
+            size: 1024,
+            created: new Date(Date.now() - 86400000 * 5),
+            lastModified: new Date(Date.now() - 86400000),
+            metadata: { resolved: 0, pending: 0, strategy: 'last-write-wins' }
+          }
+        ]
+      }
+      setSystemObjects(mockSystemObjects)
+    } catch (error) {
+      console.error('Failed to load system objects:', error)
+    } finally {
+      setLoadingSystemObjects(false)
+    }
+  }
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }))
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    // Could add toast notification here
+  }
+
+  const formatBytes = (bytes: number): string => {
+    if (!bytes || bytes === 0) return '0 B'
+    if (bytes < 1024) return bytes + ' B'
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
+  }
+
+  const loadDataStats = async () => {
+    setLoadingDataStats(true)
+    try {
+      // Get browser storage estimate
+      if ('storage' in navigator && 'estimate' in navigator.storage) {
+        const estimate = await navigator.storage.estimate()
+        const totalSize = estimate.usage || 0
+
+        // Try to get actual stats from IPC
+        let stats = {
+          totalObjects: 0,
+          totalSize,
+          messages: 0,
+          files: 0,
+          contacts: 0,
+          conversations: 0,
+          versions: 0,
+          recentActivity: 0,
+          messagesSize: totalSize * 0.3,
+          filesSize: totalSize * 0.2,
+          systemSize: totalSize * 0.1,
+          modelsSize: totalSize * 0.4
+        }
+
+        if (window.electronAPI?.invoke) {
+          try {
+            // Get message and conversation stats
+            const conversationsResult = await window.electronAPI.invoke('chat:getConversations')
+            if (conversationsResult?.success && conversationsResult.data) {
+              stats.conversations = conversationsResult.data.length
+
+              // Count messages in conversations
+              let totalMessages = 0
+              for (const conv of conversationsResult.data) {
+                try {
+                  const messagesResult = await window.electronAPI.invoke('chat:getMessages', {
+                    conversationId: conv.id
+                  })
+                  if (messagesResult?.success && messagesResult.messages) {
+                    totalMessages += messagesResult.messages.length
+                  }
+                } catch (e) {
+                  console.log('Error counting messages for conversation:', conv.id)
+                }
+              }
+              stats.messages = totalMessages
+            }
+
+            // Get contacts count
+            const contactsResult = await window.electronAPI.invoke('contacts:list')
+            if (contactsResult?.success && contactsResult.contacts) {
+              stats.contacts = contactsResult.contacts.length
+            }
+
+            // Update total objects
+            stats.totalObjects = stats.messages + stats.files + stats.contacts + stats.conversations
+
+            // Try to get more detailed stats from main process (optional)
+            try {
+              const detailedStats = await window.electronAPI.invoke('iom:getDataStats')
+              if (detailedStats?.success && detailedStats.data) {
+                stats = { ...stats, ...detailedStats.data }
+              }
+            } catch (e) {
+              // Handler not implemented yet, use estimated stats
+              console.debug('Detailed stats not available, using estimates')
+            }
+          } catch (e) {
+            console.error('Error getting data stats from IPC:', e)
+          }
+        }
+
+        setDataStats(stats)
+      }
+    } catch (error) {
+      console.error('Failed to load data stats:', error)
+    } finally {
+      setLoadingDataStats(false)
+    }
+  }
+
+  const formatTimeAgo = (date: Date): string => {
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
+    if (seconds < 60) return `${seconds}s ago`
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
+    return `${Math.floor(seconds / 86400)}d ago`
+  }
+  
+  const exportCryptoObject = async (obj: SystemObject) => {
+    try {
+      // Determine if it's a key or certificate based on metadata
+      const isKey = obj.metadata?.algorithm && obj.metadata?.isPrivate !== undefined
+      const type = isKey ? 'key' : 'certificate'
+      
+      const result = await window.electronAPI?.invoke('crypto:export', {
+        type,
+        id: obj.id,
+        format: 'pem'
+      })
+      
+      if (result?.success && result.data) {
+        // Create a download link
+        const blob = new Blob([result.data.data], { type: 'text/plain' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = result.data.filename || `${obj.id}.pem`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        
+        // Show success message
+        console.log(`Exported ${type}: ${obj.id}`)
+      }
+    } catch (error) {
+      console.error('Failed to export crypto object:', error)
+    }
+  }
+  
+  const loadClaudeApiKey = async () => {
+    try {
+      // Retrieve API key from ONE.core's secure storage via IPC
+      const result = await window.electronAPI?.invoke('onecore:secureRetrieve', {
+        key: 'claude_api_key'
+      })
+
+      if (result?.success && result.value) {
+        setClaudeApiKey(result.value)
+        setApiKeyStatus('valid')
+
+        // Trigger model discovery on load if API key exists
+        console.log('[SettingsView] Found existing Claude API key, triggering model discovery...')
+        const discoveryResult = await window.electronAPI?.invoke('ai:discoverClaudeModels')
+
+        if (discoveryResult?.success && discoveryResult.data?.models) {
+          console.log(`[SettingsView] Discovered ${discoveryResult.data.models.length} Claude models on load`)
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load Claude API key:', error)
+    }
+  }
+
+  const loadOllamaConfig = async () => {
+    try {
+      // Get Ollama configuration from IPC
+      const result = await window.electronAPI?.invoke('llm:getConfig', {
+        provider: 'ollama'
+      })
+
+      if (result?.success && result.config) {
+        setOllamaUrl(result.config.baseUrl || 'http://localhost:11434')
+        setOllamaStatus('valid')
+      }
+    } catch (error) {
+      console.error('Failed to load Ollama config:', error)
+    }
+  }
+  
+  const handleSaveClaudeApiKey = async () => {
+    if (!claudeApiKey) {
+      setApiKeyStatus('invalid')
+      return
+    }
+
+    setApiKeyStatus('testing')
+    try {
+      // Store API key securely in ONE.core's encrypted storage via IPC
+      const result = await window.electronAPI?.invoke('onecore:secureStore', {
+        key: 'claude_api_key',
+        value: claudeApiKey,
+        encrypted: true
+      })
+
+      if (result?.success) {
+        // Test the API key with Claude
+        const testResult = await window.electronAPI?.invoke('llm:testApiKey', {
+          provider: 'anthropic',
+          apiKey: claudeApiKey
+        })
+
+        if (testResult?.success) {
+          setApiKeyStatus('valid')
+
+          // Trigger LLM manager to discover Claude models with the new API key
+          console.log('[SettingsView] Triggering Claude model discovery...')
+          const discoveryResult = await window.electronAPI?.invoke('ai:discoverClaudeModels', {
+            apiKey: claudeApiKey
+          })
+
+          if (discoveryResult?.success && discoveryResult.data?.models) {
+            const claudeModels = discoveryResult.data.models
+            console.log(`[SettingsView] Discovered ${claudeModels.length} Claude models from API`)
+
+            // Create AI contacts for each discovered Claude model
+            for (const model of claudeModels) {
+              try {
+                const contactResult = await window.electronAPI?.invoke('ai:getOrCreateContact', {
+                  modelId: model.id
+                })
+                if (contactResult?.success) {
+                  console.log(`[SettingsView] Created AI contact for ${model.name}`)
+                }
+              } catch (err) {
+                console.warn(`[SettingsView] Failed to create contact for ${model.name}:`, err)
+              }
+            }
+          }
+
+          // Reload models to show newly discovered Claude models
+          await loadModels()
+        } else {
+          setApiKeyStatus('invalid')
+        }
+      } else {
+        throw new Error('Failed to store API key securely')
+      }
+    } catch (error) {
+      console.error('Failed to save Claude API key:', error)
+      setApiKeyStatus('invalid')
+    }
+  }
+
+  const handleSaveOllamaConfig = async () => {
+    if (!ollamaUrl) {
+      setOllamaStatus('invalid')
+      return
+    }
+
+    setOllamaStatus('testing')
+    try {
+      // Save Ollama configuration via IPC
+      const result = await window.electronAPI?.invoke('llm:updateConfig', {
+        provider: 'ollama',
+        config: {
+          baseUrl: ollamaUrl
+        }
+      })
+
+      if (result?.success) {
+        setOllamaStatus('valid')
+
+        // Reload models
+        await loadModels()
+
+        // Discover Ollama models and create AI contacts
+        console.log('[SettingsView] Triggering Ollama model discovery...')
+        const discoveryResult = await window.electronAPI?.invoke('ai:discoverOllamaModels')
+
+        if (discoveryResult?.success && discoveryResult.data?.models) {
+          const ollamaModels = discoveryResult.data.models
+          console.log(`[SettingsView] Discovered ${ollamaModels.length} Ollama models`)
+
+          // Create AI contacts for each discovered Ollama model
+          for (const model of ollamaModels) {
+            try {
+              const contactResult = await window.electronAPI?.invoke('ai:getOrCreateContact', {
+                modelId: model.id
+              })
+              if (contactResult?.success) {
+                console.log(`[SettingsView] Created AI contact for ${model.name}`)
+              }
+            } catch (err) {
+              console.warn(`[SettingsView] Failed to create contact for ${model.name}:`, err)
+            }
+          }
+
+          // Reload models again to show updated contact info
+          await loadModels()
+        }
+      } else {
+        setOllamaStatus('invalid')
+      }
+    } catch (error) {
+      console.error('Failed to save Ollama config:', error)
+      setOllamaStatus('invalid')
+    }
+  }
+
+  const getProviderIcon = (provider: string) => {
+    switch (provider.toLowerCase()) {
+      case 'qwen': return <Brain className="h-4 w-4" />
+      case 'openai': return <Zap className="h-4 w-4" />
+      case 'anthropic': return <MessageSquare className="h-4 w-4" />
+      default: return <Cpu className="h-4 w-4" />
+    }
+  }
+
+  const getCapabilityIcon = (capability: string) => {
+    switch (capability.toLowerCase()) {
+      case 'coding': return <Code className="h-3 w-3" />
+      case 'reasoning': return <Brain className="h-3 w-3" />
+      case 'chat': return <MessageSquare className="h-3 w-3" />
+      default: return <Circle className="h-3 w-3" />
+    }
+  }
+
+  const getMoodIcon = (mood: string) => {
+    switch (mood) {
+      case 'happy': return <Smile className="h-4 w-4" />
+      case 'sad': return <Frown className="h-4 w-4" />
+      case 'angry': return <Angry className="h-4 w-4" />
+      case 'calm': return <Wind className="h-4 w-4" />
+      case 'excited': return <Sparkles className="h-4 w-4" />
+      case 'tired': return <Coffee className="h-4 w-4" />
+      case 'focused': return <Target className="h-4 w-4" />
+      case 'neutral': return <Minus className="h-4 w-4" />
+      default: return <Circle className="h-4 w-4" />
+    }
+  }
+
+  const handleUpdateMood = async (mood: string | null) => {
+    setSavingMood(true)
+    try {
+      const result = await window.electronAPI?.invoke('onecore:updateMood', { mood })
+      if (result?.success) {
+        setCurrentMood(mood)
+      }
+    } catch (error) {
+      console.error('Failed to update mood:', error)
+    } finally {
+      setSavingMood(false)
+    }
+  }
+
+  const formatSize = (size: number) => {
+    if (size === 0) return 'API-based'
+    if (size >= 1e9) return `${(size / 1e9).toFixed(1)}B params`
+    if (size >= 1e6) return `${(size / 1e6).toFixed(1)}M params`
+    return `${size} bytes`
+  }
+
+  const handleSave = () => {
+    console.log('Saving settings:', settings)
+    setHasChanges(false)
+    // TODO: Persist settings
+  }
+
+  const updateSetting = (category: string, key: string, value: any) => {
+    setSettings(prev => ({
+      ...prev,
+      [category]: {
+        ...prev[category as keyof typeof prev],
+        [key]: value
+      }
+    }))
+    setHasChanges(true)
+  }
+
+  return (
+    <div className="h-full flex flex-col">
+      {/* Header */}
+      <Card className="mb-4">
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Settings className="h-5 w-5 text-primary" />
+              <CardTitle>Settings</CardTitle>
+            </div>
+            {hasChanges && (
+              <Button onClick={handleSave} size="sm">
+                <Save className="h-4 w-4 mr-2" />
+                Save Changes
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* Settings Content */}
+      <ScrollArea className="flex-1">
+        <div className="space-y-4">
+          {/* Profile Settings */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2">
+                <User className="h-4 w-4" />
+                <CardTitle className="text-lg">Profile</CardTitle>
+              </div>
+              <CardDescription>Manage your identity and keys</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label>Display Name</Label>
+                <Input 
+                  value={settings.profile.name}
+                  onChange={(e) => updateSetting('profile', 'name', e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Identity ID</Label>
+                <div className="flex items-center space-x-2">
+                  <Input value={settings.profile.id} disabled />
+                  <Button variant="outline" size="sm">Copy</Button>
+                </div>
+              </div>
+              <div>
+                <Label>Public Key</Label>
+                <div className="flex items-center space-x-2">
+                  <code className="text-xs bg-muted p-2 rounded flex-1">{settings.profile.publicKey}</code>
+                  <Button variant="outline" size="sm">Export</Button>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div>
+                <Label className="mb-2 block">Avatar Mood</Label>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Set your current mood to change your avatar color
+                </p>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { value: 'happy', label: 'Happy' },
+                    { value: 'sad', label: 'Sad' },
+                    { value: 'angry', label: 'Angry' },
+                    { value: 'calm', label: 'Calm' },
+                    { value: 'excited', label: 'Excited' },
+                    { value: 'tired', label: 'Tired' },
+                    { value: 'focused', label: 'Focused' },
+                    { value: 'neutral', label: 'Neutral' }
+                  ].map((mood) => (
+                    <Button
+                      key={mood.value}
+                      variant={currentMood === mood.value ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => handleUpdateMood(mood.value)}
+                      disabled={savingMood}
+                      className="flex items-center gap-2"
+                    >
+                      {getMoodIcon(mood.value)}
+                      <span className="text-xs">{mood.label}</span>
+                    </Button>
+                  ))}
+                </div>
+                {currentMood && (
+                  <div className="mt-2 flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
+                      Current: {currentMood.charAt(0).toUpperCase() + currentMood.slice(1)}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleUpdateMood(null)}
+                      disabled={savingMood}
+                      className="text-xs"
+                    >
+                      Clear Mood
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Network & Connections */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2">
+                <Globe className="h-4 w-4" />
+                <CardTitle className="text-lg">Network & Connections</CardTitle>
+              </div>
+              <CardDescription>P2P connections and device pairing</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* LAMA Domain Configuration */}
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <Globe className="h-4 w-4" />
+                  <h3 className="font-medium">Invitation Domain</h3>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lama-domain">LAMA Domain for Invitations</Label>
+                  <div className="flex space-x-2">
+                    <Input
+                      id="lama-domain"
+                      type="text"
+                      value={settings.network.eddaDomain}
+                      onChange={(e) => {
+                        const newDomain = e.target.value
+                        setSettings(prev => ({
+                          ...prev,
+                          network: { ...prev.network, eddaDomain: newDomain }
+                        }))
+                        setHasChanges(true)
+                      }}
+                      placeholder="lama.one"
+                      className="font-mono text-sm"
+                    />
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        // Save the domain to localStorage
+                        try {
+                          if (settings.network.eddaDomain) {
+                            localStorage.setItem('lama-domain', settings.network.eddaDomain)
+                          } else {
+                            localStorage.removeItem('lama-domain')
+                          }
+                          setHasChanges(false)
+                        } catch (err) {
+                          console.error('[SettingsView] Failed to save domain:', err)
+                        }
+                      }}
+                      disabled={!hasChanges}
+                    >
+                      <Save className="h-4 w-4 mr-1" />
+                      Save
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    This domain will be used in invitation URLs. Use 'lama.one' for production.
+                  </p>
+                </div>
+              </div>
+              
+              <Separator />
+              
+              {/* Instance Management */}
+              <InstancesView />
+            </CardContent>
+          </Card>
+
+          {/* AI Configuration */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2">
+                <Brain className="h-4 w-4" />
+                <CardTitle className="text-lg">AI Configuration</CardTitle>
+              </div>
+              <CardDescription>Configure API keys and AI model providers</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Ollama Configuration */}
+              <div className="space-y-2">
+                <Label>Ollama Service URL</Label>
+                <div className="flex items-center space-x-2">
+                  <Input
+                    type="text"
+                    value={ollamaUrl}
+                    onChange={(e) => setOllamaUrl(e.target.value)}
+                    placeholder="http://localhost:11434"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleSaveOllamaConfig}
+                    disabled={ollamaStatus === 'testing'}
+                  >
+                    {ollamaStatus === 'testing' ? 'Testing...' : 'Save'}
+                  </Button>
+                </div>
+                {ollamaStatus === 'valid' && (
+                  <p className="text-xs text-green-500">✓ Ollama service configured</p>
+                )}
+                {ollamaStatus === 'invalid' && (
+                  <p className="text-xs text-red-500">✗ Failed to configure Ollama service</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  URL of your Ollama service (local or remote). Default: http://localhost:11434
+                </p>
+              </div>
+
+              <Separator />
+
+              {/* Claude API Key Configuration */}
+              <div className="space-y-2">
+                <Label htmlFor="claude-api-key">Claude API Key</Label>
+                <form onSubmit={(e) => { e.preventDefault(); handleSaveClaudeApiKey(); }}>
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      id="claude-api-key"
+                      type={showApiKey ? "text" : "password"}
+                      value={claudeApiKey}
+                      onChange={(e) => setClaudeApiKey(e.target.value)}
+                      placeholder="sk-ant-..."
+                      autoComplete="off"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                    >
+                      {showApiKey ? 'Hide' : 'Show'}
+                    </Button>
+                    <Button
+                      type="submit"
+                      size="sm"
+                      disabled={apiKeyStatus === 'testing'}
+                    >
+                      {apiKeyStatus === 'testing' ? 'Testing...' : 'Save'}
+                    </Button>
+                  </div>
+                </form>
+                {apiKeyStatus === 'valid' && (
+                  <p className="text-xs text-green-500">✓ API key is valid</p>
+                )}
+                {apiKeyStatus === 'invalid' && (
+                  <p className="text-xs text-red-500">✗ Invalid API key</p>
+                )}
+              </div>
+
+              <Separator />
+
+              {/* AI Model Management */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Available AI Models</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (onNavigate) {
+                        onNavigate('contacts')
+                      }
+                    }}
+                  >
+                    <MessageSquare className="h-3 w-3 mr-1" />
+                    Go to Contacts
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  AI models are automatically added as contacts. Go to Contacts tab to start chatting with them.
+                </p>
+                {loadingModels ? (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                  </div>
+                ) : models.length === 0 ? (
+                  <Alert>
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      No AI models available. Configure Claude API key or Ollama above to add models.
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <div className="space-y-2">
+                    {models.map((model) => (
+                      <div key={model.id} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            {getProviderIcon(model.provider)}
+                            <span className="font-medium">{model.name}</span>
+                            <Badge variant="outline" className="text-xs">
+                              {model.provider}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            {/* Local models (Ollama) need to be loaded, remote/API models are always ready */}
+                            {model.modelType === 'local' && !model.isLoaded && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleLoadModel(model.id)}
+                                disabled={loadingStates[model.id]}
+                              >
+                                {loadingStates[model.id] ? (
+                                  <>
+                                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary mr-1" />
+                                    Loading...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Download className="h-3 w-3 mr-1" />
+                                    Load
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                            {model.isLoaded && (
+                              <Badge variant="secondary" className="text-xs">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Loaded
+                              </Badge>
+                            )}
+                            {model.modelType === 'remote' && (
+                              <Badge variant="secondary" className="text-xs">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Ready
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {model.description}
+                        </div>
+                        <div className="flex items-center space-x-4 text-xs text-muted-foreground">
+                          {model.size !== undefined && <span>{formatSize(model.size)}</span>}
+                          {model.size !== undefined && <span>·</span>}
+                          {model.contextLength !== undefined && <span>{model.contextLength.toLocaleString()} tokens</span>}
+                          {model.capabilities && model.capabilities.length > 0 && (
+                            <>
+                              <span>·</span>
+                              <div className="flex items-center space-x-1">
+                                {model.capabilities.map((cap) => (
+                                  <Badge key={cap} variant="secondary" className="text-xs py-0">
+                                    {getCapabilityIcon(cap)}
+                                    <span className="ml-1">{cap}</span>
+                                  </Badge>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* MCP Server Configuration */}
+          <MCPSettings />
+
+          {/* Privacy Settings */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2">
+                <Shield className="h-4 w-4" />
+                <CardTitle className="text-lg">Privacy</CardTitle>
+              </div>
+              <CardDescription>Security and data preferences</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label>Auto-encrypt Messages</Label>
+                <Button 
+                  variant={settings.privacy.autoEncrypt ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => updateSetting('privacy', 'autoEncrypt', !settings.privacy.autoEncrypt)}
+                >
+                  {settings.privacy.autoEncrypt ? 'Enabled' : 'Disabled'}
+                </Button>
+              </div>
+              <div className="flex items-center justify-between">
+                <Label>Save Chat History</Label>
+                <Button 
+                  variant={settings.privacy.saveHistory ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => updateSetting('privacy', 'saveHistory', !settings.privacy.saveHistory)}
+                >
+                  {settings.privacy.saveHistory ? 'Enabled' : 'Disabled'}
+                </Button>
+              </div>
+              <Separator />
+              <div className="pt-2 space-y-2">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" className="w-full">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Reset All App Data
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription className="space-y-2">
+                        <p>This action cannot be undone. This will permanently delete:</p>
+                        <ul className="list-disc list-inside space-y-1 text-sm">
+                          <li>All chat history and messages</li>
+                          <li>All contacts and connections</li>
+                          <li>All settings and preferences</li>
+                          <li>All locally stored AI models</li>
+                          <li>Your identity and keys</li>
+                        </ul>
+                        <p className="font-semibold text-red-500">
+                          You will need to create a new identity or restore from backup after this operation.
+                        </p>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel autoFocus>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-red-600 hover:bg-red-700"
+                        onClick={async () => {
+                          try {
+                            console.log('[SettingsView] Starting app reset...')
+
+                            // Show immediate feedback
+                            const alertDiv = document.createElement('div')
+                            alertDiv.style.cssText = `
+                              position: fixed;
+                              top: 50%;
+                              left: 50%;
+                              transform: translate(-50%, -50%);
+                              background: #1f2937;
+                              color: white;
+                              padding: 20px;
+                              border-radius: 8px;
+                              z-index: 9999;
+                              box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                              text-align: center;
+                              font-family: system-ui;
+                            `
+                            alertDiv.innerHTML = `
+                              <div style="font-size: 16px; margin-bottom: 10px;">🔄 Clearing App Data</div>
+                              <div style="font-size: 14px; opacity: 0.8;">Shutting down ONE.core...</div>
+                            `
+                            document.body.appendChild(alertDiv)
+
+                            // Shutdown the model first
+                            try {
+                              console.log('[SettingsView] Shutting down model...')
+                              await model.shutdown()
+                              console.log('[SettingsView] Model shutdown complete')
+                            } catch (e) {
+                              console.error('[SettingsView] Error shutting down model:', e)
+                            }
+
+                            // Update progress
+                            alertDiv.innerHTML = `
+                              <div style="font-size: 16px; margin-bottom: 10px;">🗑️ Clearing Storage</div>
+                              <div style="font-size: 14px; opacity: 0.8;">Removing all data...</div>
+                            `
+
+                            // Clear localStorage
+                            localStorage.clear()
+
+                            // Clear session state
+                            sessionStorage.clearState()
+
+                            // Clear IndexedDB databases
+                            if ('indexedDB' in window) {
+                              try {
+                                const databases = await indexedDB.databases()
+                                for (const db of databases) {
+                                  if (db.name) {
+                                    await indexedDB.deleteDatabase(db.name)
+                                    console.log(`[SettingsView] Deleted IndexedDB database: ${db.name}`)
+                                  }
+                                }
+                              } catch (e) {
+                                console.error('[SettingsView] Error clearing IndexedDB:', e)
+                              }
+                            }
+
+                            // Clear service worker caches
+                            if ('caches' in window) {
+                              try {
+                                const cacheNames = await caches.keys()
+                                await Promise.all(
+                                  cacheNames.map(name => caches.delete(name))
+                                )
+                                console.log('[SettingsView] Service worker caches cleared')
+                              } catch (e) {
+                                console.error('[SettingsView] Error clearing caches:', e)
+                              }
+                            }
+
+                            // Show completion and reload
+                            alertDiv.innerHTML = `
+                              <div style="font-size: 16px; margin-bottom: 10px;">✅ Reset Complete</div>
+                              <div style="font-size: 14px; opacity: 0.8;">Reloading application...</div>
+                            `
+
+                            console.log('[SettingsView] Reset complete, reloading...')
+                            setTimeout(() => window.location.reload(), 1000)
+
+                          } catch (error) {
+                            console.error('[SettingsView] Failed to reset app data:', error)
+
+                            const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+
+                            // Show error message
+                            const errorDiv = document.createElement('div')
+                            errorDiv.style.cssText = `
+                              position: fixed;
+                              top: 50%;
+                              left: 50%;
+                              transform: translate(-50%, -50%);
+                              background: #dc2626;
+                              color: white;
+                              padding: 20px;
+                              border-radius: 8px;
+                              z-index: 9999;
+                              box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                              text-align: center;
+                              font-family: system-ui;
+                            `
+                            errorDiv.innerHTML = `
+                              <div style="font-size: 16px; margin-bottom: 10px;">❌ Reset Error</div>
+                              <div style="font-size: 14px; opacity: 0.9;">
+                                ${errorMessage}
+                              </div>
+                              <div style="margin-top: 15px; font-size: 12px; opacity: 0.7;">
+                                Attempting reload anyway...
+                              </div>
+                            `
+                            document.body.appendChild(errorDiv)
+
+                            // Try to reload anyway
+                            setTimeout(() => window.location.reload(), 2000)
+                          }
+                        }}
+                      >
+                        Delete Everything
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* System Objects */}
+          <Card id="system-objects-section">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Package className="h-4 w-4" />
+                  <CardTitle className="text-lg">System Objects</CardTitle>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={loadSystemObjects}
+                  disabled={loadingSystemObjects}
+                >
+                  {loadingSystemObjects ? (
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary mr-2" />
+                  ) : (
+                    <RefreshCw className="h-3 w-3 mr-2" />
+                  )}
+                  Refresh
+                </Button>
+              </div>
+              <CardDescription>View cryptographic keys, metadata indexes, and CRDT state</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Keys & Certificates */}
+              <div className="border rounded-lg">
+                <div 
+                  className="flex items-center justify-between p-3 cursor-pointer hover:bg-accent/50"
+                  onClick={() => toggleSection('keys')}
+                >
+                  <div className="flex items-center space-x-2">
+                    {expandedSections.keys ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    <Key className="h-4 w-4 text-orange-500" />
+                    <span className="font-medium">Keys & Certificates</span>
+                    <Badge variant="secondary">{systemObjects.keys.length}</Badge>
+                  </div>
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                </div>
+                {expandedSections.keys && (
+                  <div className="border-t">
+                    {systemObjects.keys.map((obj) => (
+                      <div key={obj.id} className="p-3 border-b last:border-b-0 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Hash className="h-3 w-3 text-muted-foreground" />
+                            <span className="font-medium text-sm">{obj.type}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="outline" className="text-xs">
+                              {formatBytes(obj.size)}
+                            </Badge>
+                            {obj.metadata?.isPrivate !== undefined && (
+                              <Badge variant={obj.metadata.isPrivate ? "destructive" : "secondary"} className="text-xs">
+                                {obj.metadata.isPrivate ? "Private" : "Public"}
+                              </Badge>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copyToClipboard(obj.hash)}
+                              title="Copy fingerprint"
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => exportCryptoObject(obj)}
+                              title="Export"
+                            >
+                              <Download className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <div className="flex items-center space-x-4">
+                            <span>Hash: <code className="bg-muted px-1 rounded">{obj.hash}</code></span>
+                          </div>
+                          <div className="flex items-center space-x-4">
+                            <span>Created: {formatTimeAgo(obj.created)}</span>
+                            <span>Modified: {formatTimeAgo(obj.lastModified)}</span>
+                          </div>
+                          {obj.metadata && (
+                            <div className="flex items-center space-x-2 text-xs">
+                              <FileText className="h-3 w-3" />
+                              {Object.entries(obj.metadata).map(([key, value]) => (
+                                <Badge key={key} variant="secondary" className="text-xs">
+                                  {key}: {String(value)}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Metadata & Indexes */}
+              <div className="border rounded-lg">
+                <div 
+                  className="flex items-center justify-between p-3 cursor-pointer hover:bg-accent/50"
+                  onClick={() => toggleSection('metadata')}
+                >
+                  <div className="flex items-center space-x-2">
+                    {expandedSections.metadata ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    <Database className="h-4 w-4 text-blue-500" />
+                    <span className="font-medium">Metadata & Indexes</span>
+                    <Badge variant="secondary">{systemObjects.metadata.length}</Badge>
+                  </div>
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                </div>
+                {expandedSections.metadata && (
+                  <div className="border-t">
+                    {systemObjects.metadata.map((obj) => (
+                      <div key={obj.id} className="p-3 border-b last:border-b-0 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Database className="h-3 w-3 text-muted-foreground" />
+                            <span className="font-medium text-sm">{obj.type}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="outline" className="text-xs">
+                              {formatBytes(obj.size)}
+                            </Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copyToClipboard(obj.hash)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <div className="flex items-center space-x-4">
+                            <span>Hash: <code className="bg-muted px-1 rounded">{obj.hash}</code></span>
+                          </div>
+                          <div className="flex items-center space-x-4">
+                            <span>Created: {formatTimeAgo(obj.created)}</span>
+                            <span>Modified: {formatTimeAgo(obj.lastModified)}</span>
+                          </div>
+                          {obj.metadata && (
+                            <div className="flex items-center space-x-2 text-xs">
+                              <FileText className="h-3 w-3" />
+                              {Object.entries(obj.metadata).map(([key, value]) => (
+                                <Badge key={key} variant="secondary" className="text-xs">
+                                  {key}: {String(value)}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* CRDT State */}
+              <div className="border rounded-lg">
+                <div 
+                  className="flex items-center justify-between p-3 cursor-pointer hover:bg-accent/50"
+                  onClick={() => toggleSection('crdt')}
+                >
+                  <div className="flex items-center space-x-2">
+                    {expandedSections.crdt ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                    <Clock className="h-4 w-4 text-green-500" />
+                    <span className="font-medium">CRDT State</span>
+                    <Badge variant="secondary">{systemObjects.crdt.length}</Badge>
+                  </div>
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                </div>
+                {expandedSections.crdt && (
+                  <div className="border-t">
+                    {systemObjects.crdt.map((obj) => (
+                      <div key={obj.id} className="p-3 border-b last:border-b-0 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <Clock className="h-3 w-3 text-muted-foreground" />
+                            <span className="font-medium text-sm">{obj.type}</span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <Badge variant="outline" className="text-xs">
+                              {formatBytes(obj.size)}
+                            </Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copyToClipboard(obj.hash)}
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <div className="flex items-center space-x-4">
+                            <span>Hash: <code className="bg-muted px-1 rounded">{obj.hash}</code></span>
+                          </div>
+                          <div className="flex items-center space-x-4">
+                            <span>Created: {formatTimeAgo(obj.created)}</span>
+                            <span>Modified: {formatTimeAgo(obj.lastModified)}</span>
+                          </div>
+                          {obj.metadata && (
+                            <div className="flex items-center space-x-2 text-xs">
+                              <FileText className="h-3 w-3" />
+                              {Object.entries(obj.metadata).map(([key, value]) => (
+                                <Badge key={key} variant="secondary" className="text-xs">
+                                  {key}: {String(value)}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {loadingSystemObjects && (
+                <div className="flex items-center justify-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mr-2"></div>
+                  <span className="text-sm text-muted-foreground">Loading system objects...</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Storage Quota */}
+          <StorageQuota />
+
+          {/* Data Cleanup */}
+          <DataCleanup />
+
+          {/* Logout Section */}
+          {onLogout && (
+            <Card>
+              <CardHeader>
+                <div className="flex items-center space-x-2">
+                  <User className="h-4 w-4" />
+                  <CardTitle className="text-lg">Account</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={onLogout}
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  )
+}

@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Convert all handler files to ESM
-for file in /Users/gecko/src/lama.electron/main/ipc/handlers/*.js; do
-  if [ "$file" = "/Users/gecko/src/lama.electron/main/ipc/handlers/ai.js" ]; then
+for file in /Users/gecko/src/lama.browser/main/ipc/handlers/*.js; do
+  if [ "$file" = "/Users/gecko/src/lama.browser/main/ipc/handlers/ai.js" ]; then
     echo "Skipping ai.js (already converted)"
     continue
   fi

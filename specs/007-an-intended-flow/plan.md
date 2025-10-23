@@ -46,7 +46,7 @@
 - **Decision**: Attestations link to specific version hash
 - **Approach**:
   - Versions identified by SHA256 hash
-  - Auditor uses lama.electron or lama to read/store/view
+  - Auditor uses lama.browser or lama to read/store/view
   - Attestation confirms both content AND hash
 - **Impact**: Version-specific attestations, immutable references
 

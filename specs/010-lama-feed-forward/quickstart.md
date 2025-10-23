@@ -9,7 +9,7 @@
 
 ### 1. Install Dependencies
 ```bash
-cd /Users/gecko/src/lama.electron
+cd /Users/gecko/src/lama.browser
 npm install
 ```
 

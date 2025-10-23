@@ -172,7 +172,7 @@ class IPCClient {
 
 ## File Structure
 ```
-lama.electron/
+lama.browser/
 ├── main/                    # Main process code (NEW)
 │   ├── services/           # Business logic services
 │   │   ├── AppModel.ts

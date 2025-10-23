@@ -2,7 +2,7 @@
 
 **Feature**: 015-keyword-detail-preview
 **Branch**: `015-keyword-detail-preview`
-**Input**: Design documents from `/Users/gecko/src/lama.electron/specs/015-keyword-detail-preview/`
+**Input**: Design documents from `/Users/gecko/src/lama.browser/specs/015-keyword-detail-preview/`
 **Prerequisites**: plan.md, research.md, data-model.md, contracts/
 
 ---
@@ -47,8 +47,8 @@
 ### T001 - Create KeywordAccessState Recipe
 **Process**: [main]
 **Files**:
-- `/Users/gecko/src/lama.electron/main/core/one-ai/recipes/KeywordAccessState.ts`
-- `/Users/gecko/src/lama.electron/main/core/one-ai/recipes/ai-recipes.ts`
+- `/Users/gecko/src/lama.browser/main/core/one-ai/recipes/KeywordAccessState.ts`
+- `/Users/gecko/src/lama.browser/main/core/one-ai/recipes/ai-recipes.ts`
 
 **Description**:
 Create new ONE.core recipe for KeywordAccessState entity. Define TypeScript interface with fields: $type$, keywordTerm (string), principalId (SHA256Hash), principalType ('user' | 'group'), state ('allow' | 'deny' | 'none'), updatedAt (string), updatedBy (SHA256Hash). Register recipe in ai-recipes.ts exports.
@@ -67,7 +67,7 @@ Create new ONE.core recipe for KeywordAccessState entity. Define TypeScript inte
 ### T002 - Create Keyword Access Storage Module
 **Process**: [main]
 **Files**:
-- `/Users/gecko/src/lama.electron/main/core/one-ai/storage/keyword-access-storage.ts`
+- `/Users/gecko/src/lama.browser/main/core/one-ai/storage/keyword-access-storage.ts`
 
 **Description**:
 Create storage module for KeywordAccessState objects. Implement functions: createAccessState(keywordTerm, principalId, principalType, state, updatedBy), updateAccessState(existing, newState, updatedBy), getAccessStatesByKeyword(keywordTerm), getAccessStateByPrincipal(keywordTerm, principalId), deleteAccessState(keywordTerm, principalId). Use ONE.core's storeVersionedObject() and loadVersionedObjects() functions. Implement composite key pattern (keywordTerm + principalId).
@@ -88,7 +88,7 @@ Create storage module for KeywordAccessState objects. Implement functions: creat
 ### T003 - Extend TopicAnalysisModel with Keyword Detail Methods
 **Process**: [main]
 **Files**:
-- `/Users/gecko/src/lama.electron/main/core/one-ai/models/TopicAnalysisModel.js`
+- `/Users/gecko/src/lama.browser/main/core/one-ai/models/TopicAnalysisModel.js`
 
 **Description**:
 Add methods to TopicAnalysisModel: getKeywordWithAccessStates(keyword, topicId?), getAllKeywords(), getSubjectsForKeyword(keyword, topicId?). Methods should load base Keyword/Subject data and prepare for enrichment (no enrichment logic in model). Return plain objects ready for IPC handlers to enrich.
@@ -109,7 +109,7 @@ Add methods to TopicAnalysisModel: getKeywordWithAccessStates(keyword, topicId?)
 ### T004 - Create Keyword Enrichment Service
 **Process**: [main]
 **Files**:
-- `/Users/gecko/src/lama.electron/main/services/keyword-enrichment.js`
+- `/Users/gecko/src/lama.browser/main/services/keyword-enrichment.js`
 
 **Description**:
 Create enrichment service with functions: enrichKeywordWithTopicReferences(keyword), enrichSubjectsWithMetadata(subjects), calculateRelevanceScore(subject, placesMentioned). Enrichment adds runtime fields to Keyword (topicReferences array) and Subject (relevanceScore, placesMentioned, authors, sortTimestamp) objects. Use ChannelManager to fetch topic names. Implement relevance formula: (placesMentioned * 10) + (recencyFactor * 5) + (frequency * 2).
@@ -132,7 +132,7 @@ Create enrichment service with functions: enrichKeywordWithTopicReferences(keywo
 ### T005 - Write Test for getKeywordDetails Handler [P]
 **Process**: [main]
 **Files**:
-- `/Users/gecko/src/lama.electron/tests/ipc/handlers/keyword-detail.getKeywordDetails.test.js`
+- `/Users/gecko/src/lama.browser/tests/ipc/handlers/keyword-detail.getKeywordDetails.test.js`
 
 **Description**:
 Write integration test for getKeywordDetails IPC handler. Test scenarios: (1) successful retrieval with valid keyword + topicId, (2) keyword not found error, (3) topic filtering works, (4) enrichment includes topicReferences and enriched subjects, (5) access states loaded, (6) cache hit on second call. Use real ONE.core instance, create test keywords/subjects/access states. Assert response structure matches contract in getKeywordDetails.md.
@@ -153,7 +153,7 @@ Write integration test for getKeywordDetails IPC handler. Test scenarios: (1) su
 ### T006 - Implement getKeywordDetails Handler
 **Process**: [main]
 **Files**:
-- `/Users/gecko/src/lama.electron/main/ipc/handlers/keyword-detail.js`
+- `/Users/gecko/src/lama.browser/main/ipc/handlers/keyword-detail.js`
 
 **Description**:
 Implement getKeywordDetails(event, { keyword, topicId }) handler. Normalize keyword to lowercase. Check 5-second TTL cache with key `${keyword}:${topicId}`. Load keyword via TopicAnalysisModel.getKeywordWithAccessStates(). Filter subjects by topicId if provided. Call enrichment service to add topicReferences to keyword and metadata to subjects. Sort subjects by relevanceScore descending. Return { success: true, data: { keyword, subjects, accessStates } }. Handle errors with { success: false, error, data: { keyword: null, subjects: [], accessStates: [] } }.
@@ -177,7 +177,7 @@ Implement getKeywordDetails(event, { keyword, topicId }) handler. Normalize keyw
 ### T007 - Write Test for getKeywordsByTopic Handler [P]
 **Process**: [main]
 **Files**:
-- `/Users/gecko/src/lama.electron/tests/ipc/handlers/keyword-detail.getKeywordsByTopic.test.js`
+- `/Users/gecko/src/lama.browser/tests/ipc/handlers/keyword-detail.getKeywordsByTopic.test.js`
 
 **Description**:
 Write integration test for getKeywordsByTopic IPC handler. Test scenarios: (1) returns keywords for valid topicId sorted by frequency, (2) subjectCount enrichment accurate, (3) limit parameter works, (4) includeArchived parameter filters correctly, (5) topic not found error, (6) totalCount reflects all keywords before limit. Create test data with multiple keywords and subjects. Assert response matches contract in getKeywordsByTopic.md.
@@ -198,7 +198,7 @@ Write integration test for getKeywordsByTopic IPC handler. Test scenarios: (1) r
 ### T008 - Implement getKeywordsByTopic Handler
 **Process**: [main]
 **Files**:
-- `/Users/gecko/src/lama.electron/main/ipc/handlers/keyword-detail.js`
+- `/Users/gecko/src/lama.browser/main/ipc/handlers/keyword-detail.js`
 
 **Description**:
 Implement getKeywordsByTopic(event, { topicId, limit = 100, includeArchived = false }) handler. Validate topicId and limit inputs. Load all subjects for topic. Filter to non-archived if includeArchived = false. Extract unique keywords from subjects. For each keyword, count subjects containing it (subjectCount). Sort by frequency (desc), score (desc), term (asc). Apply limit. Return { success: true, data: { keywords, topicId, totalCount } }.
@@ -222,7 +222,7 @@ Implement getKeywordsByTopic(event, { topicId, limit = 100, includeArchived = fa
 ### T009 - Write Test for getAllKeywords Handler [P]
 **Process**: [main]
 **Files**:
-- `/Users/gecko/src/lama.electron/tests/ipc/handlers/keyword-detail.getAllKeywords.test.js`
+- `/Users/gecko/src/lama.browser/tests/ipc/handlers/keyword-detail.getAllKeywords.test.js`
 
 **Description**:
 Write integration test for getAllKeywords IPC handler. Test scenarios: (1) aggregates keywords across all topics, (2) topicCount and subjectCount accurate, (3) topTopics shows 3 highest frequency topics, (4) accessControlCount reflects access states, (5) hasRestrictions true when 'deny' state exists, (6) sorting by frequency/alphabetical/lastSeen works, (7) pagination with limit/offset. Create test data spanning multiple topics.
@@ -244,7 +244,7 @@ Write integration test for getAllKeywords IPC handler. Test scenarios: (1) aggre
 ### T010 - Implement getAllKeywords Handler
 **Process**: [main]
 **Files**:
-- `/Users/gecko/src/lama.electron/main/ipc/handlers/keyword-detail.js`
+- `/Users/gecko/src/lama.browser/main/ipc/handlers/keyword-detail.js`
 
 **Description**:
 Implement getAllKeywords(event, { includeArchived = false, sortBy = 'frequency', limit = 500, offset = 0 }) handler. Validate sortBy enum, limit, offset. Load all subjects and keywords across topics. Aggregate keywords: sum frequency, weighted average score, earliest extractedAt, latest lastSeen. Calculate topicCount, subjectCount, topTopics (top 3 by frequency). Load all access states, count per keyword, check for 'deny'. Sort by sortBy option. Paginate with limit/offset. Return { success: true, data: { keywords, totalCount, hasMore } }.
@@ -268,7 +268,7 @@ Implement getAllKeywords(event, { includeArchived = false, sortBy = 'frequency',
 ### T011 - Write Test for updateKeywordAccessState Handler [P]
 **Process**: [main]
 **Files**:
-- `/Users/gecko/src/lama.electron/tests/ipc/handlers/keyword-detail.updateKeywordAccessState.test.js`
+- `/Users/gecko/src/lama.browser/tests/ipc/handlers/keyword-detail.updateKeywordAccessState.test.js`
 
 **Description**:
 Write integration test for updateKeywordAccessState IPC handler. Test scenarios: (1) create new access state (created: true), (2) update existing access state (created: false), (3) keyword not found error, (4) principal not found error, (5) invalid principalType error, (6) invalid state error, (7) cache invalidation after update. Mock getCurrentUserId(). Assert response matches contract in updateKeywordAccessState.md.
@@ -290,7 +290,7 @@ Write integration test for updateKeywordAccessState IPC handler. Test scenarios:
 ### T012 - Implement updateKeywordAccessState Handler
 **Process**: [main]
 **Files**:
-- `/Users/gecko/src/lama.electron/main/ipc/handlers/keyword-detail.js`
+- `/Users/gecko/src/lama.browser/main/ipc/handlers/keyword-detail.js`
 
 **Description**:
 Implement updateKeywordAccessState(event, { keyword, principalId, principalType, state }) handler. Validate inputs (keyword exists, principal exists, principalType in ['user', 'group'], state in ['allow', 'deny', 'none']). Normalize keyword. Get current user via nodeOneCoreInstance.getCurrentUserId(). Call keyword-access-storage upsert function. Invalidate cache for keyword. Return { success: true, data: { accessState, created } }.
@@ -314,7 +314,7 @@ Implement updateKeywordAccessState(event, { keyword, principalId, principalType,
 ### T013 - Write Test for getKeywordAccessStates Handler [P]
 **Process**: [main]
 **Files**:
-- `/Users/gecko/src/lama.electron/tests/ipc/handlers/keyword-detail.getKeywordAccessStates.test.js`
+- `/Users/gecko/src/lama.browser/tests/ipc/handlers/keyword-detail.getKeywordAccessStates.test.js`
 
 **Description**:
 Write integration test for getKeywordAccessStates IPC handler. Test scenarios: (1) returns access states for keyword with principal details, (2) allPrincipals includes all users and groups with hasState flag, (3) sorting by principalType then name, (4) keyword not found error, (5) includePrincipalDetails = false omits enrichment. Create test data with users, groups, and access states.
@@ -336,7 +336,7 @@ Write integration test for getKeywordAccessStates IPC handler. Test scenarios: (
 ### T014 - Implement getKeywordAccessStates Handler
 **Process**: [main]
 **Files**:
-- `/Users/gecko/src/lama.electron/main/ipc/handlers/keyword-detail.js`
+- `/Users/gecko/src/lama.browser/main/ipc/handlers/keyword-detail.js`
 
 **Description**:
 Implement getKeywordAccessStates(event, { keyword, includePrincipalDetails = true }) handler. Validate keyword exists. Normalize keyword. Load access states for keyword. If includePrincipalDetails = true, fetch contacts and groups, enrich each state with principalName, principalEmail (users), principalMemberCount (groups). Build allPrincipals list with hasState flags. Sort by principalType (users first), then principalName, then updatedAt. Return { success: true, data: { keyword, accessStates, allPrincipals, totalStates } }.
@@ -360,7 +360,7 @@ Implement getKeywordAccessStates(event, { keyword, includePrincipalDetails = tru
 ### T015 - Register All IPC Handlers in Controller
 **Process**: [main]
 **Files**:
-- `/Users/gecko/src/lama.electron/main/ipc/controller.js`
+- `/Users/gecko/src/lama.browser/main/ipc/controller.js`
 
 **Description**:
 Import all 5 handlers from keyword-detail.js and register them with ipcMain.handle(). Channels: 'keywordDetail:getKeywordDetails', 'keywordDetail:getKeywordsByTopic', 'keywordDetail:getAllKeywords', 'keywordDetail:updateKeywordAccessState', 'keywordDetail:getKeywordAccessStates'. Add registration calls in IPC controller initialization.
@@ -382,7 +382,7 @@ Import all 5 handlers from keyword-detail.js and register them with ipcMain.hand
 ### T016 - Create TypeScript Interfaces for Keyword Detail [P]
 **Process**: [renderer]
 **Files**:
-- `/Users/gecko/src/lama.electron/electron-ui/src/types/keyword-detail.ts`
+- `/Users/gecko/src/lama.browser/electron-ui/src/types/keyword-detail.ts`
 
 **Description**:
 Create TypeScript interfaces matching IPC response structures: KeywordAccessState, TopicReference, EnrichedKeyword, EnrichedSubject, AccessStateValue, PrincipalType, KeywordDetailResponse, KeywordsByTopicResponse, AllKeywordsResponse, AccessStatesResponse. Import SHA256Hash type from ONE.core types. Export all interfaces for use in UI components.
@@ -404,7 +404,7 @@ Create TypeScript interfaces matching IPC response structures: KeywordAccessStat
 ### T017 - Create useKeywordDetails Hook [P]
 **Process**: [renderer]
 **Files**:
-- `/Users/gecko/src/lama.electron/electron-ui/src/hooks/useKeywordDetails.ts`
+- `/Users/gecko/src/lama.browser/electron-ui/src/hooks/useKeywordDetails.ts`
 
 **Description**:
 Create React hook useKeywordDetails(keyword: string | null, topicId?: string). Hook calls window.electronAPI.invoke('keywordDetail:getKeywordDetails', { keyword, topicId }) when keyword changes. Return { data, loading, error, refetch }. Handle null keyword (no-op). Use React.useEffect for IPC call. Cache result in state. Provide refetch function to force reload.
@@ -427,7 +427,7 @@ Create React hook useKeywordDetails(keyword: string | null, topicId?: string). H
 ### T018 - Create KeywordDetailPanel Component [P]
 **Process**: [renderer]
 **Files**:
-- `/Users/gecko/src/lama.electron/electron-ui/src/components/KeywordDetail/KeywordDetailPanel.tsx`
+- `/Users/gecko/src/lama.browser/electron-ui/src/components/KeywordDetail/KeywordDetailPanel.tsx`
 
 **Description**:
 Create main KeywordDetailPanel component. Props: keyword (string), topicId (optional), onClose (function). Use useKeywordDetails hook to fetch data. Render header with keyword name and close button. Render SortControls component. Render SubjectList component with subjects. Render AccessControlList component with access states. Handle loading and error states. Use same layout/styling as TopicSummary panel.
@@ -452,7 +452,7 @@ Create main KeywordDetailPanel component. Props: keyword (string), topicId (opti
 ### T019 - Create SubjectList Component [P]
 **Process**: [renderer]
 **Files**:
-- `/Users/gecko/src/lama.electron/electron-ui/src/components/KeywordDetail/SubjectList.tsx`
+- `/Users/gecko/src/lama.browser/electron-ui/src/components/KeywordDetail/SubjectList.tsx`
 
 **Description**:
 Create SubjectList component. Props: subjects (EnrichedSubject[]), sortBy (SortOption), onSortChange (function). Render vertically scrollable list of subjects. Each subject shows: description, keyword combination, topic references, last seen date. Implement sorting: relevance (default), time, author. Each subject item clickable to expand details. Handle empty state ("No subjects found"). Use React virtualization if >50 subjects.
@@ -475,7 +475,7 @@ Create SubjectList component. Props: subjects (EnrichedSubject[]), sortBy (SortO
 ### T020 - Create AccessControlList Component [P]
 **Process**: [renderer]
 **Files**:
-- `/Users/gecko/src/lama.electron/electron-ui/src/components/KeywordDetail/AccessControlList.tsx`
+- `/Users/gecko/src/lama.browser/electron-ui/src/components/KeywordDetail/AccessControlList.tsx`
 
 **Description**:
 Create AccessControlList component. Props: keyword (string), accessStates (KeywordAccessState[]), allPrincipals ({ users, groups }), onAccessChange (function). Render list of users and groups with 3-state selectors (allow/deny/none). Visually distinguish users from groups (icon/label). Each selector calls onAccessChange(principalId, principalType, newState). Show loading state during state change. Handle empty state ("No users or groups").
@@ -500,7 +500,7 @@ Create AccessControlList component. Props: keyword (string), accessStates (Keywo
 ### T021 - Create SortControls Component [P]
 **Process**: [renderer]
 **Files**:
-- `/Users/gecko/src/lama.electron/electron-ui/src/components/KeywordDetail/SortControls.tsx`
+- `/Users/gecko/src/lama.browser/electron-ui/src/components/KeywordDetail/SortControls.tsx`
 
 **Description**:
 Create SortControls component. Props: sortBy (SortOption), onSortChange (function). Render dropdown or button group with options: Relevance, Time, Author. Current sort option highlighted. Calls onSortChange when user selects different option. Use shadcn/ui Select or RadioGroup component.
@@ -522,7 +522,7 @@ Create SortControls component. Props: sortBy (SortOption), onSortChange (functio
 ### T022 - Extend KeywordCloud Component with Click Handler
 **Process**: [renderer]
 **Files**:
-- `/Users/gecko/src/lama.electron/electron-ui/src/components/TopicSummary/KeywordCloud.tsx`
+- `/Users/gecko/src/lama.browser/electron-ui/src/components/TopicSummary/KeywordCloud.tsx`
 
 **Description**:
 Modify existing KeywordCloud component to add onKeywordClick prop. When keyword clicked, call onKeywordClick(keyword.term). Add visual feedback on hover (cursor pointer, highlight). Ensure click handler doesn't interfere with existing functionality. TypeScript prop validation.
@@ -543,7 +543,7 @@ Modify existing KeywordCloud component to add onKeywordClick prop. When keyword 
 ### T023 - Integrate KeywordDetailPanel into TopicSummary Container
 **Process**: [renderer]
 **Files**:
-- `/Users/gecko/src/lama.electron/electron-ui/src/components/TopicSummary/TopicSummary.tsx`
+- `/Users/gecko/src/lama.browser/electron-ui/src/components/TopicSummary/TopicSummary.tsx`
 
 **Description**:
 Modify TopicSummary container component to support conditional rendering. Add state: view ('summary' | 'keyword-detail'), selectedKeyword (string | null). When KeywordCloud keyword clicked, set view = 'keyword-detail' and selectedKeyword = keyword. Render KeywordDetailPanel when view = 'keyword-detail'. Render TopicSummary when view = 'summary'. Close button on KeywordDetailPanel sets view = 'summary'.
@@ -566,7 +566,7 @@ Modify TopicSummary container component to support conditional rendering. Add st
 ### T024 - Create KeywordSettingsPage Component [P]
 **Process**: [renderer]
 **Files**:
-- `/Users/gecko/src/lama.electron/electron-ui/src/components/Settings/KeywordSettingsPage.tsx`
+- `/Users/gecko/src/lama.browser/electron-ui/src/components/Settings/KeywordSettingsPage.tsx`
 
 **Description**:
 Create settings page component for keyword management. Use useEffect to call window.electronAPI.invoke('keywordDetail:getAllKeywords', { sortBy, limit: 50, offset: page * 50 }). Render table with columns: Keyword, Frequency, Topics (count), Last Seen, Access Control. Inline access control editors (3-state selectors). Sorting controls in header. Pagination controls at bottom. Search/filter input at top.
@@ -590,7 +590,7 @@ Create settings page component for keyword management. Use useEffect to call win
 ### T025 - Add Keyboard Settings Navigation Entry
 **Process**: [renderer]
 **Files**:
-- `/Users/gecko/src/lama.electron/electron-ui/src/components/Settings/SettingsNav.tsx` (or equivalent)
+- `/Users/gecko/src/lama.browser/electron-ui/src/components/Settings/SettingsNav.tsx` (or equivalent)
 
 **Description**:
 Add navigation entry for "Keywords" in settings menu. Link to KeywordSettingsPage route. Icon: Tag icon from lucide-react or similar. Position: after existing settings sections. Ensure navigation highlights active section.
@@ -613,7 +613,7 @@ Add navigation entry for "Keywords" in settings menu. Link to KeywordSettingsPag
 ### T026 - Write Integration Test for Full Keyword Click Flow [P]
 **Process**: [both]
 **Files**:
-- `/Users/gecko/src/lama.electron/tests/integration/keyword-detail-flow.test.js`
+- `/Users/gecko/src/lama.browser/tests/integration/keyword-detail-flow.test.js`
 
 **Description**:
 Write end-to-end integration test: (1) Initialize Electron app with test data, (2) Navigate to conversation with keywords, (3) Click keyword in cloud, (4) Verify KeywordDetailPanel opens, (5) Verify subjects loaded and displayed, (6) Change sort option, verify re-sort, (7) Change access state, verify IPC call and UI update, (8) Click keyword again, verify panel closes. Use Playwright or Spectron for Electron testing.
@@ -678,7 +678,7 @@ Run performance tests: (1) IPC round-trip time for getKeywordDetails (<200ms), (
 ### T029 - Execute Quickstart Manual Testing Scenarios [P]
 **Process**: [both]
 **Files**:
-- `/Users/gecko/src/lama.electron/specs/015-keyword-detail-preview/quickstart.md`
+- `/Users/gecko/src/lama.browser/specs/015-keyword-detail-preview/quickstart.md`
 
 **Description**:
 Execute all manual testing scenarios from quickstart.md: (1) Open keyword detail panel, (2) Toggle panel on/off, (3) Switch between keywords, (4) Subject list display, (5) Subject sorting (relevance), (6) Subject sorting (time/author), (7) Access control display, (8) Update access state, (9) Settings page navigation, (10) Edge cases. Document any issues found. Verify all acceptance criteria met.
@@ -699,7 +699,7 @@ Execute all manual testing scenarios from quickstart.md: (1) Open keyword detail
 ### T030 - Update Feature Documentation
 **Process**: [both]
 **Files**:
-- `/Users/gecko/src/lama.electron/specs/015-keyword-detail-preview/README.md` (create if needed)
+- `/Users/gecko/src/lama.browser/specs/015-keyword-detail-preview/README.md` (create if needed)
 
 **Description**:
 Create or update README.md for feature with: overview, architecture diagram, IPC contract summary, UI component hierarchy, usage examples, testing instructions, troubleshooting tips. Include links to all spec documents (plan.md, data-model.md, contracts/). Document known limitations or future enhancements.

@@ -1,4 +1,4 @@
-# LAMA Electron Architecture
+# LAMA Browser Architecture
 
 ## Overview
 
@@ -140,7 +140,7 @@ IndexedDB    File System
 ## File Structure
 
 ```
-/lama.electron/
+/lama.browser/
 ├── main/                    # Main process (Node.js)
 │   ├── app.js              # Application entry
 │   └── hybrid/             # Hybrid architecture

@@ -14,7 +14,7 @@ LAMA uses pre-built `.tgz` packages stored in the `electron-ui/vendor/` director
 ## Directory Structure
 
 ```
-lama.electron/
+lama.browser/
 ├── scripts/
 │   ├── update-vendor-packages.js    # Build script for vendor packages
 │   └── update-vendor-packages.sh    # Bash alternative

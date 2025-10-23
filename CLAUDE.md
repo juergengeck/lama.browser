@@ -1,8 +1,156 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code when working with LAMA Electron.
+This file provides guidance to Claude Code when working with LAMA Browser.
 
-## NodeOneCore: Comprehensive ONE.core Instance
+## Browser Platform Architecture (ACTIVE)
+
+**CRITICAL**: This is a PURE BROWSER implementation following the one.leute pattern:
+
+### Platform Details
+- **Location**: `/browser-ui/`
+- **Platform**: Browser (IndexedDB storage)
+- **Execution**: ONE.core runs directly in browser main thread (no Electron, no Node.js, no workers)
+- **Models**: SingleUserNoAuth, LeuteModel, ChannelManager, TopicModel, TopicAnalysisModel, etc.
+- **Storage**: IndexedDB (owner-specific, created after login)
+
+### Instance-Based Context (CRITICAL)
+
+**The Instance object holds owner-specific context:**
+- Created during `SingleUserNoAuth.loginOrRegister()`
+- Storage is owner-specific (keyed by owner ID in IndexedDB)
+- **CANNOT call storage methods before login** - no Instance = no owner context
+- Owner ID available via `model.ownerId` after initialization
+
+### Initialization Flow
+
+```
+App Start (main.tsx)
+  ↓
+Load ONE.core browser platform (import '@refinio/one.core/lib/system/load-browser.js')
+  ↓
+Create Model (models constructed but NOT initialized)
+  - new LeuteModel(), new ChannelManager(), new TopicModel()
+  - new SingleUserNoAuth() (Instance manager)
+  - Register: model.one.onLogin(model.init)
+  ↓
+Render App (show Login UI)
+  - isAuthenticated = false
+  - App.tsx shows LoginDeploy component
+  ↓
+User Logs In → model.one.loginOrRegister({ email, instanceName, secret })
+  ↓
+Instance Created (owner ID established, storage initialized)
+  ↓
+SingleUserNoAuth emits onLogin → Model.init() called automatically
+  ↓
+Model.init() initializes all models in sequence:
+  - objectEvents.init()
+  - leuteModel.init()
+  - channelManager.init()
+  - topicModel.init()
+  - connections.init()
+  - topicAnalysisModel.init()
+  - All handlers init (aiHandler, chatHandler, etc.)
+  ↓
+model.initialized = true
+  ↓
+model.onOneModelsReady.emit()
+  ↓
+App.tsx: isAuthenticated = true
+  ↓
+UI renders main application (ChatLayout, etc.)
+  - Handlers are now safe to call
+  - Storage operations work (owner context available)
+```
+
+### Pre-Login Rules (CRITICAL)
+
+**DO NOT:**
+- Call handler methods before login
+- Access storage before login
+- Assume model.initialized is true on mount
+- Call operations in React hooks without checking initialized state
+
+**DO:**
+- Check `model.initialized` before all operations
+- Listen to `model.onOneModelsReady` for initialization completion
+- Return early from hooks if not initialized
+- Guard all storage/handler calls with initialization checks
+
+**Example (useTopics.ts):**
+```typescript
+const refreshTopics = useCallback(async () => {
+  // CRITICAL: Do not call before Instance is created
+  if (!model.initialized) {
+    console.log('[useTopics] Skipping - model not initialized (no Instance yet)')
+    setIsLoading(false)
+    return  // Early return - do NOT proceed
+  }
+
+  // Now safe to call handlers and access storage
+  const response = await model.chatHandler.getConversations({...})
+}, [model])
+```
+
+### Ambient Type System (January 2025)
+
+**Following ONE.core's Pattern**: The browser platform uses TypeScript's ambient module declaration merging for type safety.
+
+**File**: `/browser-ui/src/types/@OneObjectInterfaces.d.ts`
+
+This file extends `@OneObjectInterfaces` (ONE.core's ambient module) with all custom lama.core/chat.core types:
+- **Topic Analysis**: Subject, Keyword, Summary, WordCloudSettings
+- **LLM Management**: LLM, GlobalLLMSettings, SystemPromptTemplate
+- **Proposals**: ProposalConfig
+- **UI**: AvatarPreference
+
+**Benefits**:
+- Types available globally without imports
+- No circular dependency issues
+- Matches ONE.core's official pattern (see `/one.core/@OneObjectInterfaces.d.ts`)
+- Consistent with ONE.core README TypeScript support section
+
+**Already included in** `tsconfig.json` line 36.
+
+### Dependency Injection Pattern (January 2025)
+
+**Platform-agnostic modules** (from chat.core/lama.core) use dependency injection to avoid tight coupling to specific platforms.
+
+**Example - TopicGroupManager** (browser-ui/src/model/Model.ts:145-155):
+
+```typescript
+this.topicGroupManager = new TopicGroupManager(
+    this, // OneCoreInstance - Model implements this interface
+    {
+        // Storage dependencies from ONE.core
+        storeVersionedObject,
+        getObjectByIdHash,
+        getObject,
+        createAccess,
+        calculateIdHashOfObj,
+        calculateHashOfObj
+    }
+);
+```
+
+**Why**: TopicGroupManager (from chat.core) works on both Node.js and browser platforms. Dependencies are injected at construction rather than imported directly.
+
+**Pattern**:
+1. Platform-agnostic module defines dependency interfaces
+2. Platform (browser/Node.js) provides implementations at runtime
+3. Constructor injection (not globals, testable)
+
+### Key Files
+
+| File | Purpose | Key Lines |
+|------|---------|-----------|
+| `/browser-ui/src/main.tsx` | App entry point, platform loading | 1-77 |
+| `/browser-ui/src/App.tsx` | Auth state, login/logout handling | 32-102 |
+| `/browser-ui/src/types/@OneObjectInterfaces.d.ts` | Ambient type declarations | 1-280 |
+| `/browser-ui/src/model/Model.ts` | Model class with init/shutdown | 81-250 |
+| `/browser-ui/src/components/LoginDeploy.tsx` | Login UI | 1-111 |
+
+## NodeOneCore: Comprehensive ONE.core Instance (ELECTRON - LEGACY)
 
 **CRITICAL**: The Node.js process runs a FULL ONE.core instance (`NodeOneCore`) with complete capabilities:
 
@@ -489,7 +637,7 @@ Structured JSON-based protocol for LLM responses using Ollama's native `format` 
 - Cache hit rate tracking and optimization
 
 **Auto-Analysis**:
-- Triggers after 5 messages in conversation
+- Triggers after every message (immediate analysis)
 - Identifies subjects by keyword combinations
 - Generates AI summary referencing all subjects
 - Updates summary when subjects change significantly

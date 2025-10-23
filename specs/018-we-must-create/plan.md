@@ -1,7 +1,7 @@
 # Implementation Plan: Structured JSON-Based LLM Communication (Ollama Native)
 
 **Branch**: `018-we-must-create` | **Date**: 2025-10-06 | **Spec**: [spec.md](./spec.md)
-**Input**: Feature specification from `/Users/gecko/src/lama.electron/specs/018-we-must-create/spec.md`
+**Input**: Feature specification from `/Users/gecko/src/lama.browser/specs/018-we-must-create/spec.md`
 **Updated**: 2025-10-06 - Using Ollama's native structured outputs instead of prompt-engineered XML
 
 ## Execution Flow (/plan command scope)
@@ -211,7 +211,7 @@ From user stories:
    - Assert: Can trace Keyword/Subject back to creating Message
 
 ### Agent Context Update
-- Update `/Users/gecko/src/lama.electron/CLAUDE.md` with:
+- Update `/Users/gecko/src/lama.browser/CLAUDE.md` with:
   - Ollama structured output integration summary
   - JSON schema location
   - Modified services: llm-manager, ollama, ai-assistant-model
@@ -280,5 +280,5 @@ From user stories:
 - [x] Complexity deviations documented (none)
 
 ---
-*Based on Constitution v1.0.0 - See `/Users/gecko/src/lama.electron/spec/memory/constitution.md`*
+*Based on Constitution v1.0.0 - See `/Users/gecko/src/lama.browser/spec/memory/constitution.md`*
 *LAMA-specific architecture enforced - Single ONE.core, IPC-first, fail-fast*

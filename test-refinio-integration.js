@@ -16,8 +16,8 @@ async function testPairingFlow() {
   // Clear storage and start the app
   console.log('Clearing storage and starting app...');
   
-  const child = exec('./clear-all-storage.sh && npm run electron', { 
-    cwd: '/Users/gecko/src/lama.electron'
+  const child = exec('./clear-all-storage.sh && npm run electron', {
+    cwd: '/Users/gecko/src/lama.browser'
   });
   
   let output = '';

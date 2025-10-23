@@ -1,12 +1,12 @@
-# LAMA Electron Project Structure
+# LAMA Browser Project Structure
 
 ## Overview
-This repository contains the Electron desktop application for LAMA. The structure has been organized to keep the Electron UI separate from the React Native mobile app for independent updates and maintenance.
+This repository contains the Browser desktop application for LAMA. The structure has been organized to keep the Browser UI separate from the React Native mobile app for independent updates and maintenance.
 
 ## Directory Structure
 
 ```
-lama.electron/
+lama.browser/
 ├── electron-ui/              # Electron UI (React + Vite)
 │   ├── src/                  # Source code
 │   │   ├── components/       # React components

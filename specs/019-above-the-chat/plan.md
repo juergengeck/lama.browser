@@ -1,7 +1,7 @@
 # Implementation Plan: Context-Aware Knowledge Sharing Proposals
 
 **Branch**: `019-above-the-chat` | **Date**: 2025-01-11 | **Spec**: [spec.md](./spec.md)
-**Input**: Feature specification from `/Users/gecko/src/lama.electron/specs/019-above-the-chat/spec.md`
+**Input**: Feature specification from `/Users/gecko/src/lama.browser/specs/019-above-the-chat/spec.md`
 
 ## Execution Flow (/plan command scope)
 ```

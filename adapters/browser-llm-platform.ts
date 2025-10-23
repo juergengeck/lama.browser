@@ -1,47 +1,41 @@
 /**
  * Browser LLM Platform Implementation
  *
- * Implements LLMPlatform interface for browser environments using custom events.
- * This adapter bridges lama.core's platform-agnostic LLM operations with browser
- * event system.
+ * Implements LLMPlatform interface for Web Worker environments.
+ * This adapter bridges lama.core's platform-agnostic LLM operations with
+ * worker postMessage API to communicate with the main thread.
  */
 
 import type { LLMPlatform } from '@lama/core/services/llm-platform.js';
 
 export class BrowserLLMPlatform implements LLMPlatform {
   /**
-   * Emit progress update via custom event
-   * Maps to 'message:thinking' event for UI
+   * Emit progress update via worker postMessage
+   * Main thread will dispatch 'message:thinking' event for UI
    */
   emitProgress(topicId: string, progress: number): void {
-    window.dispatchEvent(
-      new CustomEvent('message:thinking', {
-        detail: {
-          conversationId: topicId,
-          progress,
-        },
-      })
-    );
+    self.postMessage({
+      type: 'ai:progress',
+      conversationId: topicId,
+      progress,
+    });
   }
 
   /**
-   * Emit error via custom event
-   * Maps to 'ai:error' event for UI
+   * Emit error via worker postMessage
+   * Main thread will dispatch 'ai:error' event for UI
    */
   emitError(topicId: string, error: Error): void {
-    window.dispatchEvent(
-      new CustomEvent('ai:error', {
-        detail: {
-          conversationId: topicId,
-          error: error.message,
-        },
-      })
-    );
+    self.postMessage({
+      type: 'ai:error',
+      conversationId: topicId,
+      error: error.message,
+    });
   }
 
   /**
-   * Emit message update via custom event
-   * Maps to 'message:stream' (streaming) or 'message:updated' (complete) events
+   * Emit message update via worker postMessage
+   * Main thread will dispatch appropriate streaming or update events
    */
   emitMessageUpdate(
     topicId: string,
@@ -50,31 +44,25 @@ export class BrowserLLMPlatform implements LLMPlatform {
     status: string
   ): void {
     if (status === 'streaming') {
-      window.dispatchEvent(
-        new CustomEvent('message:stream', {
-          detail: {
-            conversationId: topicId,
-            messageId,
-            chunk: text,
-            partial: text,
-          },
-        })
-      );
+      self.postMessage({
+        type: 'ai:messageStream',
+        conversationId: topicId,
+        messageId,
+        chunk: text,
+        partial: text,
+      });
     } else if (status === 'complete' || status === 'error') {
-      window.dispatchEvent(
-        new CustomEvent('message:updated', {
-          detail: {
-            conversationId: topicId,
-            message: {
-              id: messageId,
-              conversationId: topicId,
-              text,
-              status: status === 'error' ? 'error' : 'sent',
-              timestamp: new Date().toISOString(),
-            },
-          },
-        })
-      );
+      self.postMessage({
+        type: 'ai:messageComplete',
+        conversationId: topicId,
+        message: {
+          id: messageId,
+          conversationId: topicId,
+          text,
+          status: status === 'error' ? 'error' : 'sent',
+          timestamp: new Date().toISOString(),
+        },
+      });
     }
   }
 
