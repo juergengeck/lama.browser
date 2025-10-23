@@ -110,15 +110,15 @@ export function useMessages({
     try {
       const response = await model.chatHandler.sendMessage({
         conversationId: topicId,
-        text: content,
+        content,  // Fixed from 'text' to 'content'
         attachments
       })
 
       if (response.success && response.data) {
         const message = response.data as Message
 
-        // Optimistically add message to list
-        setMessages(prev => [message, ...prev])
+        // Optimistically add message to end (messages are sorted oldest-first)
+        setMessages(prev => [...prev, message])
 
         return message
       } else {

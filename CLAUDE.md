@@ -31,19 +31,20 @@ Load ONE.core browser platform (import '@refinio/one.core/lib/system/load-browse
 Create Model (models constructed but NOT initialized)
   - new LeuteModel(), new ChannelManager(), new TopicModel()
   - new SingleUserNoAuth() (Instance manager)
-  - Register: model.one.onLogin(model.init)
+  - Register callbacks: model.one.onLogin(model.init) [CALLBACK #1]
   ↓
 Render App (show Login UI)
   - isAuthenticated = false
   - App.tsx shows LoginDeploy component
+  - Register callbacks: model.one.onLogin(handleLogin) [CALLBACK #2]
   ↓
 User Logs In → model.one.loginOrRegister({ email, instanceName, secret })
   ↓
 Instance Created (owner ID established, storage initialized)
   ↓
-SingleUserNoAuth emits onLogin → Model.init() called automatically
+SingleUserNoAuth emits onLogin event → fires ALL registered callbacks in order:
   ↓
-Model.init() initializes all models in sequence:
+[CALLBACK #1] Model.init() (registered first during Model construction)
   - objectEvents.init()
   - leuteModel.init()
   - channelManager.init()
@@ -51,17 +52,19 @@ Model.init() initializes all models in sequence:
   - connections.init()
   - topicAnalysisModel.init()
   - All handlers init (aiHandler, chatHandler, etc.)
+  - model.initialized = true
+  - model.onOneModelsReady.emit()
   ↓
-model.initialized = true
-  ↓
-model.onOneModelsReady.emit()
-  ↓
-App.tsx: isAuthenticated = true
+[CALLBACK #2] App.handleLogin() (registered second during React mount)
+  - setIsAuthenticated(true)
+  - React re-renders with authenticated state
   ↓
 UI renders main application (ChatLayout, etc.)
   - Handlers are now safe to call
   - Storage operations work (owner context available)
 ```
+
+**CRITICAL - Callback Order**: Both Model.init() and App.handleLogin() are triggered by the SAME onLogin event. Model.init() executes FIRST because it was registered first (during Model construction). App's handleLogin executes SECOND (registered during React mount). This means you'll see all the initialization logs BEFORE the "Login event received" log - this is correct behavior, not a bug. Both callbacks are part of the login event processing.
 
 ### Pre-Login Rules (CRITICAL)
 

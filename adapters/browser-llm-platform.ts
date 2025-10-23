@@ -10,59 +10,76 @@ import type { LLMPlatform } from '@lama/core/services/llm-platform.js';
 
 export class BrowserLLMPlatform implements LLMPlatform {
   /**
-   * Emit progress update via worker postMessage
-   * Main thread will dispatch 'message:thinking' event for UI
+   * Emit progress update via window custom event (Browser Direct - no workers)
    */
   emitProgress(topicId: string, progress: number): void {
-    self.postMessage({
-      type: 'ai:progress',
-      conversationId: topicId,
-      progress,
-    });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ai:progress', {
+        detail: {
+          conversationId: topicId,
+          progress,
+        }
+      }));
+    }
   }
 
   /**
-   * Emit error via worker postMessage
-   * Main thread will dispatch 'ai:error' event for UI
+   * Emit error via window custom event (Browser Direct - no workers)
    */
   emitError(topicId: string, error: Error): void {
-    self.postMessage({
-      type: 'ai:error',
-      conversationId: topicId,
-      error: error.message,
-    });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ai:error', {
+        detail: {
+          conversationId: topicId,
+          error: error.message,
+        }
+      }));
+    }
   }
 
   /**
-   * Emit message update via worker postMessage
-   * Main thread will dispatch appropriate streaming or update events
+   * Emit message update via window custom event (Browser Direct - no workers)
    */
   emitMessageUpdate(
     topicId: string,
     messageId: string,
-    text: string,
+    content: string | { thinking?: string; response: string; raw?: string },
     status: string
   ): void {
+    if (typeof window === 'undefined') return;
+
+    // Normalize content to object format
+    const normalized = typeof content === 'string'
+      ? { response: content }
+      : content;
+
     if (status === 'streaming') {
-      self.postMessage({
-        type: 'ai:messageStream',
-        conversationId: topicId,
-        messageId,
-        chunk: text,
-        partial: text,
-      });
-    } else if (status === 'complete' || status === 'error') {
-      self.postMessage({
-        type: 'ai:messageComplete',
-        conversationId: topicId,
-        message: {
-          id: messageId,
+      console.log('[BrowserLLMPlatform] 📢 Dispatching ai:messageStream event, response length:', normalized.response.length);
+      window.dispatchEvent(new CustomEvent('ai:messageStream', {
+        detail: {
           conversationId: topicId,
-          text,
-          status: status === 'error' ? 'error' : 'sent',
-          timestamp: new Date().toISOString(),
-        },
-      });
+          messageId,
+          chunk: normalized.response,
+          partial: normalized.response,
+          thinking: normalized.thinking,
+          raw: normalized.raw,
+        }
+      }));
+    } else if (status === 'complete' || status === 'error') {
+      window.dispatchEvent(new CustomEvent('ai:messageComplete', {
+        detail: {
+          conversationId: topicId,
+          message: {
+            id: messageId,
+            conversationId: topicId,
+            text: normalized.response,
+            thinking: normalized.thinking,
+            raw: normalized.raw,
+            status: status === 'error' ? 'error' : 'sent',
+            timestamp: new Date().toISOString(),
+          },
+        }
+      }));
     }
   }
 

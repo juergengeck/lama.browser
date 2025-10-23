@@ -15,13 +15,12 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { MessageView } from './MessageView'
 import { useMessages } from '@/hooks/useMessages'
+import { useModel } from '@/model/index.js'
 import { ChatHeader } from './chat/ChatHeader'
 import { ChatContext } from './chat/ChatContext'
 import { KeywordDetailPanel } from './KeywordDetail/KeywordDetailPanel'
 
 // TODO: Replace these with worker equivalents
-const useLamaMessages = useMessages as any
-const useLamaAuth = () => ({ user: { id: 'current-user' } })
 const useLamaPeers = () => ({ peers: [] })
 const useChatSubjects = () => ({ subjects: [], subjectsJustAppeared: [] })
 const topicAnalysisService = { analyzeMessages: async () => {} }
@@ -41,8 +40,8 @@ export const ChatView = memo(function ChatView({
   hasAIParticipant?: boolean
   onAddUsers?: () => void
 }) {
-  const { messages, loading, sendMessage } = useLamaMessages(conversationId)
-  const { user } = useLamaAuth()
+  const model = useModel()
+  const { messages, isLoading: loading, sendMessage } = useMessages({ topicId: conversationId })
   const { subjects, subjectsJustAppeared } = useChatSubjects(conversationId)
   const chatHeaderRef = useRef<HTMLDivElement>(null)
 
@@ -97,53 +96,59 @@ export const ChatView = memo(function ChatView({
     }
   }, []) // Only on mount
 
-  // Listen for AI streaming events
+  // Listen for AI streaming events via window custom events (Browser Direct)
   useEffect(() => {
-    if (!window.electronAPI) return
-    
-    // Handle thinking indicator (used for all AI messages including welcome)
-    const handleThinking = (data: any) => {
-      console.log(`[ChatView-${conversationId}] 🔔 Received thinking event for: "${data.conversationId}"`)
-      console.log(`[ChatView-${conversationId}] 🔍 My conversationId: "${conversationId}"`)
-      console.log(`[ChatView-${conversationId}] 🔍 Match: ${data.conversationId === conversationId}`)
+    // Handle progress/thinking indicator
+    const handleProgress = (event: Event) => {
+      const data = (event as CustomEvent).detail;
+      console.log(`[ChatView-${conversationId}] 🔔 Progress event:`, data);
       if (data.conversationId === conversationId) {
-        console.log(`[ChatView-${conversationId}] ✅ Setting AI processing to TRUE`)
-        setIsAIProcessing(true)
-        setAiStreamingContent('')
-        onProcessingChange?.(true) // Update parent state
-      } else {
-        console.log(`[ChatView-${conversationId}] ❌ Ignoring event for different conversation`)
+        console.log(`[ChatView-${conversationId}] ✅ Setting AI processing to TRUE`);
+        setIsAIProcessing(true);
+        setAiStreamingContent('');
+        onProcessingChange?.(true);
       }
     }
-    
+
     // Handle streaming chunks
-    const handleStream = (data: any) => {
+    const handleStream = (event: Event) => {
+      const data = (event as CustomEvent).detail;
+      console.log('[ChatView] Stream data received:', data);
       if (data.conversationId === conversationId) {
-        setIsAIProcessing(false)
-        setAiStreamingContent(data.partial || '')
+        setIsAIProcessing(false);
+        // Combine thinking and response for display
+        let content = '';
+        if (data.thinking) {
+          content += `[THINKING] ${data.thinking}\n\n`;
+        }
+        if (data.partial) {
+          content += data.partial;
+        }
+        setAiStreamingContent(content);
       }
     }
-    
+
     // Handle message complete
-    const handleComplete = (data: any) => {
+    const handleComplete = (event: Event) => {
+      const data = (event as CustomEvent).detail;
       if (data.conversationId === conversationId) {
-        setIsAIProcessing(false)
-        setAiStreamingContent('')
-        onProcessingChange?.(false) // Update parent state
+        setIsAIProcessing(false);
+        setAiStreamingContent('');
+        onProcessingChange?.(false);
       }
     }
-    
-    // Subscribe to streaming events via electronAPI
-    const unsubThinking = window.electronAPI.on('message:thinking', handleThinking)
-    const unsubStream = window.electronAPI.on('message:stream', handleStream)
-    const unsubComplete = window.electronAPI.on('message:updated', handleComplete)
-    
+
+    // Subscribe to window custom events
+    window.addEventListener('ai:progress', handleProgress);
+    window.addEventListener('ai:messageStream', handleStream);
+    window.addEventListener('ai:messageComplete', handleComplete);
+
     return () => {
-      if (unsubThinking) unsubThinking()
-      if (unsubStream) unsubStream()
-      if (unsubComplete) unsubComplete()
+      window.removeEventListener('ai:progress', handleProgress);
+      window.removeEventListener('ai:messageStream', handleStream);
+      window.removeEventListener('ai:messageComplete', handleComplete);
     }
-  }, [conversationId])
+  }, [conversationId, onProcessingChange])
   
   useEffect(() => {
     // Get the conversation/contact name
@@ -223,7 +228,7 @@ export const ChatView = memo(function ChatView({
     }
 
     try {
-      await sendMessage(conversationId, content, attachments)
+      await sendMessage(content, attachments)
 
       // Update last message preview with the sent message
       if (onMessageUpdate) {
@@ -366,7 +371,7 @@ export const ChatView = memo(function ChatView({
         {/* Messages */}
         <MessageView
           messages={messages}
-          currentUserId={user?.id}
+          currentUserId={model.ownerId || undefined}
           onSendMessage={handleSendMessage}
           placeholder="Type a message..."
           showSender={true}

@@ -55,6 +55,9 @@ import {LLMConfigHandler} from '@lama/core/handlers/LLMConfigHandler';
 import {CryptoHandler} from '@lama/core/handlers/CryptoHandler';
 import {AuditHandler} from '@lama/core/handlers/AuditHandler';
 
+// LAMA core AI models (message listener)
+import {AIMessageListener} from '@lama/core/models/ai';
+
 // Proposal services
 import {ProposalEngine} from '@lama/core/services/proposal-engine';
 import {ProposalRanker} from '@lama/core/services/proposal-ranker';
@@ -186,9 +189,10 @@ export default class Model {
             }
         });
 
-        // topicAnalysisHandler and proposalsHandler will be created in init() after topicAnalysisModel is ready
+        // topicAnalysisHandler, proposalsHandler, and aiMessageListener will be created in init()
         this.topicAnalysisHandler = null as any;
-        this.proposalsHandler = null as any; // Created in init()
+        this.proposalsHandler = null as any;
+        this.aiMessageListener = null; // Created in init() after aiAssistantModel
         this.keywordDetailHandler = new KeywordDetailHandler(this);
         this.wordCloudSettingsHandler = new WordCloudSettingsHandler(this);
         this.cryptoHandler = new CryptoHandler(this);
@@ -214,7 +218,7 @@ export default class Model {
      */
     public async init(_instanceName: string, _secret: string): Promise<void> {
         try {
-            console.log('[Model] Initializing models after login...');
+            console.log('[Model] ===== LOGIN EVENT: Initializing models (Instance created) =====');
 
             // Setup object event dispatcher priority override
             objectEvents.determinePriorityOverride = (result: AnyObjectResult) => {
@@ -289,6 +293,17 @@ export default class Model {
             // Initialize LAMA handlers (AI-related)
             await this.aiHandler.init?.();
             await this.aiAssistantModel.init?.();
+
+            // Create and start AIMessageListener (listens for new messages and triggers AI responses)
+            this.aiMessageListener = new AIMessageListener({
+                channelManager: this.channelManager,
+                topicModel: this.topicModel,
+                aiHandler: this.aiAssistantModel,
+                ownerId: myMainId
+            });
+            await this.aiMessageListener.start();
+            console.log('[Model] ✅ AIMessageListener started');
+
             await this.topicAnalysisHandler.init?.();
             await this.proposalsHandler.init?.();
             await this.keywordDetailHandler.init?.();
@@ -308,7 +323,7 @@ export default class Model {
             // Mark as initialized for handlers
             this.initialized = true;
 
-            console.log('[Model] All models initialized successfully');
+            console.log('[Model] ===== All models initialized - ready for use =====');
             this.onOneModelsReady.emit();
         } catch (e) {
             console.error('[Model] Models init failed:', e);
@@ -344,6 +359,7 @@ export default class Model {
             () => this.keywordDetailHandler.shutdown?.(),
             () => this.proposalsHandler.shutdown?.(),
             () => this.topicAnalysisHandler.shutdown?.(),
+            () => this.aiMessageListener?.stop(),
             () => this.aiAssistantModel.shutdown?.(),
             () => this.aiHandler.shutdown?.(),
             () => this.iomHandler.shutdown?.(),
@@ -385,6 +401,7 @@ export default class Model {
     // LAMA handlers (AI-related from lama.core)
     public aiHandler: AIHandler;
     public aiAssistantModel: AIAssistantHandler;
+    public aiMessageListener: AIMessageListener | null;
     public topicAnalysisHandler: TopicAnalysisHandler;
     public proposalsHandler: ProposalsHandler;
     public keywordDetailHandler: KeywordDetailHandler;

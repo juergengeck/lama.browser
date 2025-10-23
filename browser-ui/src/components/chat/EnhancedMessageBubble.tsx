@@ -17,7 +17,7 @@ import './MessageContextMenu.css';
 // Enhanced message data
 export interface EnhancedMessageData {
   id: string;
-  text: string;
+  content: string;  // Changed from 'text' to match handler output
   senderId: string;
   senderName: string;
   timestamp: Date;
@@ -396,7 +396,7 @@ export const EnhancedMessageBubble: React.FC<EnhancedMessageBubbleProps> = ({
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(message.text);
+      await navigator.clipboard.writeText(message.content);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -483,9 +483,9 @@ export const EnhancedMessageBubble: React.FC<EnhancedMessageBubbleProps> = ({
   };
 
   // Check if message contains tables or code blocks (for wide layout)
-  const hasWideContent = message.text && (
-    message.text.includes('```') || // Code blocks
-    message.text.includes('|') // Likely a table
+  const hasWideContent = message.content && (
+    message.content.includes('```') || // Code blocks
+    message.content.includes('|') // Likely a table
   );
 
   return (
@@ -578,13 +578,13 @@ export const EnhancedMessageBubble: React.FC<EnhancedMessageBubbleProps> = ({
               }}>
                 [Message retracted{message.retractReason ? `: ${message.retractReason}` : ''}]
               </div>
-            ) : message.text ? (
+            ) : message.content ? (
               <div className="formatted-message-content markdown-content" style={{
                 overflowX: 'auto',
                 maxWidth: '100%'
               }}>
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {message.text}
+                  {message.content}
                 </ReactMarkdown>
               </div>
             ) : (
@@ -624,7 +624,7 @@ export const EnhancedMessageBubble: React.FC<EnhancedMessageBubbleProps> = ({
           {/* Timestamp and checkmarks in bottom right of bubble */}
           <div className="flex items-end gap-1 text-xs opacity-60 shrink-0 ml-2 mr-1">
             <span className="text-[10px]">
-              {message.timestamp.toLocaleTimeString('en-US', {
+              {new Date(message.timestamp).toLocaleTimeString('en-US', {
                 hour: 'numeric',
                 minute: '2-digit',
                 hour12: true

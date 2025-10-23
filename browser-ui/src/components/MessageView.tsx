@@ -54,7 +54,7 @@ interface MessageViewProps {
 
 export function MessageView({
   messages,
-  currentUserId = 'user-1',
+  currentUserId,
   onSendMessage,
   placeholder = 'Type a message...',
   showSender = true,
@@ -371,24 +371,24 @@ export function MessageView({
           )}
           {messages.map((message) => {
             // Check if this is the current user's message
-            const isCurrentUser = message.senderId === 'user' || message.senderId === currentUserId
+            const isCurrentUser = message.sender === 'user' || message.sender === currentUserId
             // Use the isAI flag from the message
             const isAIMessage = message.isAI === true
-            console.log(`[MessageView] Rendering message - senderId: "${message.senderId}", currentUserId: "${currentUserId}", isCurrentUser: ${isCurrentUser}, isAI: ${isAIMessage}, content: "${message.content.substring(0, 50)}..."`)
-            
+            console.log(`[MessageView] Rendering message - sender: "${message.sender}", currentUserId: "${currentUserId}", isCurrentUser: ${isCurrentUser}, isAI: ${isAIMessage}, content: "${message.content.substring(0, 50)}..."`)
+
             // Always use EnhancedMessageBubble for consistent rendering and features
             // Extract hashtags from message content
             const hashtagRegex = /#[\w-]+/g
             const hashtags = message.content.match(hashtagRegex) || []
             const subjects = hashtags.map(tag => tag.slice(1)) // Remove # prefix
 
-            
+
 
             const enhancedMessage: EnhancedMessageData = {
               id: message.id,
-              text: message.content, // Use cleaned text without attachment references
-              senderId: message.senderId,
-              senderName: message.senderName || contactNames[message.senderId] || 'Unknown',
+              content: message.content,  // Fixed: property name now matches
+              senderId: message.sender,
+              senderName: message.senderName || contactNames[message.sender] || 'Unknown',
               timestamp: message.timestamp,
               isOwn: isCurrentUser,
               subjects: subjects,
@@ -400,8 +400,8 @@ export function MessageView({
 
             console.log(`[MessageView] Passing to EnhancedMessageBubble:`, {
               id: enhancedMessage.id,
-              hasText: !!enhancedMessage.text,
-              textLength: enhancedMessage.text?.length,
+              hasContent: !!enhancedMessage.content,
+              contentLength: enhancedMessage.content?.length,
               format: enhancedMessage.format
             })
 
@@ -426,7 +426,7 @@ export function MessageView({
                 <EnhancedMessageBubble
                   message={{
                     id: 'streaming-ai-message',
-                    text: aiStreamingContent,
+                    content: aiStreamingContent,  // Fixed: use 'content' not 'text'
                     senderId: 'ai',
                     senderName: 'AI Assistant',
                     timestamp: new Date(),

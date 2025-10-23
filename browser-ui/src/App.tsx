@@ -35,7 +35,7 @@ function App({ model }: AppProps) {
   // Setup authentication event listeners (following one.leute pattern)
   useEffect(() => {
     const handleLogin = () => {
-      console.log('[App] Login event received');
+      console.log('[App] ===== LOGIN EVENT: Auth state updated (initialization complete) =====');
       setIsAuthenticated(true);
     };
 
@@ -63,11 +63,17 @@ function App({ model }: AppProps) {
   useEffect(() => {
     if (isAuthenticated) {
       console.log('[App] Checking for default model...')
-      // TODO: Implement ai:getDefaultModel worker handler
-      // For now, assume no default model to show onboarding
-      setHasDefaultModel(false)
+      model.llmConfigHandler.getConfig({})
+        .then(response => {
+          console.log('[App] Retrieved LLM config:', response)
+          setHasDefaultModel(response.success && response.config !== null)
+        })
+        .catch(err => {
+          console.error('[App] Failed to get LLM config:', err)
+          setHasDefaultModel(false)
+        })
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, model])
 
   // Persist active tab changes
   useEffect(() => {
@@ -83,7 +89,7 @@ function App({ model }: AppProps) {
   const login = async (instanceName: string, password: string) => {
     setIsLoading(true);
     try {
-      console.log('[App] Logging in/registering as:', instanceName);
+      console.log('[App] ===== LOGIN START: Requesting login/register for:', instanceName, '=====');
 
       // Use loginOrRegister() - handles both new and existing users without accessing storage first
       await model.one.loginOrRegister({
@@ -92,7 +98,7 @@ function App({ model }: AppProps) {
         secret: password
       });
 
-      // isAuthenticated will be set by onLogin event
+      // isAuthenticated will be set by onLogin event (after Model.init() completes)
     } catch (error) {
       console.error('[App] Login/register failed:', error);
       throw error;
@@ -142,7 +148,7 @@ function App({ model }: AppProps) {
 
   if (shouldShowOnboarding) {
     console.log('[App] Showing ModelOnboarding component')
-    return <ModelOnboarding onComplete={async () => {
+    return <ModelOnboarding model={model} onComplete={async () => {
       // Model has been selected and saved to settings
       console.log('[App] ModelOnboarding completed, setting hasDefaultModel to true')
       setHasDefaultModel(true)

@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Download, Cpu, Zap, Check, Loader2, Server, AlertTriangle } from 'lucide-react'
-import { lamaBridge } from '@/bridge/lama-bridge'
+import type Model from '@/model/Model.js'
 import { isOllamaRunning, getLocalOllamaModels, parseOllamaModel, type OllamaModelInfo } from '@/services/ollama'
 import { DownloadManager, checkModelExists, formatBytes, formatTime, type DownloadProgress } from '@/services/huggingface'
 
@@ -41,15 +41,19 @@ const MODEL_OPTIONS: ModelOption[] = [
   }
 ]
 
-export function ModelOnboarding({ onComplete }: { onComplete: () => void }) {
+interface ModelOnboardingProps {
+  model: Model;
+  onComplete: () => void;
+}
+
+export function ModelOnboarding({ model, onComplete }: ModelOnboardingProps) {
   const handleComplete = useCallback(() => {
     // Use setTimeout to ensure this happens after the current render cycle
     setTimeout(() => {
       onComplete()
     }, 0)
   }, [onComplete])
-  // NO AppModel in browser - everything via IPC
-  // All operations via IPC - no AppModel in browser
+
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set())
   const [selectedModel, setSelectedModel] = useState<string | null>(null) // Keep for backward compatibility
   const [isDownloading, setIsDownloading] = useState(false)
@@ -226,14 +230,21 @@ export function ModelOnboarding({ onComplete }: { onComplete: () => void }) {
 
     let modelSetSuccessfully = false
     try {
-      // Save the selected model as default via IPC
-      console.log(`[ModelOnboarding] 🎯 Calling lamaBridge.setDefaultModel(${modelId})`)
-      await lamaBridge.setDefaultModel(modelId)
+      // Save the selected model as default
+      console.log(`[ModelOnboarding] 🎯 Setting ${modelId} as default model`)
+      const response = await model.llmConfigHandler.setConfig({
+        modelType: 'local',
+        modelName: modelId,
+        setAsActive: true
+      })
 
-      // setDefaultModel returns void - if it doesn't throw, it succeeded
-      console.log(`[ModelOnboarding] ✅ Successfully set ${modelId} as default model`)
-      console.log(`[ModelOnboarding] ✅ AI contact created, chats will be created when accessed`)
-      modelSetSuccessfully = true
+      if (response.success) {
+        console.log(`[ModelOnboarding] ✅ Successfully set ${modelId} as default model`)
+        console.log(`[ModelOnboarding] ✅ AI contact created, chats will be created when accessed`)
+        modelSetSuccessfully = true
+      } else {
+        console.error('[ModelOnboarding] ❌ Failed to set default model:', response.error)
+      }
     } catch (error) {
       console.error('[ModelOnboarding] ❌ Error setting default model:', error)
     }
