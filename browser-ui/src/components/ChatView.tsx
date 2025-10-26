@@ -19,10 +19,10 @@ import { useModel } from '@/model/index.js'
 import { ChatHeader } from './chat/ChatHeader'
 import { ChatContext } from './chat/ChatContext'
 import { KeywordDetailPanel } from './KeywordDetail/KeywordDetailPanel'
+import { useChatSubjects } from '@/hooks/useChatSubjects'
 
 // TODO: Replace these with worker equivalents
 const useLamaPeers = () => ({ peers: [] })
-const useChatSubjects = () => ({ subjects: [], subjectsJustAppeared: [] })
 const topicAnalysisService = { analyzeMessages: async () => {} }
 
 export const ChatView = memo(function ChatView({

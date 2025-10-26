@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Loader2 } from 'lucide-react'
+import { Loader2, ChevronDown } from 'lucide-react'
 import './MessageView.css'
 import { useModel } from '@/model/index.js'
 
@@ -132,14 +132,11 @@ export function MessageView({
   const handleScroll = () => {
     if (!scrollAreaRef.current) return
 
-    // Don't track scroll position during streaming - content growth triggers scroll events
-    const isStreaming = isAIProcessing || aiStreamingContent
-    if (isStreaming) return
-
     const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight
 
     // Consider user at bottom if within 50px
+    // Track this even during streaming so user can scroll up
     setIsUserScrolledUp(distanceFromBottom > 50)
   }
 
@@ -178,17 +175,11 @@ export function MessageView({
     setIsUserScrolledUp(false)
   }, [topicId])
 
-  // Reset scroll tracking when streaming starts
-  useEffect(() => {
-    const isStreaming = isAIProcessing || aiStreamingContent
-    if (isStreaming) {
-      setIsUserScrolledUp(false)
-    }
-  }, [isAIProcessing, aiStreamingContent])
+  // Don't reset scroll tracking when streaming starts - respect user position
+  // (Previous version would force scroll to bottom, preventing user from scrolling up)
 
   // Auto-scroll to bottom when new messages arrive or during streaming
   useEffect(() => {
-    // During streaming, always scroll (ignore user scroll position)
     const isStreaming = isAIProcessing || aiStreamingContent
     const wasStreaming = prevStreamingRef.current
 
@@ -216,8 +207,8 @@ export function MessageView({
       return
     }
 
-    // If user has scrolled up and not streaming, don't auto-scroll
-    if (isUserScrolledUp && !isStreaming) return
+    // If user has scrolled up, don't auto-scroll (respect user intent even during streaming)
+    if (isUserScrolledUp) return
 
     // Use requestAnimationFrame to ensure DOM has finished rendering before scrolling
     requestAnimationFrame(() => {
@@ -339,6 +330,14 @@ export function MessageView({
   const handleCloseKeywordDetail = () => {
     setShowKeywordDetail(false)
     setSelectedKeyword(null)
+  }
+
+  // Scroll to bottom handler
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
+      setIsUserScrolledUp(false)
+    }
   }
 
   // Handle attachment clicks
@@ -481,6 +480,19 @@ export function MessageView({
           <div ref={messagesEndRef} />
         </div>
       </div>
+
+      {/* Scroll to bottom button - appears when user scrolls up */}
+      {isUserScrolledUp && (
+        <div className="absolute bottom-20 right-6 z-10">
+          <button
+            onClick={scrollToBottom}
+            className="bg-gray-800 hover:bg-gray-700 text-white rounded-full p-2 shadow-lg transition-all duration-200 border border-gray-600"
+            aria-label="Scroll to bottom"
+          >
+            <ChevronDown className="h-5 w-5" />
+          </button>
+        </div>
+      )}
 
       {/* Proposal Carousel - Absolutely positioned above message input */}
       {proposals.length > 0 && (

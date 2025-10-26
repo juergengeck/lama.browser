@@ -60,14 +60,31 @@ async function startLama(): Promise<void> {
   const model = new Model(COMM_SERVER_URL);
   setGlobalModel(model);
 
+  // Add page reload detection for debugging persistence issues
+  window.addEventListener('beforeunload', (event) => {
+    console.log('[LAMA] 🔍 PERSISTENCE DEBUG: Page is about to reload/close!');
+    console.log('[LAMA] 🔍 Event:', event);
+    console.log('[LAMA] 🔍 This should NOT happen during normal operation');
+    console.trace('[LAMA] 🔍 Stack trace at beforeunload');
+  });
+
+  // Log any unhandled errors that might cause reloads
+  window.addEventListener('error', (event) => {
+    console.error('[LAMA] 🔍 UNHANDLED ERROR:', event.error);
+    console.error('[LAMA] 🔍 Message:', event.message);
+    console.error('[LAMA] 🔍 Filename:', event.filename);
+    console.error('[LAMA] 🔍 This error might trigger a page reload');
+  });
+
   // Render UI - login screen will handle authentication
   const rootElement = document.getElementById('root');
   if (rootElement) {
     const root = ReactDOM.createRoot(rootElement);
     root.render(
-      <React.StrictMode>
+      // StrictMode disabled temporarily to debug restart issues
+      // <React.StrictMode>
         <App model={model} />
-      </React.StrictMode>
+      // </React.StrictMode>
     );
     console.log('[LAMA] Application rendered');
   }

@@ -9,8 +9,10 @@ import { DataDashboard } from '@/components/DataDashboard'
 import { DevicesView } from '@/components/DevicesView'
 import { LoginDeploy } from '@/components/LoginDeploy'
 import { ModelOnboarding } from '@/components/ModelOnboarding'
+import { InvitationAcceptance } from '@/components/InvitationAcceptance'
 import { MessageSquare, BookOpen, Users, Settings, Loader2, Smartphone, BarChart3 } from 'lucide-react'
 import { sessionStorage } from '@/services/session-storage'
+import { isValidInvitationUrl } from '@/utils/invitation-url-parser'
 import type Model from '@/model/Model.js'
 import { ModelProvider } from '@/model/ModelContext'
 
@@ -19,6 +21,9 @@ interface AppProps {
 }
 
 function App({ model }: AppProps) {
+  console.log('[App] ========== APP COMPONENT RENDER ==========')
+  console.log('[App] Component is rendering/re-rendering')
+
   // Restore session state on mount
   const restoredState = sessionStorage.restoreState()
   const [activeTab, setActiveTab] = useState(restoredState?.activeTab || 'chats')
@@ -28,25 +33,104 @@ function App({ model }: AppProps) {
   const [hasTopics, setHasTopics] = useState<boolean | null>(null)
   const [hasDefaultModel, setHasDefaultModel] = useState<boolean | null>(null)
 
+  // Invitation handling (check URL on mount)
+  const [invitationUrl, setInvitationUrl] = useState<string | null>(null)
+  const [pendingInvitation, setPendingInvitation] = useState<string | null>(null)
+  const [isAcceptingInvitation, setIsAcceptingInvitation] = useState(false)
+
   // Authentication state (following one.leute pattern - event-based)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true) // Start as loading while checking session
+
+  // Add mount/unmount tracking
+  useEffect(() => {
+    console.log('[App] ========== APP COMPONENT MOUNTED ==========')
+    return () => {
+      console.log('[App] ========== APP COMPONENT UNMOUNTING ==========')
+      console.log('[App] ⚠️ THIS INDICATES A RESTART/REMOUNT')
+    }
+  }, [])
+
+  // Check for invitation URL on mount (following one.leute pattern)
+  useEffect(() => {
+    const currentUrl = window.location.href
+    console.log('[App] ========== INVITATION URL CHECK (MOUNT) ==========')
+    console.log('[App] Current URL:', currentUrl)
+    console.log('[App] isAuthenticated:', isAuthenticated)
+    console.log('[App] pendingInvitation:', pendingInvitation)
+
+    if (isValidInvitationUrl(currentUrl)) {
+      console.log('[App] ✅ Valid invitation URL detected')
+      setInvitationUrl(currentUrl)
+      setPendingInvitation(currentUrl)
+
+      // Clear invitation from URL immediately to prevent re-processing
+      console.log('[App] Clearing URL (using replaceState - NOT a page reload)')
+      window.history.replaceState({}, document.title, window.location.pathname)
+    } else {
+      console.log('[App] No invitation detected in URL')
+    }
+    console.log('[App] ============================================')
+  }, [])
+
+  // Restore session on mount (following one.leute pattern)
+  useEffect(() => {
+    async function restoreSession() {
+      try {
+        console.log('[App] Checking for existing registration...')
+
+        if (await model.one.isRegistered()) {
+          console.log('[App] User is registered, attempting auto-login...')
+          await model.one.login()
+          console.log('[App] ✅ Auto-login successful')
+          // isAuthenticated will be set by onLogin event
+        } else {
+          console.log('[App] No existing registration found')
+          setIsLoading(false)
+        }
+      } catch (error) {
+        console.error('[App] Auto-login failed:', error)
+        setIsLoading(false)
+      }
+    }
+
+    restoreSession()
+  }, [model])
 
   // Setup authentication event listeners (following one.leute pattern)
   useEffect(() => {
     const handleLogin = () => {
-      console.log('[App] ===== LOGIN EVENT: Auth state updated (initialization complete) =====');
+      console.log('[App] ===== LOGIN EVENT: Auth state updated =====');
       setIsAuthenticated(true);
+      setIsLoading(false);
     };
 
     const handleLogout = () => {
       console.log('[App] Logout event received');
       setIsAuthenticated(false);
+      setPendingInvitation(null);
+      setIsAcceptingInvitation(false);
     };
 
     model.one.onLogin(handleLogin);
     model.one.onLogout(handleLogout);
   }, [model]);
+
+  // Setup onOneModelsReady listener for pending invitation processing
+  // This fires AFTER model.init() completes and model.initialized = true
+  useEffect(() => {
+    const handleModelsReady = () => {
+      console.log('[App] ===== MODELS READY: model.initialized =', model.initialized, '=====');
+      // If there's a pending invitation after login, process it now that models are ready
+      if (pendingInvitation) {
+        console.log('[App] Processing pending invitation after models ready');
+        setIsAcceptingInvitation(true);
+      }
+    };
+
+    const disconnect = model.onOneModelsReady(handleModelsReady);
+    return disconnect;
+  }, [model, pendingInvitation]);
 
   // Check if any topics exist (for onboarding detection)
   useEffect(() => {
@@ -122,6 +206,40 @@ function App({ model }: AppProps) {
     }
   };
 
+  // Show invitation acceptance AFTER login if there's a pending invitation
+  // Don't wait for isAcceptingInvitation flag - it's async and causes timing issues
+  console.log('[App] ========== INVITATION ACCEPTANCE CHECK ==========')
+  console.log('[App] isAuthenticated:', isAuthenticated)
+  console.log('[App] model.initialized:', model.initialized)
+  console.log('[App] pendingInvitation:', pendingInvitation)
+  console.log('[App] Should show invitation?', isAuthenticated && model.initialized && pendingInvitation)
+
+  if (isAuthenticated && model.initialized && pendingInvitation) {
+    console.log('[App] ✅ Showing InvitationAcceptance component')
+    return (
+      <InvitationAcceptance
+        model={model}
+        invitationUrl={pendingInvitation}
+        onComplete={(success) => {
+          console.log('[App] 🔍 Invitation acceptance complete:', success)
+          console.log('[App] 🔍 Clearing pendingInvitation')
+          setIsAcceptingInvitation(false)
+          setPendingInvitation(null)
+
+          // Refresh to load new contacts/conversations after pairing
+          if (success) {
+            console.log('[App] 🔄 Waiting 3 seconds for data to persist before reload...')
+            setTimeout(() => {
+              console.log('[App] 🔄 Reloading page to load new contacts...')
+              window.location.reload()
+            }, 3000)
+          }
+          // Continue to main app (will show onboarding if no model selected)
+        }}
+      />
+    )
+  }
+
   // Show loading screen while logging in
   if (isLoading) {
     return (
@@ -141,9 +259,11 @@ function App({ model }: AppProps) {
   }
 
   // Check if we need to show model onboarding
-  // Show onboarding only if no default model has been configured
-  const shouldShowOnboarding = hasDefaultModel === false
+  // Show onboarding only if no default model has been configured AND no pending invitation
+  // (Invitation acceptance takes priority over onboarding)
+  const shouldShowOnboarding = hasDefaultModel === false && !pendingInvitation
   console.log('[App] hasDefaultModel state:', hasDefaultModel)
+  console.log('[App] pendingInvitation for onboarding check:', pendingInvitation)
   console.log('[App] shouldShowOnboarding:', shouldShowOnboarding)
 
   if (shouldShowOnboarding) {

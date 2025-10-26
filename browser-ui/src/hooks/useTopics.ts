@@ -50,11 +50,8 @@ export function useTopics(): UseTopicsReturn {
       setIsLoading(true)
       setError(null)
 
-      // Ensure default AI chats exist before fetching conversations
-      // Use AIAssistantHandler (browser architecture) instead of AIHandler (Electron architecture)
-      console.log('[useTopics] Ensuring default AI chats exist...')
-      await model.aiAssistantModel.ensureDefaultChats()
-      console.log('[useTopics] Default chats ensured')
+      // Default AI chats are created during aiAssistantModel.init()
+      // No need to call ensureDefaultChats() here - it's handled during initialization
 
       // Call ChatHandler.getConversations (topics and conversations are the same)
       const response = await model.chatHandler.getConversations({

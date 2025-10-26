@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { User, Search, Loader2, Users, Bot } from 'lucide-react'
+import { useModel } from '@/model/ModelContext'
 
 interface Contact {
   id: string
@@ -38,6 +39,7 @@ export function GroupChatDialog({
   onOpenChange,
   onSubmit
 }: GroupChatDialogProps) {
+  const model = useModel()
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -63,39 +65,41 @@ export function GroupChatDialog({
       }
     }
 
-    if (window.electronAPI?.on) {
-      window.electronAPI.on('contacts:updated', handleContactsUpdated)
-    }
+    // Listen to browser event (dispatched by ContactsView or other components)
+    window.addEventListener('contacts:updated', handleContactsUpdated)
 
     return () => {
-      if (window.electronAPI?.off) {
-        window.electronAPI.off('contacts:updated', handleContactsUpdated)
-      }
+      window.removeEventListener('contacts:updated', handleContactsUpdated)
     }
-  }, [open])
+  }, [open, model])
 
   const loadContacts = async () => {
+    if (!model.initialized) {
+      console.log('[GroupChatDialog] Skipping - model not initialized')
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     try {
-      if (!window.electronAPI) {
-        throw new Error('Electron API not available')
-      }
+      const result = await model.contactsHandler.getContacts()
 
-      const result = await window.electronAPI.invoke('contacts:list')
       if (!result.success) {
         throw new Error(result.error || 'Failed to load contacts')
       }
 
-      // Transform contacts to UI format
-      const contactList = (result.contacts || []).map((contact: any) => ({
-        id: contact.id,
-        name: contact.name || `Contact ${contact.id.substring(0, 8)}...`,
-        personId: contact.personId,
-        isConnected: contact.isConnected || false,
-        canMessage: contact.canMessage !== false, // Default to true if not specified
-        isAI: contact.isAI || false,
-        modelId: contact.modelId
-      }))
+      // Filter out owner and transform contacts to UI format
+      const contactList = (result.contacts || [])
+        .filter((contact: any) => contact.id !== model.ownerId) // Exclude owner
+        .map((contact: any) => ({
+          id: contact.id,
+          name: contact.name || `Contact ${contact.id.substring(0, 8)}...`,
+          personId: contact.personId,
+          isConnected: contact.isConnected || false,
+          canMessage: contact.canMessage !== false,
+          isAI: contact.isAI || false,
+          modelId: contact.modelId
+        }))
 
       setContacts(contactList)
       console.log('[GroupChatDialog] Loaded contacts:', contactList.length)

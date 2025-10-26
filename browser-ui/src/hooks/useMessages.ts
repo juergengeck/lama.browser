@@ -150,8 +150,8 @@ export function useMessages({
       if (response.success && response.data) {
         const message = response.data as Message
 
-        // Optimistically add message to end (messages are sorted oldest-first)
-        setMessages(prev => [...prev, message])
+        // Don't optimistically add - channel listener will handle it
+        // This prevents duplicate messages (one from optimistic add, one from channel update)
 
         return message
       } else {

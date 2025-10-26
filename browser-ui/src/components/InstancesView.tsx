@@ -137,9 +137,20 @@ export default function InstancesView() {
   const handleCreateInvitation = async () => {
     try {
       console.log('[InstancesView] Creating invitation...')
-      // TODO: Implement invitation creation in Worker
-      // For now, show not implemented message
-      alert('Invitation creation not yet implemented in browser-only mode')
+
+      // Use IOMHandler to create pairing invitation
+      const result = await model.iomHandler.createPairingInvitation({})
+
+      if (result.success && result.invitation) {
+        // Copy invitation URL to clipboard
+        await navigator.clipboard.writeText(result.invitation.url)
+        setCopiedInvite(true)
+        setTimeout(() => setCopiedInvite(false), 3000)
+        console.log('[InstancesView] Invitation copied to clipboard:', result.invitation.url)
+      } else {
+        console.error('[InstancesView] Failed to create invitation:', result.error)
+        alert('Failed to create invitation: ' + (result.error || 'Unknown error'))
+      }
     } catch (error) {
       console.error('[InstancesView] Error creating invitation:', error)
       alert('Error creating invitation: ' + (error as Error).message)

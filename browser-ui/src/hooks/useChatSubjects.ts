@@ -1,10 +1,11 @@
 /**
- * useChatSubjects Hook
- * Fetches and manages subjects for a chat topic
+ * useChatSubjects Hook - Browser Platform
+ * Fetches and manages subjects for a chat topic using Model handlers
  */
 
 import { useState, useEffect, useRef } from 'react';
 import type { Subject } from '../types/topic-analysis';
+import { getModel } from '../model';
 
 export function useChatSubjects(topicId: string) {
   console.log('[useChatSubjects] Hook called with topicId:', topicId);
@@ -20,9 +21,9 @@ export function useChatSubjects(topicId: string) {
   // Track previous subject count for change detection
   const prevSubjectCountRef = useRef(0);
 
-  // Listen for subject update events from backend
+  // Listen for subject update events from Model
   useEffect(() => {
-    if (!topicId || !window.electronAPI) return;
+    if (!topicId) return;
 
     const handleSubjectsUpdated = (data: any) => {
       console.log(`[useChatSubjects-${topicId}] 🔔 Received subjects:updated event for: "${data.topicId}"`);
@@ -33,9 +34,10 @@ export function useChatSubjects(topicId: string) {
       }
     };
 
-    const unsub = window.electronAPI.on('subjects:updated', handleSubjectsUpdated);
+    // Listen to browser event (dispatched by Model or other components)
+    window.addEventListener('subjects:updated', handleSubjectsUpdated as EventListener);
     return () => {
-      if (unsub) unsub();
+      window.removeEventListener('subjects:updated', handleSubjectsUpdated as EventListener);
     };
   }, [topicId]);
 
@@ -48,6 +50,12 @@ export function useChatSubjects(topicId: string) {
     const currentRequest = ++requestCounter.current;
 
     try {
+      const model = getModel();
+      if (!model.initialized) {
+        console.log('[useChatSubjects] Skipping - model not initialized yet');
+        return;
+      }
+
       if (loading) {
         console.log('[useChatSubjects] Skipping - fetch already in progress');
         return;
@@ -55,7 +63,8 @@ export function useChatSubjects(topicId: string) {
 
       setLoading(true);
 
-      const response = await window.electronAPI.invoke('topicAnalysis:getSubjects', {
+      // Use Model's topicAnalysisHandler instead of Electron IPC
+      const response = await model.topicAnalysisHandler.getSubjects({
         topicId,
         includeArchived: false
       });

@@ -41,6 +41,7 @@ import {storeVersionedObject, getObjectByIdHash} from '@refinio/one.core/lib/sto
 import {getIdObject} from '@refinio/one.core/lib/storage-versioned-objects.js';
 import {getObject} from '@refinio/one.core/lib/storage-unversioned-objects.js';
 import {createAccess} from '@refinio/one.core/lib/access.js';
+import {SET_ACCESS_MODE} from '@refinio/one.core/lib/storage-base-common.js';
 import {calculateHashOfObj, calculateIdHashOfObj} from '@refinio/one.core/lib/util/object.js';
 import {createDefaultKeys, hasDefaultKeys} from '@refinio/one.core/lib/keychain/keychain.js';
 
@@ -70,6 +71,9 @@ import {ExportHandler} from '@chat/core/handlers/ExportHandler.js';
 import {FeedForwardHandler} from '@chat/core/handlers/FeedForwardHandler.js';
 import {IOMHandler} from '@chat/core/handlers/IOMHandler.js';
 
+// Chat core services (contact creation)
+import {handleReceivedProfile, ensureContactExists} from '@chat/core/services/ContactCreation.js';
+
 // LAMA core models
 import TopicAnalysisModel from '@lama/core/one-ai/models/TopicAnalysisModel';
 
@@ -96,8 +100,10 @@ export default class Model {
     public onOneModelsReady = new OEvent<() => void>();
     public initialized: boolean = false;
     public ownerId: string | null = null;
+    private commServerUrl: string;
 
     constructor(commServerUrl: string) {
+        this.commServerUrl = commServerUrl;
         console.log('[Model] Constructing LAMA Browser Model...');
 
         // Setup basic ONE.core models (following one.leute pattern)
@@ -231,6 +237,7 @@ export default class Model {
     public async init(_instanceName: string, _secret: string): Promise<void> {
         try {
             console.log('[Model] ===== LOGIN EVENT: Initializing models (Instance created) =====');
+            console.log('[Model] 🔍 PERSISTENCE DEBUG: Owner context now available, IndexedDB will be owner-specific');
 
             // Setup object event dispatcher priority override
             objectEvents.determinePriorityOverride = (result: AnyObjectResult) => {
@@ -245,17 +252,134 @@ export default class Model {
 
             await objectEvents.init();
 
+            // Setup CHUM listeners for contact creation
+            console.log('[Model] Setting up CHUM listeners for contact creation...');
+            objectEvents.onNewVersion(async (result: AnyObjectResult) => {
+                const obj = result.obj as any;
+
+                // Handle Profile objects received via CHUM
+                if (obj.$type$ === 'Profile' && obj.personId) {
+                    console.log('[Model] 📨 BROWSER: Received Profile via CHUM!', {
+                        personId: obj.personId?.substring(0, 8),
+                        name: obj.name || 'No name'
+                    });
+
+                    // Only process if LeuteModel is initialized
+                    if (this.leuteModel && this.leuteModel.state?.currentState === 'Initialised') {
+                        try {
+                            await handleReceivedProfile(obj.personId, obj, this.leuteModel);
+                            console.log('[Model] ✅ Handled received Profile data');
+                        } catch (error) {
+                            console.error('[Model] Failed to handle received Profile:', error);
+                        }
+                    } else {
+                        console.log('[Model] ⏸️  Skipping Profile - LeuteModel not yet initialized');
+                    }
+                }
+
+                // Handle Person objects received via CHUM
+                if (obj.$type$ === 'Person' && obj.email) {
+                    console.log('[Model] 📨 BROWSER: Received Person via CHUM!', {
+                        email: obj.email,
+                        idHash: result.idHash ? String(result.idHash).substring(0, 8) : undefined
+                    });
+
+                    // Only process if LeuteModel is initialized
+                    if (this.leuteModel && this.leuteModel.state?.currentState === 'Initialised') {
+                        try {
+                            // Store the Person object to ensure vheads file is created
+                            const storeResult = await storeVersionedObject(obj);
+                            console.log('[Model] ✅ Stored Person object (vheads created):', storeResult.idHash?.toString()?.substring(0, 8));
+
+                            // Ensure a contact exists for this Person
+                            await ensureContactExists(result.idHash as any, this.leuteModel, {
+                                displayName: obj.email?.split('@')[0]
+                            });
+                            console.log('[Model] ✅ Ensured contact exists for Person');
+                        } catch (error) {
+                            console.error('[Model] Failed to handle received Person:', error);
+                        }
+                    } else {
+                        console.log('[Model] ⏸️  Skipping Person - LeuteModel not yet initialized');
+                    }
+                }
+            });
+            console.log('[Model] ✅ CHUM listeners registered');
+
             // Initialize contact model (base for identity handling)
             await this.leuteModel.init();
 
+            // CRITICAL: Ensure profile has OneInstanceEndpoint for pairing (needed for IoP connections)
+            console.log('[Model] Ensuring profile has OneInstanceEndpoint...');
+            const me = await this.leuteModel.me();
+            const myMainId = await this.leuteModel.myMainIdentity();
+            const myProfile = await me.mainProfile();
+
+            if (myProfile) {
+                // Check if OneInstanceEndpoint exists using the communicationEndpoints property
+                const hasEndpoint = myProfile.communicationEndpoints.some(
+                    (ep: any) => ep.$type$ === 'OneInstanceEndpoint'
+                );
+
+                if (!hasEndpoint) {
+                    console.log('[Model] Profile missing OneInstanceEndpoint, adding it now...');
+                    const {getInstanceIdHash} = await import('@refinio/one.core/lib/instance.js');
+                    const {getDefaultKeys} = await import('@refinio/one.core/lib/keychain/keychain.js');
+
+                    const instanceId = getInstanceIdHash();
+                    if (instanceId) {
+                        const personKeys = await getDefaultKeys(myMainId);
+                        const instanceKeys = await getDefaultKeys(instanceId);
+
+                        const endpoint = {
+                            $type$: 'OneInstanceEndpoint' as const,
+                            personId: myMainId,
+                            url: this.commServerUrl,
+                            instanceId: instanceId,
+                            instanceKeys: instanceKeys,
+                            personKeys: personKeys
+                        };
+
+                        // Add to the array and save
+                        myProfile.communicationEndpoints.push(endpoint);
+                        await myProfile.saveAndLoad();
+                        console.log('[Model] ✅ OneInstanceEndpoint added to profile');
+                    }
+                } else {
+                    console.log('[Model] ✅ Profile already has OneInstanceEndpoint');
+                }
+            }
+
             // Create standard groups
             const binGroup = await this.leuteModel.createGroup('bin');
-            const everyoneGroup = await GroupModel.constructFromLatestProfileVersionByGroupName(
-                LeuteModel.EVERYONE_GROUP_NAME
-            );
+
+            // Get or create everyone group
+            let everyoneGroup: GroupModel;
+            try {
+                everyoneGroup = await GroupModel.constructFromLatestProfileVersionByGroupName(
+                    LeuteModel.EVERYONE_GROUP_NAME
+                );
+            } catch (error) {
+                // Group doesn't exist yet, create it
+                console.log('[Model] Everyone group not found, creating it...');
+                everyoneGroup = await this.leuteModel.createGroup(LeuteModel.EVERYONE_GROUP_NAME);
+            }
+
+            // Share main profile with everyone group (enables IoP contact pairing)
+            console.log('[Model] Sharing main profile with everyone group for IoP pairing...');
+            try {
+                await createAccess([{
+                    id: myProfile.idHash,
+                    person: [],
+                    group: [everyoneGroup.groupIdHash],
+                    mode: SET_ACCESS_MODE.ADD
+                }]);
+                console.log('[Model] ✅ Main profile shared with everyone group');
+            } catch (error) {
+                console.error('[Model] ❌ Failed to share profile with everyone group:', error);
+            }
 
             // Give the main identity the ability to define trusted keys
-            const myMainId = await this.leuteModel.myMainIdentity();
             await this.leuteModel.trust.certify(
                 'RightToDeclareTrustedKeysForEverybodyCertificate',
                 {
@@ -334,6 +458,16 @@ export default class Model {
 
             // Mark as initialized for handlers
             this.initialized = true;
+            console.log('[Model] 🔍 PERSISTENCE DEBUG: Models initialized, storage should now persist all data');
+
+            // Check IndexedDB databases
+            if (typeof indexedDB !== 'undefined' && 'databases' in indexedDB) {
+                indexedDB.databases().then(dbs => {
+                    console.log('[Model] 🔍 IndexedDB databases after init:', dbs.map(db => `${db.name} (v${db.version})`))
+                }).catch(err => {
+                    console.error('[Model] Failed to list databases:', err)
+                })
+            }
 
             console.log('[Model] ===== All models initialized - ready for use =====');
             this.onOneModelsReady.emit();
@@ -406,6 +540,11 @@ export default class Model {
     public channelManager: ChannelManager;
     public topicModel: TopicModel;
     public connections: ConnectionsModel;
+
+    // Alias for IOMHandler compatibility (expects connectionsModel)
+    public get connectionsModel() {
+        return this.connections;
+    }
 
     // LAMA models
     public topicAnalysisModel: TopicAnalysisModel;

@@ -44,18 +44,14 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
       loadContacts()
     }
     
-    // Listen for IPC contact added events from Node.js
+    // Listen for browser event (dispatched when contacts change)
     const handleContactAdded = () => {
-      console.log('[ContactsView] Contact added via IPC')
+      console.log('[ContactsView] Contact added event received')
       loadContacts()
     }
-    
+
     window.addEventListener('contacts:updated', handleContactsUpdated)
-    
-    // Listen for IPC events if in Electron
-    if (window.electronAPI?.on) {
-      window.electronAPI.on('contact:added', handleContactAdded)
-    }
+    window.addEventListener('contact:added', handleContactAdded)
     
     // Also refresh contacts periodically
     const interval = setInterval(loadContacts, 5000)
@@ -184,34 +180,14 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
 
   const handleAddContact = async () => {
     try {
-      if (!window.electronAPI) {
-        alert('Electron API not available')
+      if (!model.initialized) {
+        alert('Model not initialized. Please wait.')
         return
       }
 
-      // Check if user has a PersonName set
-      const nameCheck = await window.electronAPI.invoke('onecore:hasPersonName')
-
-      if (!nameCheck.success || !nameCheck.hasName) {
-        // No name set - show dialog as required
-        console.log('[ContactsView] No PersonName set, showing required dialog')
-        setProfileDialogRequired(true)
-        setProfileDialogOpen(true)
-        return
-      }
-
-      // Name is set, proceed with invitation
-      await createInvitation()
-    } catch (error: any) {
-      console.error('[ContactsView] Failed to create invitation:', error)
-      alert(error.message || 'Failed to create invitation')
-    }
-  }
-
-  const createInvitation = async () => {
-    try {
-      // Use 'invitation:create' from devices handler (has better error handling)
-      const result = await window.electronAPI.invoke('invitation:create')
+      // Create pairing invitation using IOMHandler
+      console.log('[ContactsView] Creating pairing invitation...')
+      const result = await model.iomHandler.createPairingInvitation({})
 
       if (result.success && result.invitation) {
         // Copy invitation URL to clipboard
@@ -229,12 +205,6 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
   const handleProfileSaved = () => {
     // Reload contacts to get updated owner name
     loadContacts()
-
-    // If this was required for adding a contact, proceed with invitation
-    if (profileDialogRequired) {
-      setProfileDialogRequired(false)
-      createInvitation()
-    }
   }
 
   return (

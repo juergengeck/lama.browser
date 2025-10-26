@@ -18,6 +18,7 @@ import {
   Tag,
   Shield
 } from 'lucide-react';
+import { useModel } from '../../model/ModelContext.js';
 import type {
   AggregatedKeyword,
   AllKeywordsResponse,
@@ -26,6 +27,7 @@ import type {
 } from '../../types/keyword-detail.js';
 
 export const KeywordSettingsPage: React.FC = () => {
+  const model = useModel();
   const [keywords, setKeywords] = useState<AggregatedKeyword[]>([]);
   const [filteredKeywords, setFilteredKeywords] = useState<AggregatedKeyword[]>([]);
   const [loading, setLoading] = useState(false);
@@ -57,18 +59,22 @@ export const KeywordSettingsPage: React.FC = () => {
 
   const loadKeywords = async () => {
     console.log('[KeywordSettingsPage] Loading keywords:', { sortBy, page, pageSize });
+
+    if (!model.initialized) {
+      console.log('[KeywordSettingsPage] Model not initialized yet');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const response: AllKeywordsResponse = await window.electronAPI.invoke(
-        'keywordDetail:getAllKeywords',
-        {
-          sortBy,
-          limit: pageSize,
-          offset: page * pageSize
-        }
-      );
+      const response = await model.keywordDetailHandler.getAllKeywords({
+        sortBy,
+        limit: pageSize,
+        offset: page * pageSize,
+        includeArchived: false
+      });
 
       if (response.success && response.data) {
         console.log('[KeywordSettingsPage] ✅ Loaded keywords:', {
@@ -141,13 +147,16 @@ export const KeywordSettingsPage: React.FC = () => {
       newState
     });
 
+    if (!model.initialized) {
+      console.error('[KeywordSettingsPage] Model not initialized');
+      return;
+    }
+
     try {
-      const response = await window.electronAPI.invoke(
-        'keywordDetail:updateKeywordAccessState',
-        {
-          keyword,
-          principalId,
-          principalType,
+      const response = await model.keywordDetailHandler.updateKeywordAccessState({
+        keyword,
+        principalId,
+        principalType,
           state: newState
         }
       );

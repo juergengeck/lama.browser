@@ -39,6 +39,16 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('[ErrorBoundary] Caught error:', error, errorInfo)
+
+    // Log to localStorage to survive page reloads
+    try {
+      const errorLog = `[${new Date().toISOString()}] ERROR BOUNDARY: ${error.message}\nStack: ${error.stack}\nComponent: ${errorInfo.componentStack}`;
+      const existingLogs = localStorage.getItem('error-boundary-log') || '';
+      localStorage.setItem('error-boundary-log', existingLogs + '\n' + errorLog);
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+
     this.setState({
       error,
       errorInfo

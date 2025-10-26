@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { User, Search, Loader2 } from 'lucide-react'
+import { useModel } from '@/model/ModelContext'
 
 interface Contact {
   id: string
@@ -40,6 +41,7 @@ export function UserSelectionDialog({
   description = "Select users to add to the conversation",
   excludeUserIds = []
 }: UserSelectionDialogProps) {
+  const model = useModel()
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -55,13 +57,16 @@ export function UserSelectionDialog({
   }, [open])
 
   const loadContacts = async () => {
+    if (!model.initialized) {
+      console.log('[UserSelectionDialog] Skipping - model not initialized')
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     try {
-      if (!window.electronAPI) {
-        throw new Error('Electron API not available')
-      }
+      const result = await model.contactsHandler.getContacts()
 
-      const result = await window.electronAPI.invoke('contacts:list')
       if (!result.success) {
         throw new Error(result.error || 'Failed to load contacts')
       }
@@ -69,16 +74,16 @@ export function UserSelectionDialog({
       // Transform contacts to UI format and filter out excluded users
       const contactList = (result.contacts || [])
         .filter((contact: any) => {
-          // Exclude users already in the conversation
+          // Exclude users already in the conversation and owner
           const userId = contact.personId || contact.id
-          return !excludeUserIds.includes(userId)
+          return !excludeUserIds.includes(userId) && userId !== model.ownerId
         })
         .map((contact: any) => ({
           id: contact.id,
           name: contact.name || `Contact ${contact.id.substring(0, 8)}...`,
           personId: contact.personId,
           isConnected: contact.isConnected || false,
-          canMessage: contact.canMessage !== false // Default to true if not specified
+          canMessage: contact.canMessage !== false
         }))
 
       setContacts(contactList)

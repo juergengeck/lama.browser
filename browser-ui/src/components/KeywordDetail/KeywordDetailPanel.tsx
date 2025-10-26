@@ -12,6 +12,7 @@ import { useKeywordDetails } from '../../hooks/useKeywordDetails.js';
 import { SortControls } from './SortControls.js';
 import { SubjectList } from './SubjectList.js';
 import { AccessControlList } from './AccessControlList.js';
+import { useModel } from '../../model/ModelContext.js';
 import type {
   SubjectSortMode,
   AccessStateValue,
@@ -36,6 +37,7 @@ export const KeywordDetailPanel: React.FC<KeywordDetailPanelProps> = ({
   allPrincipals,
   className = ''
 }) => {
+  const model = useModel();
   const { data, loading, error, refetch } = useKeywordDetails(keyword, topicId);
   const [sortMode, setSortMode] = useState<SubjectSortMode>('relevance');
 
@@ -51,16 +53,18 @@ export const KeywordDetailPanel: React.FC<KeywordDetailPanelProps> = ({
       newState
     });
 
+    if (!model.initialized) {
+      console.error('[KeywordDetailPanel] Model not initialized');
+      return;
+    }
+
     try {
-      const response = await window.electronAPI?.invoke(
-        'keywordDetail:updateKeywordAccessState',
-        {
-          keyword,
-          principalId,
-          principalType,
-          state: newState
-        }
-      );
+      const response = await model.keywordDetailHandler.updateKeywordAccessState({
+        keyword,
+        principalId,
+        principalType,
+        state: newState
+      });
 
       if (response?.success) {
         console.log('[KeywordDetailPanel] ✅ Access state updated');

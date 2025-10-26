@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Package, Plus, Trash2, RefreshCw, CheckCircle, Circle } from 'lucide-react'
+import { useModel } from '@/model/ModelContext'
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,7 @@ interface MCPServer {
 }
 
 export function MCPSettings() {
+  const model = useModel()
   const [servers, setServers] = useState<MCPServer[]>([])
   const [loading, setLoading] = useState(false)
   const [showDialog, setShowDialog] = useState(false)
@@ -44,12 +46,17 @@ export function MCPSettings() {
   }, [])
 
   const loadServers = async () => {
+    if (!model.initialized) {
+      console.log('[MCPSettings] Model not initialized yet')
+      return
+    }
+
     setLoading(true)
     try {
-      const result = await window.electronAPI?.invoke('mcp:listServers')
-      if (result?.success && result.servers) {
-        setServers(result.servers)
-      }
+      // TODO: Implement MCP-via-chat transport
+      // For now, return empty list
+      console.warn('[MCPSettings] MCP-via-chat not implemented yet')
+      setServers([])
     } catch (error) {
       console.error('Failed to load MCP servers:', error)
     } finally {
@@ -110,16 +117,9 @@ export function MCPSettings() {
     }
 
     try {
-      if (editingServer) {
-        await window.electronAPI?.invoke('mcp:updateServer', {
-          name: editingServer.name,
-          config: serverConfig
-        })
-      } else {
-        await window.electronAPI?.invoke('mcp:addServer', { config: serverConfig })
-      }
-
-      await loadServers()
+      // TODO: Implement MCP-via-chat transport for server management
+      console.warn('[MCPSettings] MCP server management not implemented yet')
+      alert('MCP-via-chat not implemented yet in browser platform')
       setShowDialog(false)
     } catch (error) {
       console.error('Failed to save MCP server:', error)
@@ -128,8 +128,9 @@ export function MCPSettings() {
 
   const handleDelete = async (name: string) => {
     try {
-      await window.electronAPI?.invoke('mcp:removeServer', { name })
-      await loadServers()
+      // TODO: Implement MCP-via-chat transport for server deletion
+      console.warn('[MCPSettings] MCP server deletion not implemented yet')
+      alert('MCP-via-chat not implemented yet in browser platform')
     } catch (error) {
       console.error('Failed to delete MCP server:', error)
     }
@@ -137,11 +138,9 @@ export function MCPSettings() {
 
   const handleToggle = async (server: MCPServer) => {
     try {
-      await window.electronAPI?.invoke('mcp:updateServer', {
-        name: server.name,
-        config: { ...server, enabled: !server.enabled }
-      })
-      await loadServers()
+      // TODO: Implement MCP-via-chat transport for server toggle
+      console.warn('[MCPSettings] MCP server toggle not implemented yet')
+      alert('MCP-via-chat not implemented yet in browser platform')
     } catch (error) {
       console.error('Failed to toggle MCP server:', error)
     }

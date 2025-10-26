@@ -26,7 +26,9 @@ export default defineConfig({
       // CRITICAL: Use the ONE.core packages directly - NO duplication
       '@refinio/one.core': path.resolve(__dirname, '../packages/one.core'),
       '@refinio/one.models': path.resolve(__dirname, '../packages/one.models'),
-      '@anthropic-ai/sdk': path.resolve(__dirname, '../node_modules/@anthropic-ai/sdk')
+
+      // Stub out Claude for browser builds (CORS restrictions)
+      '@anthropic-ai/sdk': path.resolve(__dirname, './src/stubs/claude-stub.ts')
     },
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
     // CRITICAL: Dedupe ONE.core to ensure single recipe registry instance
