@@ -71,8 +71,9 @@ import {ExportHandler} from '@chat/core/handlers/ExportHandler.js';
 import {FeedForwardHandler} from '@chat/core/handlers/FeedForwardHandler.js';
 import {IOMHandler} from '@chat/core/handlers/IOMHandler.js';
 
-// Chat core services (contact creation)
+// Chat core services (contact creation, P2P topics)
 import {handleReceivedProfile, ensureContactExists} from '@chat/core/services/ContactCreation.js';
+import {autoCreateP2PTopicAfterPairing} from '@chat/core/services/P2PTopicService.js';
 
 // LAMA core models
 import TopicAnalysisModel from '@lama/core/one-ai/models/TopicAnalysisModel';
@@ -400,6 +401,35 @@ export default class Model {
 
             await this.topicModel.init();
             await this.connections.init();
+
+            // Setup pairing success handler to auto-create P2P topics
+            if (this.connections.pairing && (this.connections.pairing as any).onPairingSuccess) {
+                console.log('[Model] Setting up pairing success handler for P2P topic creation...');
+                (this.connections.pairing as any).onPairingSuccess(async (initiatedLocally: boolean, localPersonId: any, localInstanceId: any, remotePersonId: any, remoteInstanceId: any, token: any) => {
+                    console.log('[Model] ✅ PAIRING SUCCESS - Auto-creating P2P topic');
+                    console.log('[Model]   Initiated locally:', initiatedLocally);
+                    console.log('[Model]   Local person:', localPersonId?.substring(0, 8));
+                    console.log('[Model]   Remote person:', remotePersonId?.substring(0, 8));
+
+                    try {
+                        // Use chat.core's P2PTopicService to create the topic
+                        await autoCreateP2PTopicAfterPairing({
+                            topicModel: this.topicModel,
+                            channelManager: this.channelManager,
+                            localPersonId,
+                            remotePersonId,
+                            initiatedLocally,
+                            sendWelcomeMessage: initiatedLocally
+                        });
+                        console.log('[Model] ✅ P2P topic created successfully');
+                    } catch (error) {
+                        console.error('[Model] Failed to auto-create P2P topic:', error);
+                    }
+                });
+                console.log('[Model] ✅ Pairing success handler registered');
+            } else {
+                console.warn('[Model] ⚠️  Pairing model not available - P2P topics won\'t be auto-created');
+            }
 
             // Initialize LAMA-specific models (create TopicAnalysisModel now that dependencies are ready)
             this.topicAnalysisModel = new TopicAnalysisModel(this.channelManager, this.topicModel);
