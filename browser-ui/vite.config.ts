@@ -1,12 +1,14 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import { apiPlugin } from './vite-plugin-api'
 
 export default defineConfig({
   base: './',
   clearScreen: false,
   plugins: [
-    react()
+    react(),
+    apiPlugin()
   ],
   resolve: {
     alias: {

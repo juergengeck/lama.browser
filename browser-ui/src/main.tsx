@@ -3,6 +3,9 @@
  * Main thread ONE.core platform (following one.leute pattern)
  */
 
+// Initialize API logger for test automation (dev mode only)
+import './services/api-logger';
+
 // ============================================================================
 // CRITICAL: Load ONE.core browser platform FIRST (before any other imports)
 // ============================================================================
@@ -52,8 +55,9 @@ import Model, { setGlobalModel } from '@/model/Model.js'
 async function startLama(): Promise<void> {
   console.log('[LAMA] Starting application...');
 
-  // Default comm server URL (can be made configurable later)
-  const COMM_SERVER_URL = 'wss://comm10.dev.refinio.one';
+  // Read comm server URL from environment or use default
+  const COMM_SERVER_URL = import.meta.env.VITE_COMM_SERVER_URL || 'wss://comm10.dev.refinio.one';
+  console.log('[LAMA] Using CommServer:', COMM_SERVER_URL);
 
   // Create model instance
   console.log('[LAMA] Creating Model...');
