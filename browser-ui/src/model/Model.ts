@@ -99,10 +99,12 @@ import {LLMManager} from '@lama/core/services/llm-manager';
 
 // connection.core integration
 import {ConnectionManagerOneCore} from '@lama/connection.core';
-import {BrowserOneCoreAdapter} from '../connection/BrowserOneCoreAdapter.js';
-import {BrowserTransportFactory} from '../connection/BrowserTransportFactory.js';
-import {BrowserIndexedDBStorage} from '../connection/BrowserStorage.js';
-import {BrowserUICallbacks} from '../connection/BrowserUICallbacks.js';
+import {
+    BrowserOneCoreAdapter,
+    BrowserTransportFactory,
+    BrowserIndexedDBStorage,
+    BrowserUICallbacks
+} from '@lama/connection.core/adapters/browser';
 
 export default class Model {
     public onOneModelsReady = new OEvent<() => void>();
