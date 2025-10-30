@@ -97,6 +97,13 @@ import {browserOllamaValidator, browserConfigManager} from '../../../adapters/br
 import {BrowserLLMPlatform} from '../../../adapters/browser-llm-platform';
 import {LLMManager} from '@lama/core/services/llm-manager';
 
+// connection.core integration
+import {ConnectionManagerOneCore} from '@lama/connection.core';
+import {BrowserOneCoreAdapter} from '../connection/BrowserOneCoreAdapter.js';
+import {BrowserTransportFactory} from '../connection/BrowserTransportFactory.js';
+import {BrowserIndexedDBStorage} from '../connection/BrowserStorage.js';
+import {BrowserUICallbacks} from '../connection/BrowserUICallbacks.js';
+
 export default class Model {
     public onOneModelsReady = new OEvent<() => void>();
     public initialized: boolean = false;
@@ -111,16 +118,6 @@ export default class Model {
         this.leuteModel = new LeuteModel(commServerUrl, true);
         this.channelManager = new ChannelManager(this.leuteModel);
         this.topicModel = new TopicModel(this.channelManager, this.leuteModel);
-        this.connections = new ConnectionsModel(this.leuteModel, {
-            commServerUrl,
-            acceptIncomingConnections: true,
-            acceptUnknownInstances: true,
-            acceptUnknownPersons: false,
-            allowPairing: true,
-            allowDebugRequests: true,
-            pairingTokenExpirationDuration: 60000 * 15, // 15 minutes
-            establishOutgoingConnections: true
-        });
 
         // Initialize SingleUserNoAuth with all recipes
         // CRITICAL: Do NOT pass CORE_RECIPES - they're auto-added by SingleUserNoAuth internally
@@ -158,7 +155,7 @@ export default class Model {
         this.llmManager = new LLMManager(llmPlatform);
         console.log('[Model] Created LLMManager with BrowserLLMPlatform');
 
-        // Create dependencies first (before AIAssistantHandler needs them)
+        // Create TopicGroupManager BEFORE ConnectionsModel (needed for filters)
         // TopicGroupManager needs oneCore instance + storageDeps
         this.topicGroupManager = new TopicGroupManager(
             this, // OneCoreInstance (Model implements this)
@@ -171,6 +168,21 @@ export default class Model {
                 calculateHashOfObj
             }
         );
+
+        // Create ConnectionsModel with filters from TopicGroupManager
+        this.connections = new ConnectionsModel(this.leuteModel, {
+            commServerUrl,
+            acceptIncomingConnections: true,
+            acceptUnknownInstances: true,
+            acceptUnknownPersons: false,
+            allowPairing: true,
+            allowDebugRequests: true,
+            pairingTokenExpirationDuration: 60000 * 15, // 15 minutes
+            establishOutgoingConnections: true,
+            objectFilter: this.topicGroupManager.createObjectFilter(),   // Outbound: allowlist of Groups we created
+            importFilter: this.topicGroupManager.createImportFilter()    // Inbound: validate certificates from trusted people
+        });
+
         this.llmConfigHandler = new LLMConfigHandler(this, browserOllamaValidator, browserConfigManager);
 
         // LLMObjectManager - platform-agnostic LLM object management using ONE.core abstractions
@@ -402,6 +414,26 @@ export default class Model {
             await this.topicModel.init();
             await this.connections.init();
 
+            // Initialize connection.core integration
+            console.log('[Model] Initializing connection.core integration...');
+            const oneCoreAdapter = new BrowserOneCoreAdapter(
+                this.one,
+                this.leuteModel,
+                this.channelManager,
+                this.topicGroupManager
+            );
+            const transportFactory = new BrowserTransportFactory();
+            const storage = new BrowserIndexedDBStorage();
+            const uiCallbacks = new BrowserUICallbacks();
+
+            this.connectionManagerOneCore = new ConnectionManagerOneCore(
+                oneCoreAdapter,
+                transportFactory,
+                storage,
+                uiCallbacks
+            );
+            console.log('[Model] ✅ connection.core integration initialized');
+
             // Setup pairing success handler to auto-create P2P topics
             if (this.connections.pairing && (this.connections.pairing as any).onPairingSuccess) {
                 console.log('[Model] Setting up pairing success handler for P2P topic creation...');
@@ -570,6 +602,9 @@ export default class Model {
     public channelManager: ChannelManager;
     public topicModel: TopicModel;
     public connections: ConnectionsModel;
+
+    // connection.core integration
+    public connectionManagerOneCore!: ConnectionManagerOneCore;
 
     // Alias for IOMHandler compatibility (expects connectionsModel)
     public get connectionsModel() {

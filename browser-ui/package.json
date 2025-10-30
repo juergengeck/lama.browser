@@ -39,6 +39,8 @@
     "@radix-ui/react-separator": "^1.0.3",
     "@radix-ui/react-slot": "^1.0.2",
     "@radix-ui/react-tabs": "^1.1.12",
+    "@lama/connection.core": "file:../../connection.core",
+    "@lama/core": "file:../../lama.core",
     "@refinio/one.core": "file:../packages/one.core",
     "@refinio/one.models": "file:../packages/one.models",
     "@refinio/refinio-api": "file:../vendor/refinio-refinio-api-0.1.0.tgz",
