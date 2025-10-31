@@ -5,7 +5,7 @@ import { Progress } from '@/components/ui/progress'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Download, Cpu, Zap, Check, Loader2, Server, AlertTriangle } from 'lucide-react'
 import type Model from '@/model/Model.js'
-import { isOllamaRunning, getLocalOllamaModels, parseOllamaModel, type OllamaModelInfo } from '@/services/ollama'
+import { getLocalOllamaModels, parseOllamaModel, type OllamaModelInfo } from '@lama/core/services/ollama'
 import { DownloadManager, checkModelExists, formatBytes, formatTime, type DownloadProgress } from '@/services/huggingface'
 
 interface ModelOption {
@@ -68,26 +68,31 @@ export function ModelOnboarding({ model, onComplete }: ModelOnboardingProps) {
   const [modelLoadProgress, setModelLoadProgress] = useState<Map<string, number>>(new Map())
   const [loadingModels, setLoadingModels] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    checkOllamaAvailability()
-  }, [])
+  // DON'T auto-check Ollama on mount - only check when user explicitly requests it
+  // useEffect(() => {
+  //   checkOllamaAvailability()
+  // }, [])
   
   const checkOllamaAvailability = async () => {
     setLoadingOllama(true)
     try {
-      const running = await isOllamaRunning()
-      console.log('[ModelOnboarding] Ollama running:', running)
-      if (running) {
-        const models = await getLocalOllamaModels()
-        console.log('[ModelOnboarding] Raw Ollama models:', models)
+      // Getting models already checks if Ollama is available (same endpoint)
+      const models = await getLocalOllamaModels()
+      console.log('[ModelOnboarding] Raw Ollama models:', models)
+
+      if (models.length > 0) {
         const parsedModels = models.map(parseOllamaModel)
         console.log('[ModelOnboarding] Parsed models:', parsedModels)
         setOllamaModels(parsedModels)
         setOllamaAvailable(true)
         console.log(`[ModelOnboarding] Found ${parsedModels.length} Ollama models:`, parsedModels.map(m => m.name))
+      } else {
+        console.log('[ModelOnboarding] Ollama is running but no models found')
+        setOllamaAvailable(false)
       }
     } catch (error) {
-      console.error('[ModelOnboarding] Failed to check Ollama:', error)
+      console.log('[ModelOnboarding] Ollama not available:', error)
+      setOllamaAvailable(false)
     } finally {
       setLoadingOllama(false)
     }

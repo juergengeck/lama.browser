@@ -34,7 +34,11 @@ export default defineConfig({
       // Point to parent's node_modules for single ONE.core instance
       '@refinio/one.core': resolve(__dirname, './node_modules/@refinio/one.core'),
       '@refinio/one.models': resolve(__dirname, './node_modules/@refinio/one.models'),
-      '@anthropic-ai/sdk': resolve(__dirname, './node_modules/@anthropic-ai/sdk')
+      '@anthropic-ai/sdk': resolve(__dirname, './node_modules/@anthropic-ai/sdk'),
+
+      // Local lama packages
+      '@lama/core': resolve(__dirname, '../lama.core'),
+      '@lama/connection.core': resolve(__dirname, '../connection.core')
     },
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
     // CRITICAL: Dedupe ONE.core to ensure single recipe registry instance

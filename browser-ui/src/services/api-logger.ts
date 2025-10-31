@@ -23,10 +23,8 @@ class APILogger {
   };
 
   constructor() {
-    // Only enable in development mode
-    if (import.meta.env.DEV) {
-      this.enable();
-    }
+    // API logger disabled - no backend endpoint configured
+    // To enable, call apiLogger.enable() manually
   }
 
   enable() {

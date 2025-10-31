@@ -65,9 +65,9 @@ async function testChatIntegration() {
       await new Promise(resolve => setTimeout(resolve, 2000))
       
       const finalMessages = await bridge.getMessages('default')
-      const aiResponse = finalMessages.find(m => 
-        m.senderId === 'ai-assistant' && 
-        finalMessages.indexOf(m) > finalMessages.indexOf(sentMessage!)
+      const aiResponse = finalMessages.find(m =>
+        m.senderId === 'ai-assistant' &&
+        finalMessages.indexOf(m) > finalMessages.indexOf(sentMessage)
       )
       
       if (aiResponse) {
