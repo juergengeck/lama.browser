@@ -39,7 +39,7 @@ import {objectEvents} from '@refinio/one.models/lib/misc/ObjectEventDispatcher.j
 import GroupModel from '@refinio/one.models/lib/models/Leute/GroupModel.js';
 import {storeVersionedObject, getObjectByIdHash} from '@refinio/one.core/lib/storage-versioned-objects.js';
 import {getIdObject} from '@refinio/one.core/lib/storage-versioned-objects.js';
-import {getObject} from '@refinio/one.core/lib/storage-unversioned-objects.js';
+import {getObject, storeUnversionedObject} from '@refinio/one.core/lib/storage-unversioned-objects.js';
 import {createAccess} from '@refinio/one.core/lib/access.js';
 import {SET_ACCESS_MODE} from '@refinio/one.core/lib/storage-base-common.js';
 import {calculateHashOfObj, calculateIdHashOfObj} from '@refinio/one.core/lib/util/object.js';
@@ -163,6 +163,7 @@ export default class Model {
             this, // OneCoreInstance (Model implements this)
             {
                 storeVersionedObject,
+                storeUnversionedObject,
                 getObjectByIdHash,
                 getObject,
                 createAccess,
@@ -184,8 +185,6 @@ export default class Model {
             objectFilter: this.topicGroupManager.createObjectFilter(),   // Outbound: allowlist of Groups we created
             importFilter: this.topicGroupManager.createImportFilter()    // Inbound: validate certificates from trusted people
         });
-
-        this.llmConfigHandler = new LLMConfigHandler(this, browserOllamaValidator, browserConfigManager);
 
         // LLMObjectManager - platform-agnostic LLM object management using ONE.core abstractions
         this.llmObjectManager = new LLMObjectManager(
@@ -213,7 +212,7 @@ export default class Model {
             topicAnalysisModel: undefined, // Will be set during init()
             topicGroupManager: this.topicGroupManager,
             settingsPersistence: undefined, // Optional - use llmConfigHandler instead
-            llmConfigHandler: this.llmConfigHandler,
+            llmConfigHandler: undefined, // Will be set right after
             storageDeps: {
                 storeVersionedObject,
                 getIdObject,
@@ -221,6 +220,9 @@ export default class Model {
                 hasDefaultKeys
             }
         });
+
+        // Create LLMConfigHandler now that aiAssistantModel exists
+        this.llmConfigHandler = new LLMConfigHandler(this, this.aiAssistantModel, browserOllamaValidator, browserConfigManager);
 
         // topicAnalysisHandler, proposalsHandler, and aiMessageListener will be created in init()
         this.topicAnalysisHandler = null as any;
@@ -419,21 +421,21 @@ export default class Model {
             // Initialize connection.core integration
             console.log('[Model] Initializing connection.core integration...');
             const oneCoreAdapter = new BrowserOneCoreAdapter(
-                this.one,
                 this.leuteModel,
                 this.channelManager,
-                this.topicGroupManager
+                this.connections,
+                this.topicModel
             );
             const transportFactory = new BrowserTransportFactory();
             const storage = new BrowserIndexedDBStorage();
             const uiCallbacks = new BrowserUICallbacks();
 
-            this.connectionManagerOneCore = new ConnectionManagerOneCore(
-                oneCoreAdapter,
-                transportFactory,
-                storage,
-                uiCallbacks
-            );
+            this.connectionManagerOneCore = new ConnectionManagerOneCore({
+                transport: transportFactory,
+                storage: storage,
+                ui: uiCallbacks
+            });
+            this.connectionManagerOneCore.setOneCoreAdapter(oneCoreAdapter);
             console.log('[Model] ✅ connection.core integration initialized');
 
             // Setup pairing success handler to auto-create P2P topics
@@ -493,6 +495,18 @@ export default class Model {
             // Initialize LAMA handlers (AI-related)
             await this.aiHandler.init?.();
             await this.aiAssistantModel.init?.();
+
+            // Create default AI chats with first available model
+            console.log('[Model] Setting up default AI chats...');
+            const models = this.llmManager.getModels();
+            if (models && models.length > 0) {
+                const defaultModel = models[0].id;
+                console.log('[Model] Creating default chats with model:', defaultModel);
+                await this.aiAssistantModel.setDefaultModel(defaultModel);
+                console.log('[Model] ✅ Default AI chats created');
+            } else {
+                console.log('[Model] No models available, skipping default chats');
+            }
 
             // Create and start AIMessageListener (listens for new messages and triggers AI responses)
             this.aiMessageListener = new AIMessageListener({
