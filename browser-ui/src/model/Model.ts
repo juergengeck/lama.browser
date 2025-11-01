@@ -9,12 +9,13 @@
 console.log('[Model.ts] INSTANCE CHECK: About to import ONE.models...');
 import { DEBUG_versionedObjects as versionedObjects } from '@refinio/one.core/lib/object-recipes.js';
 if (!(versionedObjects as any).__INSTANCE_ID) {
+  // First import - this is correct
   (versionedObjects as any).__INSTANCE_ID = 'MODEL_TS_' + Date.now();
-  console.log('[Model.ts] INSTANCE CHECK: Created NEW instance ID:', (versionedObjects as any).__INSTANCE_ID);
-  console.log('[Model.ts] INSTANCE CHECK: ⚠️  THIS SHOULD NOT HAPPEN - means duplicate module!');
+  console.log('[Model.ts] INSTANCE CHECK: ✅ Created NEW instance ID (first import):', (versionedObjects as any).__INSTANCE_ID);
 } else {
-  console.log('[Model.ts] INSTANCE CHECK: Found existing instance ID:', (versionedObjects as any).__INSTANCE_ID);
-  console.log('[Model.ts] INSTANCE CHECK: ✅ Using same instance as main.tsx');
+  // Instance ID already exists - means duplicate module import!
+  console.log('[Model.ts] INSTANCE CHECK: ⚠️  DUPLICATE MODULE! Already has instance ID:', (versionedObjects as any).__INSTANCE_ID);
+  console.log('[Model.ts] INSTANCE CHECK: This means ONE.core was imported twice - check vite.config deduplication');
 }
 console.log('[Model.ts] INSTANCE CHECK: versionedObjects size:', versionedObjects.size);
 
@@ -496,16 +497,15 @@ export default class Model {
             await this.aiHandler.init?.();
             await this.aiAssistantModel.init?.();
 
-            // Create default AI chats with first available model
-            console.log('[Model] Setting up default AI chats...');
-            const models = this.llmManager.getModels();
-            if (models && models.length > 0) {
-                const defaultModel = models[0].id;
-                console.log('[Model] Creating default chats with model:', defaultModel);
-                await this.aiAssistantModel.setDefaultModel(defaultModel);
-                console.log('[Model] ✅ Default AI chats created');
+            // Check if user has a saved default model and create chats if needed
+            const savedDefaultModel = this.aiAssistantModel.topicManager.getDefaultModel();
+            if (savedDefaultModel) {
+                console.log('[Model] Found saved default model:', savedDefaultModel);
+                // Call setDefaultModel to trigger chat creation
+                await this.llmConfigHandler.setConfig({ defaultModelId: savedDefaultModel });
+                console.log('[Model] ✅ Default model restored and chats ensured');
             } else {
-                console.log('[Model] No models available, skipping default chats');
+                console.log('[Model] No saved default model - user will select via onboarding');
             }
 
             // Create and start AIMessageListener (listens for new messages and triggers AI responses)

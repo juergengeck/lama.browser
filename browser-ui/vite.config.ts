@@ -40,17 +40,27 @@ export default defineConfig({
     global: 'globalThis',
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', 'tweetnacl'],
+    include: [
+      'react',
+      'react-dom',
+      'tweetnacl',
+      // CRITICAL: Include ONE.core modules that need deduplication
+      // This forces Vite to treat them as a single module instance
+      '@refinio/one.core/lib/object-recipes',
+      '@refinio/one.core/lib/util/object'
+    ],
     exclude: [
-      'electron',
-      '@refinio/one.core',
-      '@refinio/one.models'
+      'electron'
+      // NOTE: Removed one.core/one.models from exclude to allow optimization and deduplication
+      // They need to be optimized to ensure single module instance across the app
     ],
     esbuildOptions: {
       define: {
         global: 'globalThis'
       }
-    }
+    },
+    // Force dedupe of ONE.core to prevent multiple instances
+    force: true
   },
   worker: {
     format: 'es'

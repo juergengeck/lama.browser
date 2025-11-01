@@ -41,7 +41,6 @@ export function useMessages({
 }: UseMessagesOptions): UseMessagesReturn {
   const model = useModel()
   const [messages, setMessages] = useState<Message[]>([])
-  const [streamingMessage, setStreamingMessage] = useState<Message | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
   const [hasMore, setHasMore] = useState(false)
@@ -208,64 +207,12 @@ export function useMessages({
     return () => clearInterval(interval)
   }, [autoRefresh, refreshMessages])
 
-  // Listen to streaming message updates
-  useEffect(() => {
-    const handleStream = (event: Event) => {
-      const customEvent = event as CustomEvent
-      const { conversationId, messageId, partial } = customEvent.detail
+  // NOTE: Streaming is handled by ChatView via aiStreamingContent prop to MessageView
+  // This hook only manages the persisted messages array
+  // When streaming completes, ai:messageComplete triggers a channel update,
+  // which causes this hook to refresh and fetch the new message
 
-      // Only handle streams for this topic
-      if (conversationId !== topicId) return
-
-      console.log('[useMessages] Streaming update:', { conversationId, messageId, partial })
-
-      // Update or create streaming message
-      setStreamingMessage(prev => {
-        if (prev && prev.id === messageId) {
-          // Update existing streaming message
-          return { ...prev, content: partial }
-        } else {
-          // Create new streaming message
-          return {
-            $type$: 'Message',
-            id: messageId,
-            topic: topicId,
-            author: null, // Will be set when complete
-            content: partial,
-            timestamp: Date.now()
-          }
-        }
-      })
-    }
-
-    const handleComplete = (event: Event) => {
-      const customEvent = event as CustomEvent
-      const { conversationId } = customEvent.detail
-
-      // Only handle completion for this topic
-      if (conversationId !== topicId) return
-
-      console.log('[useMessages] Message complete, clearing streaming state and refreshing')
-
-      // Clear streaming message and refresh to get the persisted message
-      setStreamingMessage(null)
-      refreshMessages()
-    }
-
-    window.addEventListener('ai:messageStream', handleStream)
-    window.addEventListener('ai:messageComplete', handleComplete)
-
-    return () => {
-      window.removeEventListener('ai:messageStream', handleStream)
-      window.removeEventListener('ai:messageComplete', handleComplete)
-    }
-  }, [topicId, refreshMessages])
-
-  // Merge streaming message with regular messages for display
-  // Filter out any existing message with the same ID to prevent duplicates during streaming
-  const allMessages = streamingMessage
-    ? [...messages.filter(m => m.id !== streamingMessage.id), streamingMessage]
-    : messages
+  const allMessages = messages
 
   return {
     messages: allMessages,

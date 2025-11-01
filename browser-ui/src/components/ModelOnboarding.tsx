@@ -68,10 +68,10 @@ export function ModelOnboarding({ model, onComplete }: ModelOnboardingProps) {
   const [modelLoadProgress, setModelLoadProgress] = useState<Map<string, number>>(new Map())
   const [loadingModels, setLoadingModels] = useState<Set<string>>(new Set())
 
-  // DON'T auto-check Ollama on mount - only check when user explicitly requests it
-  // useEffect(() => {
-  //   checkOllamaAvailability()
-  // }, [])
+  // Check Ollama availability on mount
+  useEffect(() => {
+    checkOllamaAvailability()
+  }, [])
   
   const checkOllamaAvailability = async () => {
     setLoadingOllama(true)

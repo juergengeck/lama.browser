@@ -392,6 +392,7 @@ export function MessageView({
             const isAIMessage = message.isAI === true
             console.log(`[MessageView] Rendering message - sender: "${message.sender}", currentUserId: "${currentUserId}", isCurrentUser: ${isCurrentUser}, isAI: ${isAIMessage}, content: "${message.content.substring(0, 50)}..."`)
 
+
             // Always use EnhancedMessageBubble for consistent rendering and features
             // Extract hashtags from message content
             const hashtagRegex = /#[\w-]+/g
@@ -433,50 +434,47 @@ export function MessageView({
               />
             )
           })}
-          
-          {/* AI Typing Indicator or Streaming Content */}
-          {(isAIProcessing || aiStreamingContent) && (
-            <>
-              {aiStreamingContent ? (
-                // Use EnhancedMessageBubble for streaming content to ensure consistent markdown rendering
-                <EnhancedMessageBubble
-                  message={{
-                    id: 'streaming-ai-message',
-                    content: aiStreamingContent,  // Fixed: use 'content' not 'text'
-                    senderId: 'ai',
-                    senderName: 'AI Assistant',
-                    timestamp: new Date(),
-                    isOwn: false,
-                    subjects: [],
-                    trustLevel: 5,
-                    format: 'markdown' // Ensure markdown format for proper rendering
-                  }}
-                  onHashtagClick={handleHashtagClick}
-                  onAttachmentClick={handleAttachmentClick}
-                  onDownloadAttachment={handleDownloadAttachment}
-                  theme="dark"
-                  attachmentDescriptors={attachmentDescriptors}
-                />
-              ) : (
-                // Show typing indicator with proper AI message styling
-                <div className="flex gap-2 mb-2 justify-start">
-                  <Avatar className="h-8 w-8 shrink-0">
-                    <AvatarFallback className="text-xs">AI</AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col">
-                    <div className="message-bubble message-bubble-ai">
-                      <div className="typing-indicator">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                      </div>
-                    </div>
+
+          {/* AI Typing Indicator - only show when processing and NO streaming content */}
+          {isAIProcessing && !aiStreamingContent && (
+            <div className="flex gap-2 mb-2 justify-start">
+              <Avatar className="h-8 w-8 shrink-0">
+                <AvatarFallback className="text-xs">AI</AvatarFallback>
+              </Avatar>
+              <div className="flex flex-col">
+                <div className="message-bubble message-bubble-ai">
+                  <div className="typing-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
                   </div>
                 </div>
-              )}
-            </>
+              </div>
+            </div>
           )}
-          
+
+          {/* AI Streaming Content - show the actual streaming response */}
+          {aiStreamingContent && (
+            <EnhancedMessageBubble
+              message={{
+                id: 'streaming',
+                content: aiStreamingContent,
+                senderId: 'ai',
+                senderName: 'AI Assistant',
+                timestamp: Date.now(),
+                isOwn: false,
+                subjects: [],
+                trustLevel: 3,
+                format: 'markdown'
+              }}
+              onHashtagClick={handleHashtagClick}
+              onAttachmentClick={handleAttachmentClick}
+              onDownloadAttachment={handleDownloadAttachment}
+              theme="dark"
+              attachmentDescriptors={attachmentDescriptors}
+            />
+          )}
+
           <div ref={messagesEndRef} />
         </div>
       </div>
