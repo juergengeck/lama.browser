@@ -31,6 +31,7 @@
     "vitest": "^3.2.4"
   },
   "dependencies": {
+    "@chat/core": "file:../chat.core",
     "@lama/connection.core": "file:../connection.core",
     "@lama/core": "file:../lama.core",
     "@refinio/one.core": "file:./packages/one.core",
