@@ -4,6 +4,7 @@ export default {
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
+    "../../lama.ui/src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     container: {
