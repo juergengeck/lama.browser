@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-// import { ScrollArea } from '@/components/ui/scroll-area'
+import { Button } from '@lama/ui'
+// import { ScrollArea } from '@lama/ui'
 import { ChatLayout } from '@/components/ChatLayout'
 import { JournalView } from '@/components/JournalView'
 import { ContactsView } from '@/components/ContactsView'
 import { SettingsView } from '@/components/SettingsView'
 import { DataDashboard } from '@/components/DataDashboard'
 import { DevicesView } from '@/components/DevicesView'
-import { LoginDeploy } from '@/components/LoginDeploy'
+import { LoginDeploy } from '@lama/ui'
 import { ModelOnboarding } from '@/components/ModelOnboarding'
 import { InvitationAcceptance } from '@/components/InvitationAcceptance'
 import { MessageSquare, BookOpen, Users, Settings, Loader2, Smartphone, BarChart3 } from 'lucide-react'
@@ -33,13 +33,16 @@ function App({ model }: AppProps) {
   const [hasTopics, setHasTopics] = useState<boolean | null>(null)
   const [hasDefaultModel, setHasDefaultModel] = useState<boolean | null>(null)
 
-  // Invitation handling (check URL on mount)
+  // Invitation handling - restore from persisted state first, then check URL
   const [invitationUrl, setInvitationUrl] = useState<string | null>(null)
-  const [pendingInvitation, setPendingInvitation] = useState<string | null>(null)
+  const [pendingInvitation, setPendingInvitation] = useState<string | null>(
+    restoredState?.pendingInvitation || null
+  )
   const [isAcceptingInvitation, setIsAcceptingInvitation] = useState(false)
 
   // Authentication state (following one.leute pattern - event-based)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [modelInitialized, setModelInitialized] = useState(false)
   const [isLoading, setIsLoading] = useState(true) // Start as loading while checking session
 
   // Add mount/unmount tracking
@@ -52,75 +55,86 @@ function App({ model }: AppProps) {
   }, [])
 
   // Check for invitation URL on mount (following one.leute pattern)
+  // Also listen for URL changes (hash changes) to detect invites in already-running apps
   useEffect(() => {
-    const currentUrl = window.location.href
-    console.log('[App] ========== INVITATION URL CHECK (MOUNT) ==========')
-    console.log('[App] Current URL:', currentUrl)
-    console.log('[App] isAuthenticated:', isAuthenticated)
-    console.log('[App] pendingInvitation:', pendingInvitation)
+    const checkForInvitation = () => {
+      const currentUrl = window.location.href
+      console.log('[App] ========== INVITATION URL CHECK ==========')
+      console.log('[App] Current URL:', currentUrl)
+      console.log('[App] Persisted invitation:', sessionStorage.getPendingInvitation())
 
-    if (isValidInvitationUrl(currentUrl)) {
-      console.log('[App] ✅ Valid invitation URL detected')
-      setInvitationUrl(currentUrl)
-      setPendingInvitation(currentUrl)
+      if (isValidInvitationUrl(currentUrl)) {
+        console.log('[App] ✅ Valid invitation URL detected in URL')
+        setInvitationUrl(currentUrl)
+        setPendingInvitation(currentUrl)
 
-      // Clear invitation from URL immediately to prevent re-processing
-      console.log('[App] Clearing URL (using replaceState - NOT a page reload)')
-      window.history.replaceState({}, document.title, window.location.pathname)
-    } else {
-      console.log('[App] No invitation detected in URL')
+        // Persist to localStorage so it survives page reloads
+        sessionStorage.setPendingInvitation(currentUrl)
+
+        // Clear invitation from URL immediately to prevent re-processing
+        console.log('[App] Clearing URL (using replaceState - NOT a page reload)')
+        window.history.replaceState({}, document.title, window.location.pathname)
+      } else {
+        console.log('[App] No invitation detected in URL')
+      }
+      console.log('[App] ============================================')
     }
-    console.log('[App] ============================================')
+
+    // Check on mount
+    checkForInvitation()
+
+    // Listen for hash changes (user pastes invite into already-running app)
+    const handleHashChange = () => {
+      console.log('[App] Hash changed, checking for invitation')
+      checkForInvitation()
+    }
+
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
   }, [])
 
   // Restore session on mount (following one.leute pattern)
+  // Note: MultiUser requires explicit credentials for login, so no auto-login
+  // Users must explicitly log in each time
   useEffect(() => {
-    async function restoreSession() {
-      try {
-        console.log('[App] Checking for existing registration...')
-
-        if (await model.one.isRegistered()) {
-          console.log('[App] User is registered, attempting auto-login...')
-          await model.one.login()
-          console.log('[App] ✅ Auto-login successful')
-          // isAuthenticated will be set by onLogin event
-        } else {
-          console.log('[App] No existing registration found')
-          setIsLoading(false)
-        }
-      } catch (error) {
-        console.error('[App] Auto-login failed:', error)
-        setIsLoading(false)
-      }
-    }
-
-    restoreSession()
+    console.log('[App] MultiUser authentication - explicit login required')
+    setIsLoading(false)
   }, [model])
 
   // Setup authentication event listeners (following one.leute pattern)
   useEffect(() => {
     const handleLogin = () => {
-      console.log('[App] ===== LOGIN EVENT: Auth state updated =====');
+      console.log('[App] ===== LOGIN EVENT: Auth state updated (Model.init() starting) =====');
       setIsAuthenticated(true);
-      setIsLoading(false);
+      // DON'T set isLoading(false) yet - wait for model.initialized
     };
 
     const handleLogout = () => {
       console.log('[App] Logout event received');
       setIsAuthenticated(false);
+      setModelInitialized(false);
       setPendingInvitation(null);
       setIsAcceptingInvitation(false);
+
+      // Clear persisted invitation on logout
+      sessionStorage.setPendingInvitation(null);
     };
 
     model.one.onLogin(handleLogin);
     model.one.onLogout(handleLogout);
   }, [model]);
 
-  // Setup onOneModelsReady listener for pending invitation processing
+  // Setup onOneModelsReady listener
   // This fires AFTER model.init() completes and model.initialized = true
+  // CRITICAL: Chat UI won't render until this fires
   useEffect(() => {
     const handleModelsReady = () => {
       console.log('[App] ===== MODELS READY: model.initialized =', model.initialized, '=====');
+
+      // Now safe to render chat UI - all models initialized
+      setModelInitialized(true);
+      setIsLoading(false);
+
       // If there's a pending invitation after login, process it now that models are ready
       if (pendingInvitation) {
         console.log('[App] Processing pending invitation after models ready');
@@ -134,18 +148,18 @@ function App({ model }: AppProps) {
 
   // Check if any topics exist (for onboarding detection)
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && modelInitialized) {
       model.chatHandler.getConversations({ limit: 1 })
         .then((response) => {
           setHasTopics(response.success && response.data && response.data.length > 0)
         })
         .catch(() => setHasTopics(false))
     }
-  }, [isAuthenticated, model])
+  }, [isAuthenticated, modelInitialized, model])
 
   // Check if a default model has been configured
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && modelInitialized) {
       console.log('[App] Checking for default model...')
       model.llmConfigHandler.getConfig({})
         .then(response => {
@@ -157,7 +171,7 @@ function App({ model }: AppProps) {
           setHasDefaultModel(false)
         })
     }
-  }, [isAuthenticated, model])
+  }, [isAuthenticated, modelInitialized, model])
 
   // Persist active tab changes
   useEffect(() => {
@@ -176,11 +190,12 @@ function App({ model }: AppProps) {
       console.log('[App] ===== LOGIN START: Requesting login/register for:', instanceName, '=====');
 
       // Use loginOrRegister() - handles both new and existing users without accessing storage first
-      await model.one.loginOrRegister({
-        email: `${instanceName}@lama.local`,
-        instanceName: instanceName,
-        secret: password
-      });
+      // Parameters: email, secret, instanceName (positional, not object)
+      await model.one.loginOrRegister(
+        `${instanceName}@lama.local`,  // email
+        password,                       // secret
+        instanceName                    // instanceName
+      );
 
       // isAuthenticated will be set by onLogin event (after Model.init() completes)
     } catch (error) {
@@ -226,15 +241,12 @@ function App({ model }: AppProps) {
           setIsAcceptingInvitation(false)
           setPendingInvitation(null)
 
-          // Refresh to load new contacts/conversations after pairing
-          if (success) {
-            console.log('[App] 🔄 Waiting 3 seconds for data to persist before reload...')
-            setTimeout(() => {
-              console.log('[App] 🔄 Reloading page to load new contacts...')
-              window.location.reload()
-            }, 3000)
-          }
-          // Continue to main app (will show onboarding if no model selected)
+          // Clear persisted invitation after processing
+          sessionStorage.setPendingInvitation(null)
+
+          // React state will handle showing the main app
+          // No reload needed - data is already persisted via CHUM
+          console.log('[App] ✅ Invitation processed, continuing to main app')
         }}
       />
     )
