@@ -27,6 +27,9 @@
   "dependencies": {
     "@ai-sdk/react": "^2.0.71",
     "@anthropic-ai/sdk": "^0.59.0",
+    "@lama/connection.core": "file:../../connection.core",
+    "@lama/core": "file:../../lama.core",
+    "@lama/ui": "file:../../lama.ui",
     "@modelcontextprotocol/sdk": "^1.17.2",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-avatar": "^1.0.4",
@@ -39,8 +42,6 @@
     "@radix-ui/react-separator": "^1.0.3",
     "@radix-ui/react-slot": "^1.0.2",
     "@radix-ui/react-tabs": "^1.1.12",
-    "@lama/connection.core": "file:../../connection.core",
-    "@lama/core": "file:../../lama.core",
     "@refinio/one.core": "file:../packages/one.core",
     "@refinio/one.models": "file:../packages/one.models",
     "@refinio/refinio-api": "file:../vendor/refinio-refinio-api-0.1.0.tgz",
@@ -65,9 +66,11 @@
     "react-markdown": "^10.1.0",
     "react-swipeable": "^7.0.2",
     "remark-gfm": "^4.0.1",
+    "scrypt-js": "^3.0.1",
     "stream-browserify": "^3.0.0",
     "tailwind-merge": "^2.2.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
     "@esbuild-plugins/node-globals-polyfill": "^0.2.3",

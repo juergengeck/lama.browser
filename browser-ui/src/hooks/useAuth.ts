@@ -1,8 +1,9 @@
 /**
  * Authentication hook for LAMA Browser
  *
- * Uses Model.one (SingleUserNoAuth) for authentication.
+ * Uses Model.one (MultiUser) for authentication.
  * Follows one.leute pattern - direct model access, no IPC.
+ * Supports automatic user creation via loginOrRegister().
  */
 
 import { useState, useEffect } from 'react';
@@ -12,7 +13,7 @@ interface UseAuthReturn {
   isInitialized: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (instanceName: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   error: Error | null;
 }
@@ -20,13 +21,15 @@ interface UseAuthReturn {
 /**
  * Hook for authentication state and operations
  *
+ * Automatically creates users if they don't exist when logging in.
+ *
  * @example
  * ```tsx
  * function LoginScreen() {
  *   const { isAuthenticated, login, logout, error } = useAuth();
  *
  *   const handleLogin = async () => {
- *     await login('my-instance', 'password');
+ *     await login('user@example.com', 'password');
  *   };
  *
  *   return <div>...</div>;
@@ -68,17 +71,19 @@ export function useAuth(): UseAuthReturn {
     };
   }, [model]);
 
-  const login = async (instanceName: string, password: string) => {
+  const login = async (email: string, password: string) => {
     setIsLoading(true);
     setError(null);
 
     try {
-      console.log('[useAuth] Logging in...');
-      await model.one.login(instanceName, password);
+      console.log('[useAuth] Logging in or registering user...');
+      // Use loginOrRegister for automatic user creation
+      // instanceName defaults to email if not provided
+      await model.one.loginOrRegister(email, password, email);
       // isAuthenticated will be set by the onLogin event handler
       setIsLoading(false);
     } catch (e) {
-      console.error('[useAuth] Login failed:', e);
+      console.error('[useAuth] Login/register failed:', e);
       setError(e instanceof Error ? e : new Error(String(e)));
       setIsLoading(false);
       throw e;

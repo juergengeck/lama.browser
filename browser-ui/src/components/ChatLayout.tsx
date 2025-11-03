@@ -1,25 +1,34 @@
 import { useState, useEffect, useCallback } from 'react'
 import { MessageSquare, Plus, Trash2, Bot, Loader2, MoreVertical, Edit, CheckCheck, UserPlus, Users, ChevronLeft, ChevronRight } from 'lucide-react'
 import { ChatView } from './ChatView'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Input } from '@/components/ui/input'
+import { Button } from '@lama/ui'
+import { ScrollArea } from '@lama/ui'
+import { Input } from '@lama/ui'
 import { useTopics } from '@/hooks/useTopics'
+import { useModel } from '@/model/index.js'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from '@lama/ui'
 import { InputDialog } from './InputDialog'
 import { UserSelectionDialog } from './UserSelectionDialog'
 import { GroupChatDialog } from './GroupChatDialog'
+import { ParticipantAvatars } from './ParticipantAvatars'
+
+interface Participant {
+  id: string
+  name: string
+  isAI: boolean
+  color?: string
+}
 
 interface Conversation {
   id: string
   name: string
   type?: 'direct' | 'group'
-  participants: string[]  // Array of participant person IDs
+  participants: Participant[]  // Array of participant objects with enriched data
   participantCount?: number
   lastMessage?: string
   lastMessageTime?: Date | string
@@ -34,8 +43,11 @@ interface ChatLayoutProps {
 }
 
 export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
+  // Get model instance for owner ID
+  const model = useModel()
+
   // Use topics hook to manage conversations
-  const { topics, isLoading: topicsLoading, createTopic, deleteTopic, renameTopic } = useTopics()
+  const { topics, isLoading: topicsLoading, createTopic, deleteTopic, renameTopic, refreshTopics, updateTopicLastMessage } = useTopics()
 
   const [selectedConversation, setSelectedConversation] = useState<string | null>(selectedConversationId || null)
   const [searchQuery, setSearchQuery] = useState('')
@@ -51,17 +63,62 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
 
   // Convert topics to conversations format
-  const conversations: Conversation[] = topics.map(topic => ({
-    id: topic.id,
-    name: topic.name,
-    participants: topic.participants,
-    participantCount: topic.participants.length,
-    lastMessage: topic.lastMessage || '',
-    lastMessageTime: new Date(topic.lastActivity),
-    modelName: topic.aiModelId,
-    hasAIParticipant: topic.isAITopic || false,
-    isAITopic: topic.isAITopic || false
-  }))
+  const conversations: Conversation[] = topics.map(topic => {
+    // Check if topic is still generating welcome message
+    const isGeneratingWelcome = model.initialized &&
+      model.aiAssistantModel?.topicManager?.isTopicLoading?.(topic.id) || false;
+
+    return {
+      id: topic.id,
+      name: topic.name,
+      participants: topic.participants || [],
+      participantCount: topic.participants?.length || 0,
+      lastMessage: isGeneratingWelcome ? 'Generating welcome message...' : (topic.lastMessage || ''),
+      lastMessageTime: new Date(topic.lastActivity),
+      modelName: topic.modelName || topic.aiModelId,
+      hasAIParticipant: topic.isAITopic || false,
+      isAITopic: topic.isAITopic || false
+    };
+  })
+
+  // Sync processingConversations with topic loading states
+  useEffect(() => {
+    if (!model.initialized || !model.aiAssistantModel?.topicManager) {
+      return;
+    }
+
+    // Check all AI topics for loading state
+    const loadingTopics = topics
+      .filter(topic => topic.isAITopic)
+      .filter(topic => model.aiAssistantModel.topicManager.isTopicLoading(topic.id))
+      .map(topic => topic.id);
+
+    // Update processing set if there are changes
+    if (loadingTopics.length > 0) {
+      setProcessingConversations(prev => {
+        const next = new Set(prev);
+        let changed = false;
+
+        // Add loading topics
+        for (const topicId of loadingTopics) {
+          if (!next.has(topicId)) {
+            next.add(topicId);
+            changed = true;
+          }
+        }
+
+        // Remove topics that are no longer loading
+        for (const topicId of prev) {
+          if (!loadingTopics.includes(topicId) && topics.find(t => t.id === topicId)?.isAITopic) {
+            next.delete(topicId);
+            changed = true;
+          }
+        }
+
+        return changed ? next : prev;
+      });
+    }
+  }, [model.initialized, model.aiAssistantModel, topics]);
 
   // Handle responsive behavior on window resize
   useEffect(() => {
@@ -93,7 +150,6 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
 
   // Update selected conversation when prop changes
   useEffect(() => {
-    console.log('[ChatLayout] 🔴 selectedConversationId prop changed to:', selectedConversationId)
     if (selectedConversationId) {
       setSelectedConversation(selectedConversationId)
     }
@@ -116,8 +172,11 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
   // Create new conversation with the provided name
   const handleCreateConversation = async (chatName: string) => {
     try {
-      // TODO: Get current user ID from worker
-      const currentUserId = 'current-user-id'
+      // Get current user ID from model
+      if (!model.ownerId) {
+        throw new Error('User not authenticated')
+      }
+      const currentUserId = String(model.ownerId)
 
       // Create topic through worker
       const topic = await createTopic(chatName, [currentUserId])
@@ -125,12 +184,8 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
       // Select the new conversation
       setSelectedConversation(topic.id)
 
-      // Mark as processing
-      setProcessingConversations(prev => {
-        const next = new Set(prev)
-        next.add(topic.id)
-        return next
-      })
+      // Note: Processing state is managed by ChatView based on actual AI activity
+      // No need to manually set processing here
     } catch (error: any) {
       console.error('[ChatLayout] Error creating conversation:', error)
       const errorMessage = error?.message || 'Failed to create conversation'
@@ -193,12 +248,14 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
   }
 
   // Create new group conversation with selected users
-  const handleCreateGroupConversation = async (selectedUserIds: string[], chatName?: string) => {
+  const handleCreateGroupConversation = async (selectedUserIds: string[], chatName?: string, aiModelId?: string) => {
     try {
       const conversationName = chatName || `Group Chat ${conversations.length + 1}`
 
+      console.log('[ChatLayout] Creating group conversation:', { conversationName, selectedUserIds, aiModelId })
+
       // Create topic through worker
-      const topic = await createTopic(conversationName, selectedUserIds)
+      const topic = await createTopic(conversationName, selectedUserIds, aiModelId)
 
       // Select the new conversation
       setSelectedConversation(topic.id)
@@ -210,16 +267,10 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
   }
 
   // Filter conversations by search
-  console.log('[ChatLayout] Filtering conversations:', {
-    conversationsLength: conversations.length,
-    searchQuery,
-    conversations: conversations.map(c => ({ id: c.id, name: c.name }))
-  })
   const filteredConversations = conversations.filter(conv =>
     conv.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     conv.lastMessage?.toLowerCase().includes(searchQuery.toLowerCase())
   )
-  console.log('[ChatLayout] Filtered conversations:', filteredConversations.length)
 
   // Strip markdown formatting from text for preview
   const stripMarkdown = (text: string): string => {
@@ -257,17 +308,17 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
   }
 
   // Memoize callbacks to prevent re-renders
-  const handleProcessingChange = useCallback((isProcessing: boolean) => {
+  const handleProcessingChange = useCallback((conversationId: string, isProcessing: boolean) => {
     setProcessingConversations(prev => {
       const next = new Set(prev)
-      if (isProcessing && selectedConversation) {
-        next.add(selectedConversation)
-      } else if (!isProcessing && selectedConversation) {
-        next.delete(selectedConversation)
+      if (isProcessing) {
+        next.add(conversationId)
+      } else {
+        next.delete(conversationId)
       }
       return next
     })
-  }, [selectedConversation])
+  }, [])
 
   // Note: Message preview updates removed since conversations is derived from topics
   // Preview updates will come from worker via refreshTopics()
@@ -358,17 +409,21 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
                     <div
                       key={conv.id}
                       onClick={() => setSelectedConversation(conv.id)}
-                      className={`w-8 h-8 mx-auto rounded-full cursor-pointer transition-all flex items-center justify-center ${
+                      className={`cursor-pointer transition-all mx-auto ${
                         selectedConversation === conv.id
-                          ? 'bg-primary text-primary-foreground ring-1 ring-primary/50'
-                          : 'bg-primary/10 hover:bg-primary/20'
+                          ? 'ring-1 ring-primary/50'
+                          : ''
                       }`}
                       title={conv.name}
                     >
                       {processingConversations.has(conv.id) ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                        </div>
                       ) : (
-                        <Bot className="w-4 h-4" />
+                        <div className="w-8 h-8 flex items-center justify-center">
+                          <ParticipantAvatars participants={conv.participants} size="md" maxDisplay={1} />
+                        </div>
                       )}
                     </div>
                   ) : (
@@ -376,25 +431,26 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
                     <div
                       key={conv.id}
                       onClick={() => setSelectedConversation(conv.id)}
-                      className={`group flex items-start gap-2 p-2 rounded-lg cursor-pointer transition-colors ${
+                      className={`group flex items-start p-2 rounded-lg cursor-pointer transition-colors ${
                         selectedConversation === conv.id
                           ? 'bg-primary/10 border border-primary/30'
                           : 'hover:bg-muted/50 border border-transparent'
                       }`}
                     >
-                      {/* Avatar */}
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        {processingConversations.has(conv.id) ? (
-                          <Loader2 className="w-4 h-4 text-primary animate-spin" />
-                        ) : (
-                          <Bot className="w-4 h-4 text-primary" />
-                        )}
-                      </div>
-
-                      {/* Content */}
+                      {/* Content - full width */}
                       <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-1 mb-0.5">
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
                         <h3 className="font-medium text-xs truncate">{conv.name}</h3>
+                        {/* Time, Avatar, Menu */}
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <span className="text-[10px] text-muted-foreground">{formatTime(conv.lastMessageTime)}</span>
+                          {processingConversations.has(conv.id) ? (
+                            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
+                              <Loader2 className="w-3 h-3 text-primary animate-spin" />
+                            </div>
+                          ) : (
+                            <ParticipantAvatars participants={conv.participants} size="sm" maxDisplay={2} />
+                          )}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -439,6 +495,7 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        </div>
                       </div>
 
                       {conv.lastMessage && (
@@ -452,9 +509,8 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
                         </p>
                       )}
 
-                      <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground">
+                      <div className="flex items-center justify-between gap-1">
                         <div className="flex items-center gap-1">
-                          <span>{formatTime(conv.lastMessageTime)}</span>
                           {conv.lastMessage && (
                             <CheckCheck className="h-3 w-3 text-primary/70" />
                           )}
@@ -511,6 +567,10 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
             onProcessingChange={handleProcessingChange}
             hasAIParticipant={conversations.find(c => c.id === selectedConversation)?.hasAIParticipant}
             onAddUsers={() => openAddUsersDialog(selectedConversation)}
+            onMessageUpdate={(lastMessage) => {
+              // Optimistically update the preview text immediately
+              updateTopicLastMessage(selectedConversation, lastMessage)
+            }}
           />
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground">
@@ -555,7 +615,7 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
       description="Select users to add to this conversation"
       onSubmit={handleAddUsers}
       excludeUserIds={conversationToAddUsers
-        ? (conversations.find(c => c.id === conversationToAddUsers)?.participants || [])
+        ? (conversations.find(c => c.id === conversationToAddUsers)?.participants.map(p => p.id) || [])
         : []
       }
     />

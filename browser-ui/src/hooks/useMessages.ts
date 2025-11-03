@@ -12,6 +12,8 @@ export interface Message {
   id: string
   topic: string
   author: any // SHA256IdHash<Person>
+  sender?: any // Alias for author (for compatibility)
+  senderName?: string // Human-readable sender name (from ChatHandler)
   content: string
   timestamp: number
   attachments?: any[]
@@ -47,19 +49,29 @@ export function useMessages({
   const [offset, setOffset] = useState(0)
 
   const refreshMessages = useCallback(async () => {
+    console.log(`[useMessages] 🔄 Refreshing messages for topic: ${topicId}`);
+
     try {
       setIsLoading(true)
       setError(null)
 
       // Call ChatHandler.getMessages
+      console.log(`[useMessages] 📞 Calling ChatHandler.getMessages...`);
       const response = await model.chatHandler.getMessages({
         conversationId: topicId,
         limit,
         offset: 0
       })
 
+      console.log(`[useMessages] 📨 Received response:`, {
+        success: response.success,
+        messageCount: response.messages?.length || 0,
+        error: response.error
+      });
+
       if (response.success && response.messages) {
         const newMessages = response.messages as Message[]
+        console.log(`[useMessages] ✅ Processing ${newMessages.length} messages`);
 
         // Merge with existing messages instead of replacing
         // Deduplicate by message ID (hash)
@@ -84,25 +96,22 @@ export function useMessages({
           const merged = Array.from(messageMap.values())
           merged.sort((a, b) => a.timestamp - b.timestamp)
 
-          console.log('[useMessages] Merged messages:', {
-            prevCount: prev.length,
-            newCount: newMessages.length,
-            mergedCount: merged.length
-          })
-
+          console.log(`[useMessages] ✅ Merged ${merged.length} messages (${newMessages.length} new)`);
           return merged
         })
 
         setHasMore(response.hasMore || false)
         setOffset(0) // Reset pagination
       } else {
+        console.error(`[useMessages] ❌ Response not successful:`, response.error);
         throw new Error(response.error || 'Failed to fetch messages')
       }
     } catch (err) {
-      console.error('[useMessages] Failed to fetch messages:', err)
+      console.error('[useMessages] ❌ Failed to fetch messages:', err)
       setError(err instanceof Error ? err : new Error('Failed to fetch messages'))
     } finally {
       setIsLoading(false)
+      console.log(`[useMessages] ✅ Refresh complete - ${messages.length} messages in state`);
     }
   }, [topicId, limit, model])
 
@@ -184,14 +193,12 @@ export function useMessages({
     ) => {
       // Check if this update is for our topic
       if (channelId === topicId) {
-        console.log(`[useMessages] Channel update for topic ${topicId} - refreshing messages`)
         // Refresh messages to get the latest (will merge with existing)
         await refreshMessages()
       }
     })
 
     return () => {
-      console.log(`[useMessages] Cleaning up channel listener for topic ${topicId}`)
       unsubscribe()
     }
   }, [model.initialized, model.channelManager, topicId, refreshMessages])

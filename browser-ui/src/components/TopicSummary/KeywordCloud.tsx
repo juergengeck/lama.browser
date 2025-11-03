@@ -4,7 +4,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { Badge } from '../ui/badge.js';
+import { Badge } from '@lama/ui';
 import type { Keyword } from '../../types/topic-analysis.js';
 import { useWordCloudSettings } from '../../hooks/useWordCloudSettings.js';
 

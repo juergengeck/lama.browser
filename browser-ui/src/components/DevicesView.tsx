@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lama/ui'
+import { Badge } from '@lama/ui'
+import { Button } from '@lama/ui'
+import { ScrollArea } from '@lama/ui'
+import { Alert, AlertDescription } from '@lama/ui'
 import {
   RefreshCw,
   AlertCircle,

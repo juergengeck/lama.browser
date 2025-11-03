@@ -4,34 +4,42 @@ import path from 'path'
 import { apiPlugin } from './vite-plugin-api'
 
 export default defineConfig({
-  base: './',
+  base: '/',
   clearScreen: false,
+  publicDir: 'public',  // Include public/ files in build (for _redirects)
   plugins: [
     react(),
     apiPlugin()
   ],
   resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-      '@components': path.resolve(__dirname, './src/components'),
-      '@lib': path.resolve(__dirname, './src/lib'),
-      '@hooks': path.resolve(__dirname, './src/hooks'),
-      '@services': path.resolve(__dirname, './src/services'),
-      '@model': path.resolve(__dirname, './src/model'),
+    alias: [
+      // CRITICAL: Order matters - more specific paths must come first
+      // Map lama.ui's internal @/ imports to lama.ui (for ui components)
+      { find: /^@\/components\/ui\/(.*)$/, replacement: path.resolve(__dirname, '../../lama.ui/src/components/ui/$1') },
+      { find: '@/lib/utils', exact: true, replacement: path.resolve(__dirname, '../../lama.ui/src/lib/utils') },
 
-      // Shared directories (relative to browser-ui/)
-      '@shared': path.resolve(__dirname, '../shared'),
-      '@worker': path.resolve(__dirname, '../worker'),
-      '@lama/core': path.resolve(__dirname, '../../lama.core'),
-      '@chat/core': path.resolve(__dirname, '../../chat.core'),
+      // Local aliases for browser-ui
+      { find: '@', replacement: path.resolve(__dirname, './src') },
+      { find: '@components', replacement: path.resolve(__dirname, './src/components') },
+      { find: '@lib', replacement: path.resolve(__dirname, './src/lib') },
+      { find: '@hooks', replacement: path.resolve(__dirname, './src/hooks') },
+      { find: '@services', replacement: path.resolve(__dirname, './src/services') },
+      { find: '@model', replacement: path.resolve(__dirname, './src/model') },
+
+      // Shared directories
+      { find: '@shared', replacement: path.resolve(__dirname, '../shared') },
+      { find: '@worker', replacement: path.resolve(__dirname, '../worker') },
+      { find: '@lama/core', replacement: path.resolve(__dirname, '../../lama.core') },
+      { find: '@lama/ui', replacement: path.resolve(__dirname, '../../lama.ui/src') },
+      { find: '@chat/core', replacement: path.resolve(__dirname, '../../chat.core') },
 
       // CRITICAL: Use the ONE.core packages directly - NO duplication
-      '@refinio/one.core': path.resolve(__dirname, '../packages/one.core'),
-      '@refinio/one.models': path.resolve(__dirname, '../packages/one.models'),
+      { find: '@refinio/one.core', replacement: path.resolve(__dirname, '../packages/one.core') },
+      { find: '@refinio/one.models', replacement: path.resolve(__dirname, '../packages/one.models') },
 
       // Stub out Claude for browser builds (CORS restrictions)
-      '@anthropic-ai/sdk': path.resolve(__dirname, './src/stubs/claude-stub.ts')
-    },
+      { find: '@anthropic-ai/sdk', replacement: path.resolve(__dirname, './src/stubs/claude-stub.ts') }
+    ],
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
     // CRITICAL: Dedupe ONE.core to ensure single recipe registry instance
     dedupe: ['react', 'react-dom', '@refinio/one.core', '@refinio/one.models']
@@ -71,7 +79,8 @@ export default defineConfig({
   build: {
     target: 'esnext',
     outDir: 'dist',
-    sourcemap: true,
+    emptyOutDir: true,  // Clean dist before every build
+    sourcemap: false,  // No source maps in production
     rollupOptions: {
       external: [
         'ws',
@@ -87,7 +96,8 @@ export default defineConfig({
     }
   },
   server: {
-    port: 5175,
+    port: 5174,
+    strictPort: true,  // Fail if port is busy instead of switching to another port
     open: true,
     hmr: false,  // Disable HMR - ONE.core worker state doesn't survive hot reloads
     fs: {

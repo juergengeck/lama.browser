@@ -6,8 +6,8 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Badge } from '@lama/ui'
+import { Button } from '@lama/ui'
 import { Wifi, WifiOff, RefreshCw, AlertTriangle } from 'lucide-react'
 
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error' | 'syncing'

@@ -7,10 +7,10 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
  */
 import { useState, useMemo } from 'react';
 import { Search, Filter, Grid, List, Tag, Plus, X, Hash } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from '@/components/ui/select';
+import { Button } from '@lama/ui';
+import { Input } from '@lama/ui';
+import { Badge } from '@lama/ui';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, } from '@lama/ui';
 import { createAttachmentView } from '@/components/attachments/AttachmentViewFactory';
 import { formatFileSize, getAttachmentType } from '@/types/attachments';
 export const MediaViewer = ({ items = [], onItemClick, onSubjectClick, onAddSubject, onRemoveSubject, llmContactId }) => {

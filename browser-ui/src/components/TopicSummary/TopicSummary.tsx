@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card.js';
-import { Badge } from '../ui/badge.js';
-import { Button } from '../ui/button.js';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lama/ui';
+import { Badge } from '@lama/ui';
+import { Button } from '@lama/ui';
 import { RefreshCw, History, ChevronDown, ChevronUp, Loader2, Sparkles } from 'lucide-react';
 import { KeywordCloud } from './KeywordCloud.js';
 import { KeywordDetailPanel } from '../KeywordDetail/KeywordDetailPanel.js';

@@ -7,7 +7,7 @@ import { Loader2, Download, Music } from 'lucide-react'
 import type { AttachmentViewProps } from '@/types/attachments'
 import { formatFileSize } from '@/types/attachments'
 import { useAttachmentDescriptor } from './AttachmentViewFactory'
-import { Button } from '@/components/ui/button'
+import { Button } from '@lama/ui'
 
 export const AudioAttachmentView: React.FC<AttachmentViewProps> = ({
   attachment,

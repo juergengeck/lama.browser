@@ -183,6 +183,9 @@ declare module '@OneObjectInterfaces' {
         checksum?: string;
         provider?: string;
         downloadUrl?: string;
+
+        // API key for remote providers (Claude, OpenAI, etc.)
+        encryptedApiKey?: string;
     }
 
     /**

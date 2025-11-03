@@ -4,11 +4,12 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card.js';
-import { Badge } from '../ui/badge.js';
-import { Button } from '../ui/button.js';
+import { Card, CardContent, CardHeader, CardTitle } from '@lama/ui';
+import { Badge } from '@lama/ui';
+import { Button } from '@lama/ui';
 import { Merge, Archive, MessageSquare, Clock } from 'lucide-react';
 import type { Subject, GetSubjectsResponse } from '../../types/topic-analysis.js';
+import { addAIEventListener, AIEventNames } from '../../events/AIEventTypes.js';
 
 interface SubjectListProps {
   topicId: string;
@@ -35,22 +36,21 @@ export const SubjectList: React.FC<SubjectListProps> = ({
     loadSubjects();
   }, [topicId, showArchived]);
 
-  // Listen for subject update events from backend
+  // Listen for subject update events from Model (type-safe, browser platform)
   useEffect(() => {
-    if (!topicId || !window.electronAPI) return;
+    if (!topicId) return;
 
-    const handleSubjectsUpdated = (data: any) => {
+    // Listen to type-safe AI analysis update events
+    const cleanup = addAIEventListener(AIEventNames.ANALYSIS_UPDATE, (event) => {
+      const data = event.detail;
       if (data.topicId === topicId) {
-        console.log('[SubjectList] Subjects updated event received for topic:', topicId);
+        console.log('[SubjectList] Analysis updated event received for topic:', topicId, 'type:', data.type);
         // Re-fetch subjects
         loadSubjects();
       }
-    };
+    });
 
-    const unsub = window.electronAPI.on('subjects:updated', handleSubjectsUpdated);
-    return () => {
-      if (unsub) unsub();
-    };
+    return cleanup;
   }, [topicId]);
 
   const loadSubjects = async () => {

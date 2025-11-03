@@ -4,41 +4,40 @@
  * Implements LLMPlatform interface for Web Worker environments.
  * This adapter bridges lama.core's platform-agnostic LLM operations with
  * worker postMessage API to communicate with the main thread.
+ *
+ * Uses type-safe event system for all AI events.
  */
 
 import type { LLMPlatform } from '@lama/core/services/llm-platform.js';
+import { emitAIEvent, AIEventNames } from '../browser-ui/src/events/AIEventTypes.js';
 
 export class BrowserLLMPlatform implements LLMPlatform {
   /**
-   * Emit progress update via window custom event (Browser Direct - no workers)
+   * Emit progress update via type-safe event system
    */
   emitProgress(topicId: string, progress: number): void {
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('ai:progress', {
-        detail: {
-          conversationId: topicId,
-          progress,
-        }
-      }));
+      emitAIEvent(AIEventNames.PROGRESS, {
+        topicId,
+        progress,
+      });
     }
   }
 
   /**
-   * Emit error via window custom event (Browser Direct - no workers)
+   * Emit error via type-safe event system
    */
   emitError(topicId: string, error: Error): void {
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('ai:error', {
-        detail: {
-          conversationId: topicId,
-          error: error.message,
-        }
-      }));
+      emitAIEvent(AIEventNames.ERROR, {
+        topicId,
+        error,
+      });
     }
   }
 
   /**
-   * Emit message update via window custom event (Browser Direct - no workers)
+   * Emit message update via type-safe event system
    */
   emitMessageUpdate(
     topicId: string,
@@ -48,38 +47,36 @@ export class BrowserLLMPlatform implements LLMPlatform {
   ): void {
     if (typeof window === 'undefined') return;
 
-    // Normalize content to object format
+    // Normalize content to string format (extract response)
     const normalized = typeof content === 'string'
-      ? { response: content }
-      : content;
+      ? content
+      : content.response;
 
     if (status === 'streaming') {
-      console.log('[BrowserLLMPlatform] 📢 Dispatching ai:messageStream event, response length:', normalized.response.length);
-      window.dispatchEvent(new CustomEvent('ai:messageStream', {
-        detail: {
-          conversationId: topicId,
-          messageId,
-          chunk: normalized.response,
-          partial: normalized.response,
-          thinking: normalized.thinking,
-          raw: normalized.raw,
-        }
-      }));
+      emitAIEvent(AIEventNames.MESSAGE_STREAM, {
+        topicId,
+        messageId,
+        partial: normalized,
+      });
     } else if (status === 'complete' || status === 'error') {
-      window.dispatchEvent(new CustomEvent('ai:messageComplete', {
-        detail: {
-          conversationId: topicId,
-          message: {
-            id: messageId,
-            conversationId: topicId,
-            text: normalized.response,
-            thinking: normalized.thinking,
-            raw: normalized.raw,
-            status: status === 'error' ? 'error' : 'sent',
-            timestamp: new Date().toISOString(),
-          },
-        }
-      }));
+      emitAIEvent(AIEventNames.MESSAGE_COMPLETE, {
+        topicId,
+        messageId,
+        response: normalized,
+      });
+    }
+  }
+
+  /**
+   * Emit analysis update via type-safe event system
+   * Notifies UI when subjects/keywords are extracted from AI responses
+   */
+  emitAnalysisUpdate(topicId: string, updateType: 'subjects' | 'keywords' | 'both'): void {
+    if (typeof window !== 'undefined') {
+      emitAIEvent(AIEventNames.ANALYSIS_UPDATE, {
+        topicId,
+        type: updateType,
+      });
     }
   }
 

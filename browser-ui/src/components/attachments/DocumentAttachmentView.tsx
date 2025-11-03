@@ -7,7 +7,7 @@ import { FileText, Download, File, FileCode, FileSpreadsheet } from 'lucide-reac
 import type { AttachmentViewProps } from '@/types/attachments'
 import { formatFileSize } from '@/types/attachments'
 import { useAttachmentDescriptor } from './AttachmentViewFactory'
-import { Button } from '@/components/ui/button'
+import { Button } from '@lama/ui'
 
 export const DocumentAttachmentView: React.FC<AttachmentViewProps> = ({
   attachment,

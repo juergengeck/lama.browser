@@ -5,10 +5,10 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
+} from '@lama/ui'
+import { ScrollArea } from '@lama/ui'
+import { Badge } from '@lama/ui'
+import { Progress } from '@lama/ui'
 import { useModel } from '@/model/index.js'
 import {
   ChevronRight,

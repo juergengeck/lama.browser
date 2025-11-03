@@ -5,11 +5,11 @@
  */
 
 import React, { useState } from 'react';
-import { Button } from '../ui/button.js';
-import { Input } from '../ui/input.js';
-import { Label } from '../ui/label.js';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card.js';
-import { Checkbox } from '../ui/checkbox.js';
+import { Button } from '@lama/ui';
+import { Input } from '@lama/ui';
+import { Label } from '@lama/ui';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lama/ui';
+import { Checkbox } from '@lama/ui';
 import { useWordCloudSettings } from '../../hooks/useWordCloudSettings.js';
 import { Settings, RotateCcw, Save } from 'lucide-react';
 

@@ -1,9 +1,10 @@
 /**
- * useChatKeywords Hook
+ * useChatKeywords Hook - Browser Platform
  * Non-blocking real-time single-word keyword extraction
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { getModel } from '../model';
 
 interface Message {
   id?: string;
@@ -28,11 +29,12 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
   // Track previous keyword count for change detection
   const prevKeywordCountRef = useRef(0);
 
-  // Listen for keyword update events from backend
+  // Listen for keyword update events from Model (browser events)
   useEffect(() => {
-    if (!topicId || !window.electronAPI) return;
+    if (!topicId) return;
 
-    const handleKeywordsUpdated = (data: any) => {
+    const handleKeywordsUpdated = (event: Event) => {
+      const data = (event as CustomEvent).detail;
       console.log(`[useChatKeywords-${topicId}] 🔔 Received keywords:updated event for: "${data.topicId}"`);
       console.log(`[useChatKeywords-${topicId}] 🔍 My topicId: "${topicId}"`);
       console.log(`[useChatKeywords-${topicId}] 🔍 Match: ${data.topicId === topicId}`);
@@ -43,7 +45,8 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
         // Re-fetch keywords immediately
         const fetchKeywords = async () => {
           try {
-            const response = await window.electronAPI.invoke('topicAnalysis:getKeywords', {
+            const model = getModel();
+            const response = await model.topicAnalysisHandler.getKeywords({
               topicId,
               limit: 15
             });
@@ -64,9 +67,9 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
       }
     };
 
-    const unsub = window.electronAPI.on('keywords:updated', handleKeywordsUpdated);
+    window.addEventListener('keywords:updated', handleKeywordsUpdated);
     return () => {
-      if (unsub) unsub();
+      window.removeEventListener('keywords:updated', handleKeywordsUpdated);
     };
   }, [topicId]);
 
@@ -105,6 +108,12 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
         extractionInProgress.current = true;
 
         try {
+          const model = getModel();
+          if (!model.initialized) {
+            console.log('[useChatKeywords] Skipping - model not initialized yet');
+            return;
+          }
+
           // Only show loading for initial load, not updates
           if (keywords.length === 0) {
             setLoading(true);
@@ -114,7 +123,7 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
             console.log('[useChatKeywords] Loading keywords from storage for', messages.length, 'messages');
 
             // Get keywords from storage (populated by analyzeMessages)
-            const response = await window.electronAPI.invoke('topicAnalysis:getKeywords', {
+            const response = await model.topicAnalysisHandler.getKeywords({
               topicId,
               limit: 15
             });
@@ -138,7 +147,7 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
             // Only try fallback if we have no keywords yet
             console.log('[useChatKeywords] No messages, trying fallback to subjects');
 
-            const subjectsResponse = await window.electronAPI.invoke('topicAnalysis:getSubjects', {
+            const subjectsResponse = await model.topicAnalysisHandler.getSubjects({
               topicId,
               includeArchived: false
             });
@@ -200,9 +209,15 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
     // Fire and forget - don't block on this
     const performUpdate = async () => {
       try {
+        const model = getModel();
+        if (!model.initialized) {
+          console.log('[useChatKeywords] Skipping update - model not initialized yet');
+          return;
+        }
+
         console.log('[useChatKeywords] Updating keywords for new message (non-blocking)');
 
-        const response = await window.electronAPI.invoke('topicAnalysis:extractRealtimeKeywords', {
+        const response = await model.topicAnalysisHandler.extractRealtimeKeywords({
           text: messageText,
           existingKeywords: keywords,
           maxKeywords: 15

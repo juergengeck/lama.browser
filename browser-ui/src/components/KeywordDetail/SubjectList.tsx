@@ -6,7 +6,7 @@
 
 import React, { useMemo } from 'react';
 import { SubjectItem } from './SubjectItem.js';
-import { ScrollArea } from '../ui/scroll-area.js';
+import { ScrollArea } from '@lama/ui';
 import type { EnrichedSubject, SubjectSortMode } from '../../types/keyword-detail.js';
 
 interface SubjectListProps {

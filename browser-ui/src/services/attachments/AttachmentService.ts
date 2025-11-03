@@ -1,12 +1,17 @@
 /**
- * AttachmentService - Browser proxy that uses IPC to handle attachments in Node.js
+ * AttachmentService - Browser-native attachment handling using ONE.core BLOB storage
+ *
+ * This is a PURE BROWSER implementation that uses ONE.core directly.
+ * NO Electron IPC - storage happens in IndexedDB via ONE.core.
  */
 
 import type { MessageAttachment } from '@/types/attachments'
+import { storeArrayBufferAsBlob, readBlobAsArrayBuffer } from '@refinio/one.core/lib/storage-blob.js'
+import type { SHA256Hash } from '@refinio/one.core/lib/util/type-checks.js'
 
 class AttachmentService {
   /**
-   * Store an attachment
+   * Store an attachment using ONE.core BLOB storage
    */
   async storeAttachment(
     data: ArrayBuffer | Uint8Array | string,
@@ -16,37 +21,49 @@ class AttachmentService {
       size?: number
     }
   ): Promise<MessageAttachment> {
-    // Convert data to base64 for IPC transfer
-    let base64Data: string
-    if (typeof data === 'string') {
-      base64Data = data
-    } else {
-      // Convert ArrayBuffer or Uint8Array to base64
-      // Use a more efficient method for large buffers
-      const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data
-      let binary = ''
-      const chunkSize = 32768 // Process in chunks to avoid stack overflow
-      for (let i = 0; i < bytes.length; i += chunkSize) {
-        const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length))
-        binary += String.fromCharCode.apply(null, Array.from(chunk))
+    try {
+      // Convert to ArrayBuffer if needed
+      let buffer: ArrayBuffer
+      if (typeof data === 'string') {
+        // Assume base64 string
+        const binaryString = atob(data)
+        const bytes = new Uint8Array(binaryString.length)
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i)
+        }
+        buffer = bytes.buffer
+      } else if (data instanceof Uint8Array) {
+        buffer = data.buffer
+      } else {
+        buffer = data
       }
-      base64Data = btoa(binary)
+
+      // Store as BLOB using ONE.core
+      const result = await storeArrayBufferAsBlob(buffer)
+
+      console.log('[AttachmentService] Stored BLOB:', {
+        hash: result.hash.substring(0, 8),
+        status: result.status,
+        size: metadata.size,
+        name: metadata.name
+      })
+
+      // Return MessageAttachment with hash
+      return {
+        hash: result.hash as string,
+        type: 'blob',
+        mimeType: metadata.mimeType,
+        name: metadata.name,
+        size: metadata.size || buffer.byteLength
+      }
+    } catch (error) {
+      console.error('[AttachmentService] Failed to store attachment:', error)
+      throw new Error(`Failed to store attachment: ${error}`)
     }
-    
-    const result = await window.electronAPI.invoke('attachment:store', {
-      data: base64Data,
-      metadata
-    })
-    
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to store attachment')
-    }
-    
-    return result.data
   }
   
   /**
-   * Get an attachment by hash
+   * Get an attachment by hash using ONE.core BLOB storage
    */
   async getAttachment(hash: string): Promise<{
     data: ArrayBuffer
@@ -56,45 +73,58 @@ class AttachmentService {
       size: number
     }
   }> {
-    const result = await window.electronAPI.invoke('attachment:get', { hash })
-    
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to get attachment')
-    }
-    
-    // Convert base64 back to ArrayBuffer
-    const base64 = result.data.data
-    const binaryString = atob(base64)
-    const bytes = new Uint8Array(binaryString.length)
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i)
-    }
-    
-    return {
-      data: bytes.buffer,
-      metadata: result.data.metadata
+    try {
+      // Read BLOB from ONE.core storage
+      const data = await readBlobAsArrayBuffer(hash as SHA256Hash<'BLOB'>)
+
+      console.log('[AttachmentService] Retrieved BLOB:', {
+        hash: hash.substring(0, 8),
+        size: data.byteLength
+      })
+
+      // TODO: Metadata is not stored with BLOBs in ONE.core
+      // We should store metadata separately if needed
+      return {
+        data,
+        metadata: {
+          name: 'attachment',
+          mimeType: 'application/octet-stream',
+          size: data.byteLength
+        }
+      }
+    } catch (error) {
+      console.error('[AttachmentService] Failed to get attachment:', error)
+      throw new Error(`Failed to get attachment: ${error}`)
     }
   }
   
   /**
    * Get attachment metadata only
+   *
+   * NOTE: ONE.core BLOBs don't store metadata, so we need to fetch the full blob
+   * and return basic metadata.
    */
   async getAttachmentMetadata(hash: string): Promise<{
     name: string
     mimeType: string
     size: number
   }> {
-    const result = await window.electronAPI.invoke('attachment:getMetadata', { hash })
-    
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to get metadata')
+    try {
+      const data = await readBlobAsArrayBuffer(hash as SHA256Hash<'BLOB'>)
+
+      return {
+        name: 'attachment',
+        mimeType: 'application/octet-stream',
+        size: data.byteLength
+      }
+    } catch (error) {
+      console.error('[AttachmentService] Failed to get metadata:', error)
+      throw new Error(`Failed to get metadata: ${error}`)
     }
-    
-    return result.data
   }
   
   /**
-   * Store multiple attachments
+   * Store multiple attachments using ONE.core BLOB storage
    */
   async storeMultiple(
     attachments: Array<{
@@ -106,38 +136,14 @@ class AttachmentService {
       }
     }>
   ): Promise<MessageAttachment[]> {
-    // Convert all data to base64
-    const prepared = attachments.map(att => {
-      let base64Data: string
-      if (typeof att.data === 'string') {
-        base64Data = att.data
-      } else {
-        // Convert ArrayBuffer or Uint8Array to base64
-        const bytes = att.data instanceof ArrayBuffer ? new Uint8Array(att.data) : att.data
-        let binary = ''
-        const chunkSize = 32768 // Process in chunks to avoid stack overflow
-        for (let i = 0; i < bytes.length; i += chunkSize) {
-          const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length))
-          binary += String.fromCharCode.apply(null, Array.from(chunk))
-        }
-        base64Data = btoa(binary)
-      }
-      
-      return {
-        data: base64Data,
-        metadata: att.metadata
-      }
-    })
-    
-    const result = await window.electronAPI.invoke('attachment:storeMultiple', {
-      attachments: prepared
-    })
-    
-    if (!result.success) {
-      throw new Error(result.error || 'Failed to store attachments')
-    }
-    
-    return result.data
+    // Store each attachment individually
+    const results = await Promise.all(
+      attachments.map(att => this.storeAttachment(att.data, att.metadata))
+    )
+
+    console.log('[AttachmentService] Stored multiple BLOBs:', results.length)
+
+    return results
   }
   
   /**

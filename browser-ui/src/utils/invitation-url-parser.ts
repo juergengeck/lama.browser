@@ -70,7 +70,7 @@ export function parseInvitationUrl(invitationLink: string): ParsedInvitation {
 /**
  * Extract pairing information from invitation URL
  * Simple validation without ONE.core dependency
- * 
+ *
  * @param invitationLink URL containing invitation data in hash fragment
  * @returns Invitation object if valid, undefined otherwise
  */

@@ -6,9 +6,9 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@lama/ui'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@lama/ui'
+import { Alert, AlertDescription } from '@lama/ui'
 import { Loader2, CheckCircle2, XCircle, UserPlus, Smartphone } from 'lucide-react'
 import { parseInvitationUrl, type InvitationMode } from '@/utils/invitation-url-parser'
 import type Model from '@/model/Model'
@@ -53,30 +53,11 @@ export function InvitationAcceptance(props: InvitationAcceptanceProps) {
 
   async function handleAccept() {
     console.log('[InvitationAcceptance] ========== ACCEPT BUTTON CLICKED ==========');
-
-    // Log to localStorage to survive page reloads
-    const logError = (msg: string, error?: any) => {
-      const log = `[${new Date().toISOString()}] ${msg}: ${JSON.stringify(error)}`;
-      console.error(log);
-      try {
-        const existingLogs = localStorage.getItem('invitation-error-log') || '';
-        localStorage.setItem('invitation-error-log', existingLogs + '\n' + log);
-      } catch (e) {
-        // Ignore localStorage errors
-      }
-    };
-
-    console.log('[InvitationAcceptance] About to call setStatus');
     setStatus('accepting')
-    console.log('[InvitationAcceptance] Called setStatus, about to call setError');
     setError(null)
-    console.log('[InvitationAcceptance] Called setError, about to log to localStorage');
-
-    logError('handleAccept called', { url: props.invitationUrl });
 
     const parsed = parseInvitationUrl(props.invitationUrl)
     if (!parsed.invitation) {
-      logError('Failed to parse invitation');
       setStatus('error')
       setError('Failed to parse invitation')
       return
@@ -87,14 +68,11 @@ export function InvitationAcceptance(props: InvitationAcceptanceProps) {
         mode: parsed.mode,
         commServer: parsed.invitation.url
       })
-      logError('About to call acceptPairingInvitation');
 
       // Use IOMHandler to accept invitation (follows one.leute pattern with retry logic)
       const result = await props.model.iomHandler.acceptPairingInvitation({
         invitationUrl: props.invitationUrl
       })
-
-      logError('acceptPairingInvitation returned', result);
 
       if (result.success) {
         console.log('[InvitationAcceptance] ✅ Invitation accepted successfully')
@@ -112,25 +90,15 @@ export function InvitationAcceptance(props: InvitationAcceptanceProps) {
         }
 
         setStatus('success')
-        console.log('[InvitationAcceptance] 🔍 Completing in 2 seconds...')
-        logError('About to call onComplete in 2 seconds');
-        setTimeout(() => {
-          console.log('[InvitationAcceptance] 🔍 Calling onComplete(true) - this should NOT cause a page reload')
-          logError('Calling onComplete(true)');
-          props.onComplete(true)
-        }, 2000)
+        console.log('[InvitationAcceptance] ✅ Calling onComplete(true) immediately')
+        props.onComplete(true)
       } else {
         console.error('[InvitationAcceptance] ❌ Failed to accept invitation:', result.error)
-        logError('Invitation acceptance failed', result.error);
         setStatus('error')
         setError(result.error || 'Failed to accept invitation')
       }
     } catch (err) {
       console.error('[InvitationAcceptance] Exception during acceptance:', err)
-      logError('EXCEPTION in handleAccept', {
-        message: err instanceof Error ? err.message : 'Unknown',
-        stack: err instanceof Error ? err.stack : undefined
-      });
       setStatus('error')
       setError(err instanceof Error ? err.message : 'Unknown error')
     }

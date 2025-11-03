@@ -6,10 +6,9 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Subject } from '../types/topic-analysis';
 import { getModel } from '../model';
+import { addAIEventListener, AIEventNames } from '../events/AIEventTypes';
 
 export function useChatSubjects(topicId: string) {
-  console.log('[useChatSubjects] Hook called with topicId:', topicId);
-
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,24 +20,20 @@ export function useChatSubjects(topicId: string) {
   // Track previous subject count for change detection
   const prevSubjectCountRef = useRef(0);
 
-  // Listen for subject update events from Model
+  // Listen for subject update events from Model (type-safe)
   useEffect(() => {
     if (!topicId) return;
 
-    const handleSubjectsUpdated = (data: any) => {
-      console.log(`[useChatSubjects-${topicId}] 🔔 Received subjects:updated event for: "${data.topicId}"`);
+    // Listen to type-safe AI analysis update events
+    const cleanup = addAIEventListener(AIEventNames.ANALYSIS_UPDATE, (event) => {
+      const data = event.detail;
       if (data.topicId === topicId) {
-        console.log(`[useChatSubjects-${topicId}] ✅ Fetching updated subjects`);
         // Re-fetch subjects immediately
         fetchSubjects();
       }
-    };
+    });
 
-    // Listen to browser event (dispatched by Model or other components)
-    window.addEventListener('subjects:updated', handleSubjectsUpdated as EventListener);
-    return () => {
-      window.removeEventListener('subjects:updated', handleSubjectsUpdated as EventListener);
-    };
+    return cleanup;
   }, [topicId]);
 
   // Detect when subjects appear (0 -> N) and return flag
@@ -72,15 +67,11 @@ export function useChatSubjects(topicId: string) {
       // Only update if this is still the latest request
       if (currentRequest === requestCounter.current) {
         if (response.success && response.data?.subjects) {
-          console.log('[useChatSubjects] ✅ Subjects loaded:', response.data.subjects.length);
           setSubjects(response.data.subjects);
           setError(null);
         } else {
-          console.log('[useChatSubjects] ❌ No subjects in response:', response);
           setSubjects([]);
         }
-      } else {
-        console.log('[useChatSubjects] Ignoring stale response');
       }
     } catch (err) {
       if (currentRequest === requestCounter.current) {
@@ -97,7 +88,6 @@ export function useChatSubjects(topicId: string) {
   // Load subjects when topicId changes
   useEffect(() => {
     // Clear subjects immediately when topicId changes
-    console.log('[useChatSubjects] 🧹 Clearing subjects for topic change to:', topicId);
     setSubjects([]);
     setError(null);
 

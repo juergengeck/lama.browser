@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { Badge } from '../ui/badge.js';
+import { Badge } from '@lama/ui';
 import { MessageSquare, Users, Calendar, ChevronDown } from 'lucide-react';
 import type { EnrichedSubject } from '../../types/keyword-detail.js';
 

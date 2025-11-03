@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ipcStorage } from '@/services/ipc-storage'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@lama/ui'
+import { Button } from '@lama/ui'
+import { Input } from '@lama/ui'
+import { Label } from '@lama/ui'
+import { Badge } from '@lama/ui'
+import { ScrollArea } from '@lama/ui'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@lama/ui'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@lama/ui'
+import { Alert, AlertDescription } from '@lama/ui'
 import { 
   Users, UserPlus, Link, QrCode, Copy, Check, Circle, 
   RefreshCw, Wifi, WifiOff, Shield, X, AlertTriangle,
@@ -54,26 +54,16 @@ export function ConnectionsView({ onNavigateToChat }: ConnectionsViewProps = {})
 
   // All operations via IPC - no AppModel in browser
 
-  // Get edda domain from settings with fallback
-  const getEddaDomain = (): string => {
-    // Check if user has configured a custom domain
-    const customDomain = await ipcStorage.getItem('edda-domain')
-    if (customDomain) {
-      return customDomain
+  // Get lama domain from settings with fallback
+  const getLamaDomain = (): string => {
+    // Check localStorage for saved domain
+    const savedDomain = localStorage.getItem('lama-domain')
+    if (savedDomain) {
+      return savedDomain
     }
-    
-    // Fallback to environment-based domain detection
-    const eddaDomains = {
-      development: 'edda.dev.refinio.one',
-      production: 'edda.one'
-    }
-    
-    // Detect environment - in Electron, check if we're in development
-    const isDevelopment = window.electronAPI?.isDevelopment || 
-                         process.env.NODE_ENV === 'development' ||
-                         window.location.hostname === 'localhost'
-    
-    return isDevelopment ? eddaDomains.development : eddaDomains.production
+
+    // Default to lama.one for all environments
+    return 'lama.one'
   }
 
   // Load connections and network status
@@ -439,7 +429,7 @@ export function ConnectionsView({ onNavigateToChat }: ConnectionsViewProps = {})
               
               {/* Connection Details */}
               <div className="text-xs text-muted-foreground space-y-1">
-                <div>Domain: {getEddaDomain()}</div>
+                <div>Domain: {getLamaDomain()}</div>
                 <div>Token: {currentInvitation.token.substring(0, 16)}...</div>
                 <div>Public Key: {currentInvitation.publicKey.substring(0, 16)}...</div>
                 <div>Expires: {currentInvitation.expiresAt.toLocaleTimeString()}</div>

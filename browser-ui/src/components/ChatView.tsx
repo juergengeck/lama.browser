@@ -10,9 +10,9 @@
  */
 
 import { useState, useEffect, useRef, useCallback, memo } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@lama/ui'
+import { Button } from '@lama/ui'
+import { Badge } from '@lama/ui'
 import { MessageView } from './MessageView'
 import { useMessages } from '@/hooks/useMessages'
 import { useModel } from '@/model/index.js'
@@ -20,6 +20,7 @@ import { ChatHeader } from './chat/ChatHeader'
 import { ChatContext } from './chat/ChatContext'
 import { KeywordDetailPanel } from './KeywordDetail/KeywordDetailPanel'
 import { useChatSubjects } from '@/hooks/useChatSubjects'
+import { addAIEventListener, AIEventNames } from '../events/AIEventTypes'
 
 // TODO: Replace these with worker equivalents
 const useLamaPeers = () => ({ peers: [] })
@@ -34,7 +35,7 @@ export const ChatView = memo(function ChatView({
   onAddUsers
 }: {
   conversationId?: string
-  onProcessingChange?: (isProcessing: boolean) => void
+  onProcessingChange?: (conversationId: string, isProcessing: boolean) => void
   onMessageUpdate?: (lastMessage: string) => void
   isInitiallyProcessing?: boolean
   hasAIParticipant?: boolean
@@ -45,17 +46,15 @@ export const ChatView = memo(function ChatView({
   const { subjects, subjectsJustAppeared } = useChatSubjects(conversationId)
   const chatHeaderRef = useRef<HTMLDivElement>(null)
 
-  // Debug: log messages received from hook
-  console.log('[ChatView] Received from hook - messages:', messages?.length || 0, 'loading:', loading)
-  if (messages && messages.length > 0) {
-    console.log('[ChatView] First message in ChatView:', messages[0])
-  }
+  // Track last message ID to avoid redundant updates
+  const lastMessageIdRef = useRef<string | null>(null)
 
-  // Separate effect for updating parent
+  // Separate effect for updating parent - only when last message actually changes
   useEffect(() => {
     if (messages.length > 0 && onMessageUpdate) {
       const lastMessage = messages[messages.length - 1]
-      if (lastMessage && lastMessage.content) {
+      if (lastMessage && lastMessage.content && lastMessage.id !== lastMessageIdRef.current) {
+        lastMessageIdRef.current = lastMessage.id
         onMessageUpdate(lastMessage.content)
       }
     }
@@ -66,6 +65,8 @@ export const ChatView = memo(function ChatView({
   const [isProcessing, setIsProcessing] = useState(false)
   const [isAIProcessing, setIsAIProcessing] = useState(isInitiallyProcessing)
   const [aiStreamingContent, setAiStreamingContent] = useState('')
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [streamingTimeout, setStreamingTimeout] = useState<NodeJS.Timeout | null>(null)
   const [lastAnalysisMessageCount, setLastAnalysisMessageCount] = useState(0)
   const [showSummary, setShowSummary] = useState(false)
   const [showSubjectDetail, setShowSubjectDetail] = useState(false)
@@ -82,7 +83,6 @@ export const ChatView = memo(function ChatView({
 
   // Clear AI processing state when conversation changes
   useEffect(() => {
-    console.log(`[ChatView] Conversation changed to: ${conversationId}, clearing AI state`)
     setIsAIProcessing(false)
     setAiStreamingContent('')
   }, [conversationId])
@@ -92,68 +92,121 @@ export const ChatView = memo(function ChatView({
     // If there are no messages and this is an AI conversation, show spinner immediately
     // This covers the case where welcome message generation is in progress
     if (messages.length === 0 && hasAIParticipant && !loading) {
-      console.log('[ChatView] No messages in AI topic - showing spinner for welcome generation')
       setIsAIProcessing(true)
-      onProcessingChange?.(true)
+      onProcessingChange?.(conversationId, true)
+
+      // Safety timeout: Clear spinner after 10 seconds if no messages arrive
+      // This prevents infinite spinner if welcome message fails or takes too long
+      const timeout = setTimeout(() => {
+        console.log('[ChatView] Welcome message timeout - clearing spinner')
+        setIsAIProcessing(false)
+        onProcessingChange?.(conversationId, false)
+      }, 10000) // 10 second timeout
+
+      return () => clearTimeout(timeout)
     } else if (messages.length > 0 && isAIProcessing) {
       // Messages arrived - clear the spinner
-      console.log('[ChatView] Messages arrived - clearing welcome spinner')
       setIsAIProcessing(false)
-      onProcessingChange?.(false)
+      onProcessingChange?.(conversationId, false)
     }
-  }, [messages.length, hasAIParticipant, loading]) // Watch for message arrival
+  }, [messages.length, hasAIParticipant, loading, conversationId, onProcessingChange, isAIProcessing]) // Watch for message arrival
 
-  // Listen for AI streaming events via window custom events (Browser Direct)
+  // Prevent duplicate display: Clear streaming content when persisted message arrives
+  // This is the ONLY place streaming content should be cleared (not in MESSAGE_COMPLETE)
   useEffect(() => {
-    // Handle progress/thinking indicator
-    const handleProgress = (event: Event) => {
-      const data = (event as CustomEvent).detail;
-      console.log(`[ChatView-${conversationId}] 🔔 Progress event:`, data);
-      if (data.conversationId === conversationId) {
-        console.log(`[ChatView-${conversationId}] ✅ Setting AI processing to TRUE`);
+    if (!aiStreamingContent) return; // No streaming content to check
+
+    // Check if the last persisted message matches the streaming content
+    // This means the message has been saved to ONE.core and arrived via channel update
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && lastMessage.content) {
+      // Normalize both for comparison (trim whitespace, remove markdown formatting)
+      const streamingNormalized = aiStreamingContent.trim().toLowerCase();
+      const persistedNormalized = lastMessage.content.trim().toLowerCase();
+
+      // Check if they're the same message (allowing for minor differences)
+      // Use a similarity check: if 90% of streaming content is in persisted content
+      const similarity = streamingNormalized.length > 0
+        ? (persistedNormalized.includes(streamingNormalized) ? 1.0 :
+           streamingNormalized.includes(persistedNormalized) ? 1.0 : 0)
+        : 0;
+
+      if (similarity > 0.5) {
+        // Clear the streaming content
+        setAiStreamingContent('');
+
+        // Cancel the timeout since we found the persisted message
+        if (streamingTimeout) {
+          clearTimeout(streamingTimeout);
+          setStreamingTimeout(null);
+        }
+      }
+    }
+  }, [messages, aiStreamingContent, streamingTimeout])
+
+  // Listen for AI streaming events via type-safe event system (Browser Direct)
+  useEffect(() => {
+    // Handle progress/thinking indicator (type-safe)
+    const cleanupProgress = addAIEventListener(AIEventNames.PROGRESS, (event) => {
+      const data = event.detail;
+      if (data.topicId === conversationId) {
         setIsAIProcessing(true);
         setAiStreamingContent('');
-        onProcessingChange?.(true);
+        setAiError(null); // Clear any previous errors
+        onProcessingChange?.(conversationId, true);
       }
-    }
+    });
 
-    // Handle streaming chunks
-    const handleStream = (event: Event) => {
-      const data = (event as CustomEvent).detail;
-      console.log('[ChatView] Stream data received:', data);
-      if (data.conversationId === conversationId) {
+    // Handle streaming chunks (type-safe)
+    const cleanupStream = addAIEventListener(AIEventNames.MESSAGE_STREAM, (event) => {
+      const data = event.detail;
+      if (data.topicId === conversationId) {
+        // Keep isAIProcessing=true during streaming - only set to false on complete
+        setAiStreamingContent(data.partial);
+        setAiError(null); // Clear any errors during successful streaming
+      }
+    });
+
+    // Handle message complete (type-safe)
+    // NOTE: We don't clear aiStreamingContent here because the persisted message
+    // arrives later via channel update. The duplicate detection will clear it.
+    const cleanupComplete = addAIEventListener(AIEventNames.MESSAGE_COMPLETE, (event) => {
+      const data = event.detail;
+      if (data.topicId === conversationId) {
         setIsAIProcessing(false);
-        // Combine thinking and response for display
-        let content = '';
-        if (data.thinking) {
-          content += `[THINKING] ${data.thinking}\n\n`;
-        }
-        if (data.partial) {
-          content += data.partial;
-        }
-        setAiStreamingContent(content);
-      }
-    }
+        setAiError(null); // Clear errors on success
+        onProcessingChange?.(conversationId, false);
 
-    // Handle message complete
-    const handleComplete = (event: Event) => {
-      const data = (event as CustomEvent).detail;
-      if (data.conversationId === conversationId) {
+        // DON'T clear aiStreamingContent here - let duplicate detection handle it
+        // But set a timeout fallback in case persisted message never arrives
+        const timeout = setTimeout(() => {
+          setAiStreamingContent('');
+        }, 5000); // 5 second safety timeout
+        setStreamingTimeout(timeout);
+      }
+    });
+
+    // Handle errors (type-safe)
+    const cleanupError = addAIEventListener(AIEventNames.ERROR, (event) => {
+      const data = event.detail;
+      console.error('[ChatView] AI Error:', data);
+      if (data.topicId === conversationId) {
+        const errorMessage = typeof data.error === 'string'
+          ? data.error
+          : data.error.message || 'An error occurred while generating the response';
+
+        setAiError(errorMessage);
         setIsAIProcessing(false);
         setAiStreamingContent('');
-        onProcessingChange?.(false);
+        onProcessingChange?.(conversationId, false);
       }
-    }
-
-    // Subscribe to window custom events
-    window.addEventListener('ai:progress', handleProgress);
-    window.addEventListener('ai:messageStream', handleStream);
-    window.addEventListener('ai:messageComplete', handleComplete);
+    });
 
     return () => {
-      window.removeEventListener('ai:progress', handleProgress);
-      window.removeEventListener('ai:messageStream', handleStream);
-      window.removeEventListener('ai:messageComplete', handleComplete);
+      cleanupProgress();
+      cleanupStream();
+      cleanupComplete();
+      cleanupError();
     }
   }, [conversationId, onProcessingChange])
   
@@ -222,14 +275,11 @@ export const ChatView = memo(function ChatView({
 
   const handleSendMessage = async (content: string, attachments?: any[]) => {
     setIsProcessing(true)
-    onProcessingChange?.(true)
+    onProcessingChange?.(conversationId, true)
 
-    // Check if this is an AI conversation to show processing indicator
-    const isAIConversation = conversationId === 'lama' ||
-                             conversationId === 'ai-chat' ||
-                             messages.some(m => m.isAI)
-
-    if (isAIConversation) {
+    // Use hasAIParticipant to determine if this is an AI conversation
+    // This is consistent with the prop passed from ChatLayout
+    if (hasAIParticipant) {
       setIsAIProcessing(true)
       setAiStreamingContent('')
     }
@@ -243,8 +293,12 @@ export const ChatView = memo(function ChatView({
       }
     } finally {
       setIsProcessing(false)
-      onProcessingChange?.(false)
-      // AI processing indicator will be cleared by streaming events
+      // For AI conversations, keep the spinner active until MESSAGE_COMPLETE fires
+      // For non-AI conversations, clear the spinner immediately
+      if (!hasAIParticipant) {
+        onProcessingChange?.(conversationId, false)
+      }
+      // AI processing indicator will be cleared by streaming events (MESSAGE_COMPLETE)
     }
   }
 
@@ -387,6 +441,7 @@ export const ChatView = memo(function ChatView({
           loading={loading}
           isAIProcessing={isAIProcessing}
           aiStreamingContent={aiStreamingContent}
+          aiError={aiError}
           topicId={conversationId}
           subjectsJustAppeared={subjectsJustAppeared}
           chatHeaderRef={chatHeaderRef}

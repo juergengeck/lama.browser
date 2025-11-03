@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { MessageSquare, ChevronLeft, ChevronRight, MoreHorizontal, Brain, UserPlus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@lama/ui'
+import { Badge } from '@lama/ui'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from '@lama/ui'
 
 interface Subject {
   id: string
@@ -42,8 +42,6 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   conversationId,
   className = ''
 }) => {
-  console.log('[ChatHeader] Rendering with:', { conversationName, subjects: subjects?.length || 0, hasAI, messageCount })
-
   const [showLeftChevron, setShowLeftChevron] = useState(false)
   const [showRightChevron, setShowRightChevron] = useState(false)
   const scrollContainerRef = useRef<HTMLDivElement>(null)

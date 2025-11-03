@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
+import { Button } from '@lama/ui'
+import { Card, CardContent, CardHeader, CardTitle } from '@lama/ui'
+import { Badge } from '@lama/ui'
+import { Separator } from '@lama/ui'
 import {
   Monitor,
   Smartphone,
@@ -184,6 +184,8 @@ export default function InstancesView() {
         return 'outline'
     }
   }
+
+  console.log('[InstancesView] Render - loading:', loading, 'contacts:', contacts.length, 'copiedInvite:', copiedInvite)
 
   if (loading) {
     return (
@@ -368,27 +370,32 @@ export default function InstancesView() {
           <h3 className="text-sm font-medium">
             Contacts ({contacts.length})
           </h3>
-          {/* TODO: Implement invitation creation in Worker
-          <Button
-            size="sm"
-            onClick={() => {
-              handleCreateInvitation()
-            }}
-            className="gap-2"
-          >
-            {copiedInvite ? (
-              <>
-                <Copy className="h-3 w-3" />
-                Copied!
-              </>
-            ) : (
-              <>
-                <User className="h-3 w-3" />
-                Add Contact
-              </>
-            )}
-          </Button>
-          */}
+          {(() => {
+            console.log('[InstancesView] Rendering Add Contact button, copiedInvite:', copiedInvite)
+            return (
+              <Button
+                size="sm"
+                onClick={() => {
+                  console.log('[InstancesView] Add Contact button clicked')
+                  setInviteType('contact')
+                  handleCreateInvitation()
+                }}
+                className="gap-2"
+              >
+                {copiedInvite ? (
+                  <>
+                    <Copy className="h-3 w-3" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <User className="h-3 w-3" />
+                    Add Contact
+                  </>
+                )}
+              </Button>
+            )
+          })()}
         </div>
 
         {contacts.length === 0 ? (

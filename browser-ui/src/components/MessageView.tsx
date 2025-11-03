@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback } from '@lama/ui'
 import { Loader2, ChevronDown } from 'lucide-react'
 import './MessageView.css'
 import { useModel } from '@/model/index.js'
@@ -37,6 +37,9 @@ import { KeywordDetailPanel } from './KeywordDetail/KeywordDetailPanel'
 import { ProposalCarousel } from './ProposalCarousel'
 import { useProposals } from '@/hooks/useProposals'
 
+// Import throttled streaming content hook
+import { useThrottledStreamingContent } from '@/hooks/useThrottledStreamingContent'
+
 interface MessageViewProps {
   messages: Message[]
   currentUserId?: string
@@ -47,6 +50,7 @@ interface MessageViewProps {
   participants?: string[] // List of participant IDs to determine if multiple people
   isAIProcessing?: boolean // Show typing indicator when AI is processing
   aiStreamingContent?: string // Show partial AI response while streaming
+  aiError?: string | null // Error message from AI processing
   topicId?: string // Topic ID for context panel
   subjectsJustAppeared?: boolean // Flag indicating subjects just appeared
   chatHeaderRef?: React.RefObject<HTMLDivElement> // Ref to ChatHeader to measure height change
@@ -62,16 +66,12 @@ export function MessageView({
   participants = [],
   isAIProcessing = false,
   aiStreamingContent = '',
+  aiError = null,
   topicId,
   subjectsJustAppeared = false,
   chatHeaderRef
 }: MessageViewProps) {
   const model = useModel()
-  console.log('[MessageView] 🎨 Rendering with', messages.length, 'messages')
-  if (messages.length > 0) {
-    console.log('[MessageView] First message:', messages[0])
-    console.log('[MessageView] Last message:', messages[messages.length - 1])
-  }
   const [contactNames, setContactNames] = useState<Record<string, string>>({})
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
@@ -79,6 +79,9 @@ export function MessageView({
 
   // Store attachment descriptors for display
   const [attachmentDescriptors, setAttachmentDescriptors] = useState<Map<string, BlobDescriptor>>(new Map())
+
+  // Throttle streaming content updates for better markdown rendering performance
+  const throttledStreamingContent = useThrottledStreamingContent(aiStreamingContent, isAIProcessing)
 
   // Keyword detail dialog state
   const [showKeywordDetail, setShowKeywordDetail] = useState(false)
@@ -143,17 +146,10 @@ export function MessageView({
   // Adjust scroll position when subjects appear to compensate for header height change
   useEffect(() => {
     if (subjectsJustAppeared && chatHeaderRef?.current && scrollAreaRef.current) {
-      console.log('[MessageView] Subjects just appeared, adjusting scroll position')
-
       // Measure the height of the subject line that just appeared
       // We use requestAnimationFrame to wait for the DOM to update
       requestAnimationFrame(() => {
         if (!chatHeaderRef.current || !scrollAreaRef.current) return
-
-        // The subject line is roughly 48px (py-2 + text height + border)
-        // But let's measure it to be precise
-        const headerHeight = chatHeaderRef.current.offsetHeight
-        console.log('[MessageView] Header height after subjects:', headerHeight)
 
         // Adjust scroll to compensate for the header growth
         // This keeps the visible content in the same position
@@ -189,7 +185,6 @@ export function MessageView({
     // If streaming just ended (was streaming but now not), don't scroll
     // The final message is already visible from the streaming view
     if (wasStreaming && !isStreaming) {
-      console.log('[MessageView] Streaming ended, skipping scroll')
       return
     }
 
@@ -228,25 +223,19 @@ export function MessageView({
   // Enhanced send handler with proper attachment storage
   const handleEnhancedSend = async (text: string, attachments?: EnhancedAttachment[]) => {
     if (!text.trim() && (!attachments || attachments.length === 0)) {
-      console.log('[MessageView] Empty message, not sending')
       return
     }
 
     try {
-      console.log('[MessageView] 🎯 Enhanced send with:', text, attachments?.length, 'attachments')
-
       // Extract hashtags from text
       const hashtagRegex = /#[\w-]+/g
       const hashtags = text.match(hashtagRegex) || []
-      console.log('[MessageView] Extracted hashtags:', hashtags)
 
       let messageContent = text
       const messageAttachments: MessageAttachment[] = []
 
       // Process and store attachments using AttachmentService
       if (attachments && attachments.length > 0) {
-        console.log('[MessageView] Processing attachments with AttachmentService')
-
         for (const attachment of attachments) {
           try {
             // Convert File to ArrayBuffer first
@@ -285,8 +274,6 @@ export function MessageView({
               newMap.set(hash, descriptor)
               return newMap
             })
-
-            console.log(`[MessageView] Stored attachment ${attachment.file.name} with hash: ${hash}`)
           } catch (error) {
             console.error(`[MessageView] Failed to store attachment ${attachment.file.name}:`, error)
           }
@@ -314,8 +301,6 @@ export function MessageView({
 
   // Handle hashtag clicks - open keyword detail dialog
   const handleHashtagClick = (hashtag: string) => {
-    console.log('[MessageView] Hashtag/keyword clicked:', hashtag, '| topicId:', topicId)
-
     if (topicId) {
       // Open keyword detail dialog
       setSelectedKeyword(hashtag)
@@ -342,13 +327,11 @@ export function MessageView({
 
   // Handle attachment clicks
   const handleAttachmentClick = (attachmentId: string) => {
-    console.log('[MessageView] Attachment clicked:', attachmentId)
     // TODO: Implement attachment viewer
   }
 
   // Handle attachment downloads
   const handleDownloadAttachment = (attachmentId: string) => {
-    console.log('[MessageView] Download attachment:', attachmentId)
     // TODO: Implement attachment download
   }
 
@@ -390,8 +373,6 @@ export function MessageView({
             const isCurrentUser = message.sender === 'user' || message.sender === currentUserId
             // Use the isAI flag from the message
             const isAIMessage = message.isAI === true
-            console.log(`[MessageView] Rendering message - sender: "${message.sender}", currentUserId: "${currentUserId}", isCurrentUser: ${isCurrentUser}, isAI: ${isAIMessage}, content: "${message.content.substring(0, 50)}..."`)
-
 
             // Always use EnhancedMessageBubble for consistent rendering and features
             // Extract hashtags from message content
@@ -415,23 +396,41 @@ export function MessageView({
               format: message.format || 'markdown' // Use message format if available, otherwise markdown
             }
 
-            console.log(`[MessageView] Passing to EnhancedMessageBubble:`, {
-              id: enhancedMessage.id,
-              hasContent: !!enhancedMessage.content,
-              contentLength: enhancedMessage.content?.length,
-              format: enhancedMessage.format
-            })
+            const senderInitials = (enhancedMessage.senderName || 'U')
+              .split(' ')
+              .filter(n => n && n.length > 0)
+              .map(n => n[0])
+              .join('')
+              .toUpperCase()
+              .substring(0, 2) || 'U'
 
             return (
-              <EnhancedMessageBubble
-                key={message.id}
-                message={enhancedMessage}
-                onHashtagClick={handleHashtagClick}
-                onAttachmentClick={handleAttachmentClick}
-                onDownloadAttachment={handleDownloadAttachment}
-                theme="dark"
-                attachmentDescriptors={attachmentDescriptors}
-              />
+              <div key={message.id} className="flex gap-2 mb-2" style={{ justifyContent: isCurrentUser ? 'flex-end' : 'flex-start' }}>
+                {!isCurrentUser && (
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarFallback className="text-xs bg-primary/20 text-primary">
+                      {senderInitials}
+                    </AvatarFallback>
+                  </Avatar>
+                )}
+                <div className="flex-1 max-w-[80%]">
+                  <EnhancedMessageBubble
+                    message={enhancedMessage}
+                    onHashtagClick={handleHashtagClick}
+                    onAttachmentClick={handleAttachmentClick}
+                    onDownloadAttachment={handleDownloadAttachment}
+                    theme="dark"
+                    attachmentDescriptors={attachmentDescriptors}
+                  />
+                </div>
+                {isCurrentUser && (
+                  <Avatar className="h-8 w-8 shrink-0">
+                    <AvatarFallback className="text-xs bg-secondary text-secondary-foreground">
+                      {senderInitials}
+                    </AvatarFallback>
+                  </Avatar>
+                )}
+              </div>
             )
           })}
 
@@ -439,7 +438,7 @@ export function MessageView({
           {isAIProcessing && !aiStreamingContent && (
             <div className="flex gap-2 mb-2 justify-start">
               <Avatar className="h-8 w-8 shrink-0">
-                <AvatarFallback className="text-xs">AI</AvatarFallback>
+                <AvatarFallback className="text-xs bg-primary/20 text-primary">AI</AvatarFallback>
               </Avatar>
               <div className="flex flex-col">
                 <div className="message-bubble message-bubble-ai">
@@ -453,26 +452,52 @@ export function MessageView({
             </div>
           )}
 
-          {/* AI Streaming Content - show the actual streaming response */}
-          {aiStreamingContent && (
-            <EnhancedMessageBubble
-              message={{
-                id: 'streaming',
-                content: aiStreamingContent,
-                senderId: 'ai',
-                senderName: 'AI Assistant',
-                timestamp: Date.now(),
-                isOwn: false,
-                subjects: [],
-                trustLevel: 3,
-                format: 'markdown'
-              }}
-              onHashtagClick={handleHashtagClick}
-              onAttachmentClick={handleAttachmentClick}
-              onDownloadAttachment={handleDownloadAttachment}
-              theme="dark"
-              attachmentDescriptors={attachmentDescriptors}
-            />
+          {/* AI Streaming Content - show the actual streaming response (throttled for performance) */}
+          {throttledStreamingContent && (
+            <div className="flex gap-2 mb-2 justify-start">
+              <Avatar className="h-8 w-8 shrink-0">
+                <AvatarFallback className="text-xs bg-primary/20 text-primary">AI</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 max-w-[80%]">
+                <EnhancedMessageBubble
+                  message={{
+                    id: 'streaming',
+                    content: throttledStreamingContent,
+                    senderId: 'ai',
+                    senderName: 'AI Assistant',
+                    timestamp: Date.now(),
+                    isOwn: false,
+                    subjects: [],
+                    trustLevel: 3,
+                    format: 'markdown'
+                  }}
+                  onHashtagClick={handleHashtagClick}
+                  onAttachmentClick={handleAttachmentClick}
+                  onDownloadAttachment={handleDownloadAttachment}
+                  theme="dark"
+                  attachmentDescriptors={attachmentDescriptors}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* AI Error Message - show when AI processing fails */}
+          {aiError && (
+            <div className="flex gap-2 mb-2 justify-start">
+              <Avatar className="h-8 w-8 shrink-0">
+                <AvatarFallback className="text-xs bg-destructive/20 text-destructive">!</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 max-w-[80%]">
+                <div className="message-bubble bg-destructive/10 border border-destructive/30 text-destructive-foreground">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1">
+                      <div className="font-semibold text-sm mb-1">AI Error</div>
+                      <div className="text-sm">{aiError}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
 
           <div ref={messagesEndRef} />

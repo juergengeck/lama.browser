@@ -27,7 +27,7 @@ echo -e "${YELLOW}Target:${NC} $REMOTE_HOST:$REMOTE_PATH"
 echo ""
 
 # Step 1: Build
-echo -e "${BLUE}[1/6]${NC} 🔨 Building LAMA Browser..."
+echo -e "${BLUE}[1/5]${NC} 🔨 Building LAMA Browser..."
 if npm run build; then
     echo -e "${GREEN}✓ Build successful${NC}"
 else
@@ -37,7 +37,7 @@ fi
 echo ""
 
 # Step 2: Verify build
-echo -e "${BLUE}[2/6]${NC} 🔍 Verifying build output..."
+echo -e "${BLUE}[2/5]${NC} 🔍 Verifying build output..."
 if [ ! -f "$BUILD_DIR/index.html" ]; then
     echo -e "${RED}✗ Build verification failed: index.html not found${NC}"
     exit 1
@@ -45,27 +45,31 @@ fi
 echo -e "${GREEN}✓ Build verified${NC}"
 echo ""
 
-# Step 3: Create tarball
-echo -e "${BLUE}[3/6]${NC} 📦 Creating deployment package..."
-cd browser-ui
-tar -czf ../lama-browser-dist.tar.gz dist/
+# Step 3: Create packages
+echo -e "${BLUE}[3/5]${NC} 📦 Creating deployment packages..."
+mkdir -p deploy
+rm -rf deploy/lama.browser deploy/lama-browser.tar.gz deploy/lama-browser.zip
+cp -r browser-ui/dist deploy/lama.browser
+
+cd deploy
+tar -czf lama-browser.tar.gz lama.browser/
+zip -r lama-browser.zip lama.browser/
 cd ..
-echo -e "${GREEN}✓ Package created: lama-browser-dist.tar.gz${NC}"
+echo -e "${GREEN}✓ Packages created in deploy/${NC}"
 echo ""
 
 # Step 4: Upload
-echo -e "${BLUE}[4/6]${NC} ⬆️  Uploading to remote server..."
-if scp lama-browser-dist.tar.gz $REMOTE_HOST:/tmp/; then
+echo -e "${BLUE}[4/5]${NC} ⬆️  Uploading to remote server..."
+if scp deploy/lama-browser.tar.gz $REMOTE_HOST:/tmp/; then
     echo -e "${GREEN}✓ Upload successful${NC}"
 else
     echo -e "${RED}✗ Upload failed${NC}"
-    rm lama-browser-dist.tar.gz
     exit 1
 fi
 echo ""
 
 # Step 5: Deploy on remote
-echo -e "${BLUE}[5/6]${NC} 🚀 Deploying on remote server..."
+echo -e "${BLUE}[5/5]${NC} 🚀 Deploying on remote server..."
 ssh $REMOTE_HOST << EOF
     set -e
 
@@ -82,7 +86,7 @@ ssh $REMOTE_HOST << EOF
     sudo mkdir -p ${REMOTE_PATH}.new
 
     echo "Extracting new version..."
-    sudo tar -xzf /tmp/lama-browser-dist.tar.gz -C ${REMOTE_PATH}.new --strip-components=1
+    sudo tar -xzf /tmp/lama-browser.tar.gz -C ${REMOTE_PATH}.new --strip-components=1
 
     echo "Switching to new version..."
     sudo rm -rf ${REMOTE_PATH}.old
@@ -96,7 +100,7 @@ ssh $REMOTE_HOST << EOF
     sudo chmod -R 755 $REMOTE_PATH
 
     # Cleanup
-    rm /tmp/lama-browser-dist.tar.gz
+    rm /tmp/lama-browser.tar.gz
 
     echo "Deployment complete!"
 EOF
@@ -108,15 +112,8 @@ else
     echo -e "${YELLOW}To rollback, SSH to server and run:${NC}"
     echo -e "${YELLOW}  sudo rm -rf $REMOTE_PATH${NC}"
     echo -e "${YELLOW}  sudo mv ${REMOTE_PATH}.old $REMOTE_PATH${NC}"
-    rm lama-browser-dist.tar.gz
     exit 1
 fi
-echo ""
-
-# Step 6: Cleanup
-echo -e "${BLUE}[6/6]${NC} 🧹 Cleaning up..."
-rm lama-browser-dist.tar.gz
-echo -e "${GREEN}✓ Local cleanup complete${NC}"
 echo ""
 
 # Success message

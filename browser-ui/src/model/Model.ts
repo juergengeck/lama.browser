@@ -26,7 +26,7 @@ import TopicModel from '@refinio/one.models/lib/models/Chat/TopicModel.js';
 import {OEvent} from '@refinio/one.models/lib/misc/OEvent.js';
 import RecipesStable from '@refinio/one.models/lib/recipes/recipes-stable.js';
 import RecipesExperimental from '@refinio/one.models/lib/recipes/recipes-experimental.js';
-import SingleUserNoAuth from '@refinio/one.models/lib/models/Authenticator/SingleUserNoAuth.js';
+import MultiUser from '@refinio/one.models/lib/models/Authenticator/MultiUser.js';
 import {
     ReverseMapsStable,
     ReverseMapsForIdObjectsStable
@@ -98,14 +98,14 @@ import {browserOllamaValidator, browserConfigManager} from '../../../adapters/br
 import {BrowserLLMPlatform} from '../../../adapters/browser-llm-platform';
 import {LLMManager} from '@lama/core/services/llm-manager';
 
-// connection.core integration
-import {ConnectionManagerOneCore} from '@lama/connection.core';
-import {
-    BrowserOneCoreAdapter,
-    BrowserTransportFactory,
-    BrowserIndexedDBStorage,
-    BrowserUICallbacks
-} from '@lama/connection.core/adapters/browser';
+// connection.core integration - DISABLED: Browser adapters not implemented yet
+// import {ConnectionManagerOneCore} from '@lama/connection.core';
+// import {
+//     BrowserOneCoreAdapter,
+//     BrowserTransportFactory,
+//     BrowserIndexedDBStorage,
+//     BrowserUICallbacks
+// } from '@lama/connection.core/adapters/browser';
 
 export default class Model {
     public onOneModelsReady = new OEvent<() => void>();
@@ -118,13 +118,15 @@ export default class Model {
         console.log('[Model] Constructing LAMA Browser Model...');
 
         // Setup basic ONE.core models (following one.leute pattern)
-        this.leuteModel = new LeuteModel(commServerUrl, true);
+        // Pass false for autoInit - let CoreInitializer handle initialization
+        this.leuteModel = new LeuteModel(commServerUrl, false);
         this.channelManager = new ChannelManager(this.leuteModel);
         this.topicModel = new TopicModel(this.channelManager, this.leuteModel);
 
-        // Initialize SingleUserNoAuth with all recipes
-        // CRITICAL: Do NOT pass CORE_RECIPES - they're auto-added by SingleUserNoAuth internally
-        this.one = new SingleUserNoAuth({
+        // Initialize MultiUser with all recipes
+        // CRITICAL: Do NOT pass CORE_RECIPES - they're auto-added by MultiUser internally
+        this.one = new MultiUser({
+            directory: 'lama.browser.storage', // Storage location for browser
             recipes: [
                 ...RecipesStable,
                 ...RecipesExperimental,
@@ -253,6 +255,11 @@ export default class Model {
      * Initialize all models after login
      */
     public async init(_instanceName: string, _secret: string): Promise<void> {
+        // Fail fast: Don't allow double-init
+        if (this.initialized) {
+            throw new Error('Model already initialized - call shutdown() first before re-initializing');
+        }
+
         try {
             console.log('[Model] ===== LOGIN EVENT: Initializing models (Instance created) =====');
             console.log('[Model] 🔍 PERSISTENCE DEBUG: Owner context now available, IndexedDB will be owner-specific');
@@ -324,15 +331,36 @@ export default class Model {
             });
             console.log('[Model] ✅ CHUM listeners registered');
 
-            // Initialize contact model (base for identity handling)
-            await this.leuteModel.init();
+            // Use centralized initialization from lama.core
+            // This enforces correct order: LeuteModel → LLM → Channels → Topics
+            const { initializeCoreModels } = await import('@lama/core/initialization/CoreInitializer.ts');
 
-            // CRITICAL: Ensure profile has OneInstanceEndpoint for pairing (needed for IoP connections)
-            console.log('[Model] Ensuring profile has OneInstanceEndpoint...');
+            await initializeCoreModels({
+                oneCore: this,
+                leuteModel: this.leuteModel,
+                channelManager: this.channelManager,
+                topicModel: this.topicModel,
+                connections: this.connections,
+                llmManager: this.llmManager,
+                llmObjectManager: this.llmObjectManager,
+                aiAssistantModel: this.aiAssistantModel,
+                chatHandler: this.chatHandler,
+                topicAnalysisModel: this.topicAnalysisModel,
+                topicGroupManager: this.topicGroupManager
+            }, (progress) => {
+                console.log(`[Model] Init progress: ${progress.stage} (${progress.percent}%) - ${progress.message}`);
+            });
+
+            // Now that LeuteModel is initialized, set up profile and groups
             const me = await this.leuteModel.me();
             const myMainId = await this.leuteModel.myMainIdentity();
             const myProfile = await me.mainProfile();
 
+            // Set ownerId for handlers
+            this.ownerId = myMainId;
+
+            // CRITICAL: Ensure profile has OneInstanceEndpoint for pairing (needed for IoP connections)
+            console.log('[Model] Ensuring profile has OneInstanceEndpoint...');
             if (myProfile) {
                 // Check if OneInstanceEndpoint exists using the communicationEndpoints property
                 const hasEndpoint = myProfile.communicationEndpoints.some(
@@ -405,39 +433,30 @@ export default class Model {
                 }
             );
 
-            // Set ownerId for handlers
-            this.ownerId = myMainId;
-
-            // Initialize core models
-            await this.channelManager.init();
-
             // Create the 'lama' channel for LLM config storage
             // Use myMainId as the owner since LLM config is per-user
             await this.channelManager.createChannel('lama', myMainId);
             console.log('[Model] Created lama channel for LLM config storage');
 
-            await this.topicModel.init();
-            await this.connections.init();
+            // Initialize connection.core integration - DISABLED: Browser adapters not implemented yet
+            // console.log('[Model] Initializing connection.core integration...');
+            // const oneCoreAdapter = new BrowserOneCoreAdapter(
+            //     this.leuteModel,
+            //     this.channelManager,
+            //     this.connections,
+            //     this.topicModel
+            // );
+            // const transportFactory = new BrowserTransportFactory();
+            // const storage = new BrowserIndexedDBStorage();
+            // const uiCallbacks = new BrowserUICallbacks();
 
-            // Initialize connection.core integration
-            console.log('[Model] Initializing connection.core integration...');
-            const oneCoreAdapter = new BrowserOneCoreAdapter(
-                this.leuteModel,
-                this.channelManager,
-                this.connections,
-                this.topicModel
-            );
-            const transportFactory = new BrowserTransportFactory();
-            const storage = new BrowserIndexedDBStorage();
-            const uiCallbacks = new BrowserUICallbacks();
-
-            this.connectionManagerOneCore = new ConnectionManagerOneCore({
-                transport: transportFactory,
-                storage: storage,
-                ui: uiCallbacks
-            });
-            this.connectionManagerOneCore.setOneCoreAdapter(oneCoreAdapter);
-            console.log('[Model] ✅ connection.core integration initialized');
+            // this.connectionManagerOneCore = new ConnectionManagerOneCore({
+            //     transport: transportFactory,
+            //     storage: storage,
+            //     ui: uiCallbacks
+            // });
+            // this.connectionManagerOneCore.setOneCoreAdapter(oneCoreAdapter);
+            // console.log('[Model] ✅ connection.core integration initialized');
 
             // Setup pairing success handler to auto-create P2P topics
             if (this.connections.pairing && (this.connections.pairing as any).onPairingSuccess) {
@@ -472,6 +491,14 @@ export default class Model {
             this.topicAnalysisModel = new TopicAnalysisModel(this.channelManager, this.topicModel);
             await this.topicAnalysisModel.init();
 
+            // CRITICAL: Inject topicAnalysisModel into AIMessageProcessor so it can create subjects
+            // The aiAssistantModel was created with topicAnalysisModel: undefined (line 214)
+            // Now that topicAnalysisModel exists, we need to inject it
+            if (this.aiAssistantModel.messageProcessor) {
+                console.log('[Model] 💉 Injecting topicAnalysisModel into AIMessageProcessor');
+                (this.aiAssistantModel.messageProcessor as any).topicAnalysisModel = this.topicAnalysisModel;
+            }
+
             // Create TopicAnalysisHandler now that topicAnalysisModel is ready
             this.topicAnalysisHandler = new TopicAnalysisHandler(this.topicAnalysisModel);
 
@@ -488,22 +515,34 @@ export default class Model {
             );
             console.log('[Model] ✅ ProposalsHandler initialized');
 
-            // Initialize LLM manager (discover models, load config, etc.)
-            console.log('[Model] Initializing LLM manager...');
-            await this.llmManager.init();
-            console.log('[Model] ✅ LLM manager initialized');
-
-            // Initialize LAMA handlers (AI-related)
-            await this.aiHandler.init?.();
-            await this.aiAssistantModel.init?.();
-
             // Check if user has a saved default model and create chats if needed
+            // (AI was already initialized earlier, before channels)
             const savedDefaultModel = this.aiAssistantModel.topicManager.getDefaultModel();
             if (savedDefaultModel) {
                 console.log('[Model] Found saved default model:', savedDefaultModel);
-                // Call setDefaultModel to trigger chat creation
-                await this.llmConfigHandler.setConfig({ defaultModelId: savedDefaultModel });
-                console.log('[Model] ✅ Default model restored and chats ensured');
+
+                // Validate that the saved model still exists and is available
+                const availableModels = this.llmManager.getAvailableModels();
+                const modelExists = availableModels.some((m: any) => m.id === savedDefaultModel);
+
+                if (modelExists) {
+                    // Call setDefaultModel to trigger chat creation
+                    try {
+                        await this.llmConfigHandler.setConfig({ defaultModelId: savedDefaultModel });
+                        console.log('[Model] ✅ Default model restored and chats ensured');
+                    } catch (error) {
+                        console.error('[Model] ❌ Failed to restore default model and create chats:', error);
+                        // Clear the problematic model and continue initialization
+                        this.aiAssistantModel.topicManager.setDefaultModel('');
+                        console.warn('[Model] Cleared problematic model - user will need to reselect');
+                    }
+                } else {
+                    console.warn('[Model] ⚠️ Saved model no longer available:', savedDefaultModel);
+                    console.warn('[Model] Available models:', availableModels.map((m: any) => m.id));
+                    // Clear the invalid saved model
+                    this.aiAssistantModel.topicManager.setDefaultModel('');
+                    console.log('[Model] Cleared invalid model - user will select via onboarding');
+                }
             } else {
                 console.log('[Model] No saved default model - user will select via onboarding');
             }
@@ -518,6 +557,7 @@ export default class Model {
             await this.aiMessageListener.start();
             console.log('[Model] ✅ AIMessageListener started');
 
+            // Initialize remaining handlers (core models already initialized via CoreInitializer)
             await this.topicAnalysisHandler.init?.();
             await this.proposalsHandler.init?.();
             await this.keywordDetailHandler.init?.();
@@ -526,13 +566,23 @@ export default class Model {
             await this.cryptoHandler.init?.();
             await this.auditHandler.init?.();
 
-            // Initialize chat handlers
-            await this.chatHandler.init?.();
+            // Chat handlers (chatHandler already initialized via CoreInitializer)
             await this.contactsHandler.init?.();
             await this.exportHandler.init?.();
             await this.feedForwardHandler.init?.();
             await this.iomHandler.init?.();
             // NOTE: topicGroupManager has no init() method
+
+            // Initialize AIHandler with all dependencies
+            console.log('[Model] Initializing AIHandler with dependencies...');
+            this.aiHandler.setModels(
+                this.llmManager,
+                this.aiAssistantModel,
+                this.topicModel,
+                this, // nodeOneCore
+                undefined // stateManager (not used in browser)
+            );
+            console.log('[Model] ✅ AIHandler initialized');
 
             // Mark as initialized for handlers
             this.initialized = true;
@@ -570,57 +620,67 @@ export default class Model {
     public async shutdown(): Promise<void> {
         console.log('[Model] Shutting down models...');
 
-        // Mark as not initialized
-        this.initialized = false;
-        this.ownerId = null;
-
-        // Shutdown in reverse order
-        const shutdownSteps = [
-            () => this.auditHandler.shutdown?.(),
-            () => this.cryptoHandler.shutdown?.(),
-            () => this.llmConfigHandler.shutdown?.(),
-            () => this.wordCloudSettingsHandler.shutdown?.(),
-            () => this.keywordDetailHandler.shutdown?.(),
-            () => this.proposalsHandler.shutdown?.(),
-            () => this.topicAnalysisHandler.shutdown?.(),
-            () => this.aiMessageListener?.stop(),
-            () => this.aiAssistantModel.shutdown?.(),
-            () => this.aiHandler.shutdown?.(),
-            () => this.iomHandler.shutdown?.(),
-            () => this.feedForwardHandler.shutdown?.(),
-            () => this.exportHandler.shutdown?.(),
-            () => this.contactsHandler.shutdown?.(),
-            () => this.chatHandler.shutdown?.(),
-            () => this.topicGroupManager.shutdown?.(),
-            () => this.llmManager.shutdown?.(),
-            () => this.topicAnalysisModel.shutdown(),
-            () => this.connections.shutdown(),
-            () => this.topicModel.shutdown(),
-            () => this.channelManager.shutdown(),
-            () => this.leuteModel.shutdown(),
-            () => objectEvents.shutdown()
+        // Shutdown platform-specific handlers first
+        const platformHandlers = [
+            { name: 'AuditHandler', fn: () => this.auditHandler?.shutdown?.() },
+            { name: 'CryptoHandler', fn: () => this.cryptoHandler?.shutdown?.() },
+            { name: 'LLMConfigHandler', fn: () => this.llmConfigHandler?.shutdown?.() },
+            { name: 'WordCloudSettingsHandler', fn: () => this.wordCloudSettingsHandler?.shutdown?.() },
+            { name: 'KeywordDetailHandler', fn: () => this.keywordDetailHandler?.shutdown?.() },
+            { name: 'ProposalsHandler', fn: () => this.proposalsHandler?.shutdown?.() },
+            { name: 'TopicAnalysisHandler', fn: () => this.topicAnalysisHandler?.shutdown?.() },
+            { name: 'AIMessageListener', fn: () => this.aiMessageListener?.stop?.() },
+            { name: 'AIHandler', fn: () => this.aiHandler?.shutdown?.() },
+            { name: 'IOMHandler', fn: () => this.iomHandler?.shutdown?.() },
+            { name: 'FeedForwardHandler', fn: () => this.feedForwardHandler?.shutdown?.() },
+            { name: 'ExportHandler', fn: () => this.exportHandler?.shutdown?.() },
+            { name: 'ContactsHandler', fn: () => this.contactsHandler?.shutdown?.() },
         ];
 
-        for (const shutdownStep of shutdownSteps) {
+        for (const handler of platformHandlers) {
             try {
-                await shutdownStep();
-            } catch (e) {
-                console.error('[Model] Shutdown error:', e);
+                await handler.fn();
+            } catch (error) {
+                console.error(`[Model] Shutdown error (${handler.name}):`, error);
             }
         }
+
+        // Use centralized shutdown from lama.core for core models
+        const { shutdownCoreModels } = await import('@lama/core/initialization/CoreInitializer.ts');
+        await shutdownCoreModels({
+            oneCore: this,
+            leuteModel: this.leuteModel,
+            channelManager: this.channelManager,
+            topicModel: this.topicModel,
+            connections: this.connections,
+            llmManager: this.llmManager,
+            llmObjectManager: this.llmObjectManager,
+            aiAssistantModel: this.aiAssistantModel,
+            chatHandler: this.chatHandler,
+            topicAnalysisModel: this.topicAnalysisModel,
+        });
+
+        // Shutdown ObjectEventDispatcher
+        await objectEvents.shutdown();
+        console.log('[Model] ✅ ObjectEventDispatcher shutdown');
+
+        // ONLY mark as uninitialized if shutdown completed successfully
+        // If any step above threw, this won't execute and initialized stays true
+        this.initialized = false;
+        this.ownerId = null;
 
         console.log('[Model] Shutdown complete');
     }
 
     // ONE.core models
-    public one: SingleUserNoAuth;
+    public one: MultiUser;
     public leuteModel: LeuteModel;
     public channelManager: ChannelManager;
     public topicModel: TopicModel;
     public connections: ConnectionsModel;
 
-    // connection.core integration
-    public connectionManagerOneCore!: ConnectionManagerOneCore;
+    // connection.core integration - DISABLED: Browser adapters not implemented yet
+    // public connectionManagerOneCore!: ConnectionManagerOneCore;
 
     // Alias for IOMHandler compatibility (expects connectionsModel)
     public get connectionsModel() {

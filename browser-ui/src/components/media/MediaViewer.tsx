@@ -7,16 +7,16 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import { Search, Filter, Grid, List, Tag, Plus, X, Hash } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@lama/ui'
+import { Input } from '@lama/ui'
+import { Badge } from '@lama/ui'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select'
+} from '@lama/ui'
 import type { MessageAttachment, BlobDescriptor } from '@/types/attachments'
 import { attachmentService } from '@/services/attachments/AttachmentService'
 import { createAttachmentView } from '@/components/attachments/AttachmentViewFactory'

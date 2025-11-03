@@ -2,7 +2,7 @@ import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
 import { FileText, Download, File, FileCode, FileSpreadsheet } from 'lucide-react';
 import { formatFileSize } from '@/types/attachments';
 import { useAttachmentDescriptor } from './AttachmentViewFactory';
-import { Button } from '@/components/ui/button';
+import { Button } from '@lama/ui';
 export const DocumentAttachmentView = ({ attachment, descriptor: providedDescriptor, onClick, onDownload, mode = 'inline', showMetadata = true, className = '' }) => {
     const { descriptor, loading, error } = useAttachmentDescriptor(attachment, providedDescriptor);
     const handleDownload = () => {

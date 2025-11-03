@@ -67,25 +67,14 @@ export function useProposals({
       setError(null);
 
       try {
-        console.log('[useProposals] Fetching proposals for topic:', topicId, 'currentSubjects:', currentSubjects);
         const response: GetProposalsResponse = await model.proposalsHandler.getForTopic({
           topicId,
           currentSubjects,
           forceRefresh,
         });
 
-        console.log('[useProposals] Received response:', response);
         setProposals(response.proposals || []);
         setCurrentIndex(0); // Reset to first proposal
-
-        // Log performance metrics
-        if (response.count === 0) {
-          console.log('[useProposals] No proposals found for topic:', topicId);
-        } else if (response.computeTimeMs) {
-          console.log(
-            `[useProposals] Fetched ${response.count} proposals in ${response.computeTimeMs}ms (cached: ${response.cached})`
-          );
-        }
       } catch (err: any) {
         console.error('[useProposals] Error fetching proposals:', err);
         setError(err.message || 'Failed to fetch proposals');
@@ -103,7 +92,6 @@ export function useProposals({
    */
   useEffect(() => {
     if (autoRefresh && topicId) {
-      console.log('[useProposals] Auto-refreshing proposals for topic:', topicId);
       fetchProposals();
     }
   }, [autoRefresh, topicId, fetchProposals]);

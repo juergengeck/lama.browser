@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { Loader2, Download, Maximize2, X } from 'lucide-react';
 import { formatFileSize } from '@/types/attachments';
 import { useAttachmentDescriptor } from './AttachmentViewFactory';
-import { Button } from '@/components/ui/button';
+import { Button } from '@lama/ui';
 export const ImageAttachmentView = ({ attachment, descriptor: providedDescriptor, onClick, onDownload, mode = 'inline', maxWidth = 400, maxHeight = 300, showMetadata = true, className = '' }) => {
     const { descriptor, loading, error } = useAttachmentDescriptor(attachment, providedDescriptor);
     const [imageUrl, setImageUrl] = useState();

@@ -5,14 +5,15 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
-import { Brain, ChevronDown, ChevronRight, RefreshCw, Save, Bot } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@lama/ui'
+import { Button } from '@lama/ui'
+import { Badge } from '@lama/ui'
+import { Textarea } from '@lama/ui'
+import { Input } from '@lama/ui'
+import { Label } from '@lama/ui'
+import { Brain, ChevronDown, ChevronRight, RefreshCw, Save, Bot, Key } from 'lucide-react'
 import { useModel } from '@/model/ModelContext'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Alert, AlertDescription } from '@lama/ui'
 
 interface LLMConfig {
   id: string
@@ -23,6 +24,7 @@ interface LLMConfig {
   active: boolean
   created: number
   modified: number
+  encryptedApiKey?: string
 }
 
 export function LLMSettings() {
@@ -31,8 +33,10 @@ export function LLMSettings() {
   const [loading, setLoading] = useState(true)
   const [expandedLlm, setExpandedLlm] = useState<string | null>(null)
   const [editedPrompts, setEditedPrompts] = useState<Record<string, string>>({})
+  const [editedApiKeys, setEditedApiKeys] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<string | null>(null)
   const [regenerating, setRegenerating] = useState<string | null>(null)
+  const [savingApiKey, setSavingApiKey] = useState<string | null>(null)
 
   useEffect(() => {
     loadLLMConfigs()
@@ -141,6 +145,55 @@ export function LLMSettings() {
     return editedPrompts[llm.id] !== undefined && editedPrompts[llm.id] !== llm.systemPrompt
   }
 
+  const handleApiKeyEdit = (llmId: string, newApiKey: string) => {
+    setEditedApiKeys(prev => ({
+      ...prev,
+      [llmId]: newApiKey
+    }))
+  }
+
+  const handleSaveApiKey = async (llmId: string) => {
+    const apiKey = editedApiKeys[llmId]
+    if (!apiKey || apiKey.trim() === '') {
+      alert('API key cannot be empty')
+      return
+    }
+
+    setSavingApiKey(llmId)
+    try {
+      await model.llmConfigHandler.updateApiKey({
+        llmId,
+        apiKey
+      })
+
+      // Reload configs to show updated state
+      await loadLLMConfigs()
+
+      // Clear edited state
+      setEditedApiKeys(prev => {
+        const updated = { ...prev }
+        delete updated[llmId]
+        return updated
+      })
+
+      console.log('[LLMSettings] API key saved successfully')
+    } catch (error) {
+      console.error('[LLMSettings] Failed to save API key:', error)
+      alert('Failed to save API key: ' + (error as Error).message)
+    } finally {
+      setSavingApiKey(null)
+    }
+  }
+
+  const hasUnsavedApiKey = (llmId: string): boolean => {
+    return editedApiKeys[llmId] !== undefined && editedApiKeys[llmId].trim() !== ''
+  }
+
+  const needsApiKey = (provider: string): boolean => {
+    // These providers require API keys
+    return ['openai', 'anthropic', 'claude', 'deepseek', 'qwen'].includes(provider?.toLowerCase())
+  }
+
   if (loading) {
     return (
       <Card>
@@ -227,9 +280,57 @@ export function LLMSettings() {
                     </div>
                   </div>
 
-                  {/* Expanded content with system prompt editor */}
+                  {/* Expanded content with API key and system prompt editor */}
                   {expandedLlm === llm.id && (
                     <div className="mt-4 space-y-4" onClick={(e) => e.stopPropagation()}>
+                      {/* API Key input for providers that need it */}
+                      {needsApiKey(llm.provider) && (
+                        <div className="p-4 border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950 rounded-lg">
+                          <div className="flex items-center space-x-2 mb-2">
+                            <Key className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            <Label htmlFor={`apikey-${llm.id}`} className="text-sm font-medium">
+                              API Key
+                            </Label>
+                            {llm.encryptedApiKey && !editedApiKeys[llm.id] && (
+                              <Badge variant="outline" className="text-xs text-green-600">
+                                Configured
+                              </Badge>
+                            )}
+                          </div>
+                          <Input
+                            id={`apikey-${llm.id}`}
+                            type="password"
+                            value={editedApiKeys[llm.id] || ''}
+                            onChange={(e) => handleApiKeyEdit(llm.id, e.target.value)}
+                            className="mt-2 font-mono text-sm"
+                            placeholder={llm.encryptedApiKey ? 'Enter new API key to update...' : 'Enter API key...'}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            API key for {llm.provider}. This will be encrypted and stored securely.
+                          </p>
+                          {hasUnsavedApiKey(llm.id) && (
+                            <Button
+                              size="sm"
+                              onClick={() => handleSaveApiKey(llm.id)}
+                              disabled={savingApiKey === llm.id}
+                              className="mt-2"
+                            >
+                              {savingApiKey === llm.id ? (
+                                <>
+                                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary-foreground mr-1" />
+                                  Saving...
+                                </>
+                              ) : (
+                                <>
+                                  <Save className="h-3 w-3 mr-1" />
+                                  Save API Key
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </div>
+                      )}
+
                       <div>
                         <Label htmlFor={`prompt-${llm.id}`} className="text-sm font-medium">
                           System Prompt

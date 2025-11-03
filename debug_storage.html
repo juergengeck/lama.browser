@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Storage</title>
+    <style>
+        body { font-family: monospace; padding: 20px; }
+        button { padding: 10px; margin: 5px; font-size: 14px; }
+        pre { background: #f5f5f5; padding: 10px; overflow: auto; max-height: 400px; }
+        .section { margin: 20px 0; border: 1px solid #ccc; padding: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Storage Debugger</h1>
+
+    <div class="section">
+        <h2>1. Check IndexedDB Databases</h2>
+        <button onclick="checkIndexedDB()">Check IndexedDB</button>
+        <pre id="indexeddb-output"></pre>
+    </div>
+
+    <div class="section">
+        <h2>2. Inspect Specific Database</h2>
+        <input type="text" id="db-name" placeholder="Database name" style="width: 500px;">
+        <button onclick="inspectDatabase()">Inspect</button>
+        <pre id="db-output"></pre>
+    </div>
+
+    <div class="section">
+        <h2>3. Check localStorage</h2>
+        <button onclick="checkLocalStorage()">Check localStorage</button>
+        <pre id="localstorage-output"></pre>
+    </div>
+
+    <div class="section">
+        <h2>4. Clear ALL Storage</h2>
+        <button onclick="clearAllStorage()" style="background: red; color: white;">CLEAR EVERYTHING</button>
+        <pre id="clear-output"></pre>
+    </div>
+
+    <script>
+        async function checkIndexedDB() {
+            const output = document.getElementById('indexeddb-output');
+            try {
+                const dbs = await indexedDB.databases();
+                output.textContent = `Found ${dbs.length} databases:\n\n` +
+                    dbs.map(db => `  - ${db.name} (version ${db.version})`).join('\n');
+            } catch (e) {
+                output.textContent = 'Error: ' + e.message;
+            }
+        }
+
+        async function inspectDatabase() {
+            const dbName = document.getElementById('db-name').value;
+            const output = document.getElementById('db-output');
+
+            if (!dbName) {
+                output.textContent = 'Please enter a database name';
+                return;
+            }
+
+            try {
+                const request = indexedDB.open(dbName);
+
+                request.onsuccess = async (event) => {
+                    const db = event.target.result;
+                    const storeNames = Array.from(db.objectStoreNames);
+
+                    let result = `Database: ${dbName}\n`;
+                    result += `Version: ${db.version}\n`;
+                    result += `Object stores: ${storeNames.length}\n\n`;
+
+                    for (const storeName of storeNames) {
+                        const tx = db.transaction(storeName, 'readonly');
+                        const store = tx.objectStore(storeName);
+                        const countReq = store.count();
+
+                        countReq.onsuccess = () => {
+                            result += `  - ${storeName}: ${countReq.result} items\n`;
+                            output.textContent = result;
+                        };
+                    }
+
+                    db.close();
+                };
+
+                request.onerror = () => {
+                    output.textContent = 'Error opening database: ' + request.error;
+                };
+            } catch (e) {
+                output.textContent = 'Error: ' + e.message;
+            }
+        }
+
+        function checkLocalStorage() {
+            const output = document.getElementById('localstorage-output');
+            let result = `localStorage items: ${localStorage.length}\n\n`;
+
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                const value = localStorage.getItem(key);
+                result += `${key}: ${value.substring(0, 100)}${value.length > 100 ? '...' : ''}\n\n`;
+            }
+
+            output.textContent = result;
+        }
+
+        async function clearAllStorage() {
+            const output = document.getElementById('clear-output');
+            output.textContent = 'Clearing...\n';
+
+            try {
+                // Clear IndexedDB
+                const dbs = await indexedDB.databases();
+                for (const db of dbs) {
+                    if (db.name) {
+                        await new Promise((resolve, reject) => {
+                            const req = indexedDB.deleteDatabase(db.name);
+                            req.onsuccess = resolve;
+                            req.onerror = reject;
+                        });
+                        output.textContent += `✓ Deleted IndexedDB: ${db.name}\n`;
+                    }
+                }
+
+                // Clear localStorage
+                localStorage.clear();
+                output.textContent += '✓ Cleared localStorage\n';
+
+                // Clear sessionStorage
+                sessionStorage.clear();
+                output.textContent += '✓ Cleared sessionStorage\n';
+
+                // Clear caches
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    for (const name of cacheNames) {
+                        await caches.delete(name);
+                    }
+                    output.textContent += `✓ Cleared ${cacheNames.length} caches\n`;
+                }
+
+                output.textContent += '\n✅ All storage cleared!\n';
+                output.textContent += '\nReload the page to verify.';
+            } catch (e) {
+                output.textContent += '\n❌ Error: ' + e.message;
+            }
+        }
+
+        // Auto-check on load
+        window.onload = () => {
+            checkIndexedDB();
+            checkLocalStorage();
+        };
+    </script>
+</body>
+</html>

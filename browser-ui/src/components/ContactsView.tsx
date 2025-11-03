@@ -10,12 +10,12 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@lama/ui'
+import { Avatar, AvatarFallback } from '@lama/ui'
+import { Button } from '@lama/ui'
+import { Badge } from '@lama/ui'
+import { Input } from '@lama/ui'
+import { ScrollArea } from '@lama/ui'
 import { Users, UserPlus, Search, Circle, Bot, MessageSquare, Download, CheckCircle, User, Edit } from 'lucide-react'
 import { useModel } from '@/model/ModelContext'
 import { ProfileDialog } from './ProfileDialog'

@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { Badge } from '../ui/badge.js';
+import { Badge } from '@lama/ui';
 
 interface KeywordLineProps {
   keywords: string[];

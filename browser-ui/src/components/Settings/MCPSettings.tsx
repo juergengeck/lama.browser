@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@lama/ui'
+import { Button } from '@lama/ui'
+import { Input } from '@lama/ui'
+import { Label } from '@lama/ui'
+import { Badge } from '@lama/ui'
 import { Package, Plus, Trash2, RefreshCw, CheckCircle, Circle } from 'lucide-react'
 import { useModel } from '@/model/ModelContext'
 import {
@@ -13,7 +13,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
+} from '@lama/ui'
 
 interface MCPServer {
   name: string

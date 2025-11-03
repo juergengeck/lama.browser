@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Card, CardContent, CardHeader, CardTitle } from '@lama/ui'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@lama/ui'
 import { MessageView } from './MessageView'
 import { AppStateJournal } from './AppStateJournal'
 import { type Message } from '@/bridge/lama-bridge'

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Badge } from '../ui/badge.js';
+import { Badge } from '@lama/ui';
 
 interface KeywordDisplayProps {
   topicId: string;

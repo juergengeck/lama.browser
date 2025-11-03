@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card.js';
-import { Button } from '../ui/button.js';
-import { Badge } from '../ui/badge.js';
-import { Input } from '../ui/input.js';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lama/ui';
+import { Button } from '@lama/ui';
+import { Badge } from '@lama/ui';
+import { Input } from '@lama/ui';
 // Using div-based table layout since Table component may not exist
 import {
   Search,

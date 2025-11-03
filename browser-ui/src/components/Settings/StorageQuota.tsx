@@ -6,10 +6,10 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Progress } from '@/components/ui/progress'
-import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@lama/ui'
+import { Button } from '@lama/ui'
+import { Progress } from '@lama/ui'
+import { Badge } from '@lama/ui'
 import { HardDrive, AlertTriangle, CheckCircle, Shield } from 'lucide-react'
 import { storagePermissions } from '@/services/storage-permissions'
 

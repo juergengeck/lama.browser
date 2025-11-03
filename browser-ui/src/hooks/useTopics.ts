@@ -25,9 +25,10 @@ interface UseTopicsReturn {
   isLoading: boolean
   error: Error | null
   refreshTopics: () => Promise<void>
-  createTopic: (name: string, participantIds: string[]) => Promise<Topic>
+  createTopic: (name: string, participantIds: string[], aiModelId?: string) => Promise<Topic>
   deleteTopic: (topicId: string) => Promise<void>
   renameTopic: (topicId: string, newName: string) => Promise<void>
+  updateTopicLastMessage: (topicId: string, lastMessage: string) => void
 }
 
 export function useTopics(): UseTopicsReturn {
@@ -41,10 +42,12 @@ export function useTopics(): UseTopicsReturn {
     // Instance is owner-specific and created during login
     // Storage operations require owner context
     if (!model.initialized) {
-      console.log('[useTopics] Skipping refresh - model not initialized (no Instance yet)')
+      console.log('[useTopics] ⏸️ Skipping refresh - model not initialized (no Instance yet)')
       setIsLoading(false)
       return
     }
+
+    console.log('[useTopics] 🔄 Refreshing topics...');
 
     try {
       setIsLoading(true)
@@ -54,30 +57,47 @@ export function useTopics(): UseTopicsReturn {
       // No need to call ensureDefaultChats() here - it's handled during initialization
 
       // Call ChatHandler.getConversations (topics and conversations are the same)
+      console.log('[useTopics] 📞 Calling ChatHandler.getConversations...');
       const response = await model.chatHandler.getConversations({
         limit: 100,  // Get all topics
         offset: 0
       })
 
+      console.log('[useTopics] 📨 ChatHandler response:', {
+        success: response.success,
+        dataLength: response.data?.length || 0,
+        firstTopic: response.data?.[0],
+        error: response.error
+      });
+
       if (response.success && response.data) {
-        setTopics(response.data as Topic[])
+        console.log(`[useTopics] ✅ Setting ${response.data.length} topics in state`);
+        console.log('[useTopics] 📋 Topics data:', response.data);
+        const typedTopics = response.data as Topic[];
+        setTopics(typedTopics);
+        // Verify what we're setting
+        console.log('[useTopics] 📋 Setting topics:', typedTopics.map(t => ({ id: t.id, name: t.name })));
       } else {
+        console.error(`[useTopics] ❌ Response not successful:`, response.error);
         throw new Error(response.error || 'Failed to fetch topics')
       }
     } catch (err) {
-      console.error('[useTopics] Failed to fetch topics:', err)
+      console.error('[useTopics] ❌ Failed to fetch topics:', err)
       setError(err instanceof Error ? err : new Error('Failed to fetch topics'))
     } finally {
       setIsLoading(false)
+      // Note: topics here is stale closure value - actual state updates on next render
+      console.log(`[useTopics] ✅ Refresh complete (stale closure shows ${topics.length}, actual state will update on next render)`);
     }
   }, [model])
 
-  const createTopic = useCallback(async (name: string, participantIds: string[]): Promise<Topic> => {
+  const createTopic = useCallback(async (name: string, participantIds: string[], aiModelId?: string): Promise<Topic> => {
     try {
       const response = await model.chatHandler.createConversation({
         name,
         participants: participantIds,
-        type: participantIds.length > 1 ? 'group' : 'direct'
+        type: participantIds.length > 1 ? 'group' : 'direct',
+        aiModelId // Pass AI model ID if provided
       })
 
       if (response.success && response.data) {
@@ -125,13 +145,31 @@ export function useTopics(): UseTopicsReturn {
     }
   }, [refreshTopics])
 
-  // Load topics on mount
-  useEffect(() => {
-    refreshTopics()
-  }, [refreshTopics])
+  const updateTopicLastMessage = useCallback((topicId: string, lastMessage: string) => {
+    // Optimistically update the lastMessage for the topic
+    setTopics(prev => prev.map(t =>
+      t.id === topicId
+        ? { ...t, lastMessage, lastActivity: Date.now() }
+        : t
+    ))
+  }, [])
 
-  // Listen for model initialization and refresh topics when ready
+  // Debug: Log when topics state actually changes
   useEffect(() => {
+    console.log(`[useTopics] 📊 Topics state changed: ${topics.length} topics`, topics.map(t => ({ id: t.id, name: t.name })));
+  }, [topics]);
+
+  // Load topics when model is ready (not on mount)
+  // This prevents wasteful double-refresh: mount call would skip (model not ready),
+  // then model ready event would trigger a second refresh
+  useEffect(() => {
+    // If already initialized, refresh immediately
+    if (model.initialized) {
+      console.log('[useTopics] Model already initialized - refreshing topics')
+      refreshTopics()
+    }
+
+    // Listen for model initialization and refresh topics when ready
     const handler = () => {
       console.log('[useTopics] Model initialized - refreshing topics to ensure default chats')
       refreshTopics()
@@ -152,6 +190,7 @@ export function useTopics(): UseTopicsReturn {
     refreshTopics,
     createTopic,
     deleteTopic,
-    renameTopic
+    renameTopic,
+    updateTopicLastMessage
   }
 }

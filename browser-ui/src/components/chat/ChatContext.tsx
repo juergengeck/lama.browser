@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { ChevronUp, ChevronDown, Sparkles, RefreshCw, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+import { Button } from '@lama/ui'
+import { Card } from '@lama/ui'
+import { Badge } from '@lama/ui'
 import type { Summary } from '../../types/topic-analysis.js'
 
 interface ChatContextProps {

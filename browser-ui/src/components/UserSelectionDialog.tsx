@@ -8,11 +8,11 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Checkbox } from '@/components/ui/checkbox'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@lama/ui'
+import { Button } from '@lama/ui'
+import { Input } from '@lama/ui'
+import { Checkbox } from '@lama/ui'
+import { ScrollArea } from '@lama/ui'
 import { User, Search, Loader2 } from 'lucide-react'
 import { useModel } from '@/model/ModelContext'
 

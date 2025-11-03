@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@lama/ui'
+import { Input } from '@lama/ui'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lama/ui'
+import { Alert, AlertDescription } from '@lama/ui'
 import { Loader2, UserPlus, LogIn } from 'lucide-react'
 
 interface LoginScreenProps {

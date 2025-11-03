@@ -9,6 +9,7 @@ interface SessionState {
   activeTab?: string
   selectedConversationId?: string
   lastLogin?: number
+  pendingInvitation?: string  // Persisted invitation URL
   preferences?: {
     theme?: 'light' | 'dark' | 'system'
     sidebarCollapsed?: boolean
@@ -142,6 +143,27 @@ class SessionStorage {
   }
 
   /**
+   * Set pending invitation URL
+   */
+  setPendingInvitation(invitationUrl: string | null): void {
+    if (invitationUrl === null) {
+      // Remove from state
+      const currentState = this.getState() || {}
+      const { pendingInvitation, ...rest } = currentState
+      this.setState(rest)
+    } else {
+      this.updateState({ pendingInvitation: invitationUrl })
+    }
+  }
+
+  /**
+   * Get pending invitation URL
+   */
+  getPendingInvitation(): string | undefined {
+    return this.getState()?.pendingInvitation
+  }
+
+  /**
    * Restore state on app load
    */
   restoreState(): SessionState | null {
@@ -151,6 +173,7 @@ class SessionStorage {
       console.log('[SessionStorage] Restored session state:', {
         activeTab: state.activeTab,
         hasConversation: !!state.selectedConversationId,
+        hasPendingInvitation: !!state.pendingInvitation,
         lastLogin: state.lastLogin ? new Date(state.lastLogin).toISOString() : null
       })
     }

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lama/ui'
+import { ScrollArea } from '@lama/ui'
+import { Badge } from '@lama/ui'
+import { Progress } from '@lama/ui'
+import { Button } from '@lama/ui'
+import { Input } from '@lama/ui'
 import { useModel } from '@/model/index.js'
 import {
   ChevronRight,

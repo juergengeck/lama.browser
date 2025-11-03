@@ -64,6 +64,12 @@ async function startLama(): Promise<void> {
   const model = new Model(COMM_SERVER_URL);
   setGlobalModel(model);
 
+  // Expose model on window for debugging (dev mode only)
+  if (import.meta.env.DEV) {
+    (window as any).__model = model;
+    console.log('[LAMA] Model exposed on window.__model for debugging');
+  }
+
   // Add page reload detection for debugging persistence issues
   window.addEventListener('beforeunload', (event) => {
     console.log('[LAMA] 🔍 PERSISTENCE DEBUG: Page is about to reload/close!');

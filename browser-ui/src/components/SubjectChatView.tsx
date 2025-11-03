@@ -6,9 +6,9 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@lama/ui'
+import { Badge } from '@lama/ui'
+import { Button } from '@lama/ui'
 import { Hash, Brain, Image, TrendingUp, Users, Sparkles } from 'lucide-react'
 import { useSubjectChat } from '@/hooks/useSubjectChat'
 import { MediaViewer, type MediaItem } from './media/MediaViewer'

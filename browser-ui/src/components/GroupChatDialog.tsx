@@ -9,12 +9,12 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Checkbox } from '@/components/ui/checkbox'
-import { ScrollArea } from '@/components/ui/scroll-area'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@lama/ui'
+import { Button } from '@lama/ui'
+import { Input } from '@lama/ui'
+import { Label } from '@lama/ui'
+import { Checkbox } from '@lama/ui'
+import { ScrollArea } from '@lama/ui'
 import { User, Search, Loader2, Users, Bot } from 'lucide-react'
 import { useModel } from '@/model/ModelContext'
 
@@ -31,7 +31,7 @@ interface Contact {
 interface GroupChatDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSubmit: (selectedUserIds: string[], chatName: string) => void
+  onSubmit: (selectedUserIds: string[], chatName: string, aiModelId?: string) => void
 }
 
 export function GroupChatDialog({
@@ -139,8 +139,16 @@ export function GroupChatDialog({
       return contact?.personId || userId
     })
 
-    console.log('[GroupChatDialog] 🔵 Calling onSubmit with:', { participantIds, finalName })
-    onSubmit(participantIds, finalName)
+    // Check if any selected participants are AI contacts
+    const aiParticipants = selectedUserIds
+      .map(userId => contacts.find(c => c.id === userId))
+      .filter(contact => contact?.isAI)
+
+    // If there's exactly one AI participant, pass its modelId
+    const aiModelId = aiParticipants.length === 1 ? aiParticipants[0]?.modelId : undefined
+
+    console.log('[GroupChatDialog] 🔵 Calling onSubmit with:', { participantIds, finalName, aiModelId })
+    onSubmit(participantIds, finalName, aiModelId)
     onOpenChange(false)
   }
 

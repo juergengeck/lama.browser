@@ -4,9 +4,9 @@
  */
 
 import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card.js';
-import { Button } from '../ui/button.js';
-import { Badge } from '../ui/badge.js';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lama/ui';
+import { Button } from '@lama/ui';
+import { Badge } from '@lama/ui';
 import { X, RefreshCw, Loader2, Tag } from 'lucide-react';
 import { useKeywordDetails } from '../../hooks/useKeywordDetails.js';
 import { SortControls } from './SortControls.js';

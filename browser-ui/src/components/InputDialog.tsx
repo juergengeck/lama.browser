@@ -6,10 +6,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+} from '@lama/ui'
+import { Button } from '@lama/ui'
+import { Input } from '@lama/ui'
+import { Label } from '@lama/ui'
 
 interface InputDialogProps {
   open: boolean

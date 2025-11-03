@@ -25,7 +25,9 @@
     "paths": {
       "@/*": ["./src/*"],
       "@components/*": ["./src/components/*"],
-      "@lib/*": ["./src/lib/*"]
+      "@lib/*": ["./src/lib/*"],
+      "@lama/ui": ["../../lama.ui/src"],
+      "@lama/ui/*": ["../../lama.ui/src/*"]
     }
   },
   "include": [

@@ -13,13 +13,13 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter
-} from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+} from '@lama/ui'
+import { Button } from '@lama/ui'
+import { Input } from '@lama/ui'
+import { Label } from '@lama/ui'
+import { Badge } from '@lama/ui'
+import { Alert, AlertDescription } from '@lama/ui'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@lama/ui'
 import { QrCode, Copy, CheckCircle, RefreshCw, Link2, AlertTriangle } from 'lucide-react'
 
 interface PairingDialogProps {
