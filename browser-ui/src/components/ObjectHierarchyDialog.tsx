@@ -10,6 +10,7 @@ import { ScrollArea } from '@lama/ui'
 import { Badge } from '@lama/ui'
 import { Progress } from '@lama/ui'
 import { useModel } from '@/model/index.js'
+import { usePlans } from '@lama/ui'
 import {
   ChevronRight,
   ChevronDown,
@@ -46,7 +47,12 @@ interface ObjectHierarchyDialogProps {
 }
 
 export function ObjectHierarchyDialog({ open, onOpenChange, totalSize, onNavigate }: ObjectHierarchyDialogProps) {
+  // Keep Model for platform-specific features (initialized check)
   const model = useModel()
+
+  // Use Plans for platform-agnostic operations
+  const { chat, contacts } = usePlans()
+
   const [hierarchy, setHierarchy] = useState<ObjectInfo[]>([])
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
@@ -79,11 +85,11 @@ export function ObjectHierarchyDialog({ open, onOpenChange, totalSize, onNavigat
       }
 
       try {
-        // Get all conversations
-        const convsResult = await model.chatHandler.getConversations()
+        // Platform-agnostic conversation and message loading
+        const convsResult = await chat.getConversations()
         const conversations = (convsResult.success && convsResult.data) ? convsResult.data : []
 
-        const defaultMsgsResult = await model.chatHandler.getMessages({ topicId: 'default' })
+        const defaultMsgsResult = await chat.getMessages({ topicId: 'default' })
         const defaultMessages = (defaultMsgsResult.success && defaultMsgsResult.data) ? defaultMsgsResult.data : []
 
         if (defaultMessages.length > 0) {
@@ -99,7 +105,7 @@ export function ObjectHierarchyDialog({ open, onOpenChange, totalSize, onNavigat
         }
 
         for (const conv of conversations) {
-          const messagesResult = await model.chatHandler.getMessages({ topicId: conv.id })
+          const messagesResult = await chat.getMessages({ topicId: conv.id })
           const messages = (messagesResult.success && messagesResult.data) ? messagesResult.data : []
           if (messages.length > 0) {
             const convSize = estimateObjectSize(messages)
@@ -130,13 +136,13 @@ export function ObjectHierarchyDialog({ open, onOpenChange, totalSize, onNavigat
       }
 
       try {
-        const contactsResult = await model.contactsHandler.getContacts()
-        const contacts = (contactsResult.success && contactsResult.data) ? contactsResult.data : []
-        
+        const contactsResult = await contacts.getContacts()
+        const contactsList = (contactsResult.success && contactsResult.data) ? contactsResult.data : []
+
         // Separate by type
-        const me = contacts.filter((c: any) => c.isMe)
-        const ai = contacts.filter((c: any) => c.isAI)
-        const humans = contacts.filter((c: any) => !c.isMe && !c.isAI)
+        const me = contactsList.filter((c: any) => c.isMe)
+        const ai = contactsList.filter((c: any) => c.isAI)
+        const humans = contactsList.filter((c: any) => !c.isMe && !c.isAI)
         
         if (me.length > 0) {
           const meSize = estimateObjectSize(me)
@@ -170,8 +176,8 @@ export function ObjectHierarchyDialog({ open, onOpenChange, totalSize, onNavigat
           })
           contactData.size += humanSize
         }
-        
-        contactData.count = contacts.length
+
+        contactData.count = contactsList.length
       } catch (e) {
         console.error('[ObjectHierarchy] Error fetching contacts:', e)
       }
