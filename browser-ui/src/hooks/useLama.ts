@@ -46,7 +46,7 @@ export function useLamaMessages(conversationId: string) {
     console.log('🔄 Loading messages for:', conversationId)
     try {
       setLoading(true)
-      const result = await model.chatHandler.getMessages({ topicId: conversationId })
+      const result = await model.chatPlan.getMessages({ topicId: conversationId })
 
       if (!result.success || !result.data) {
         setMessages([])
@@ -60,7 +60,7 @@ export function useLamaMessages(conversationId: string) {
         content: msg.text || msg.content,
         timestamp: new Date(msg.timestamp || msg.createdAt),
         encrypted: false,
-        isAI: false,
+        isAI: msg.isAI || false,  // Use isAI from ChatPlan (AI detection happens server-side)
         attachments: msg.attachments,
         topicId: conversationId
       }))
@@ -117,7 +117,7 @@ export function useLamaMessages(conversationId: string) {
       setOptimisticMessages([optimisticMessage])
 
       // Send via Model handler
-      const result = await model.chatHandler.sendMessage({
+      const result = await model.chatPlan.sendMessage({
         topicId,
         content,
         attachments
@@ -166,7 +166,7 @@ export function useLamaPeers() {
 
       try {
         setLoading(true)
-        const result = await model.contactsHandler.getContacts()
+        const result = await model.contactsPlan.getContacts()
 
         if (!result.success || !result.data) {
           setPeers([])
@@ -238,7 +238,7 @@ export function useLamaAI() {
       setProcessing(true)
       window.dispatchEvent(new Event('ai:processing'))
 
-      const result = await model.aiHandler.chat({
+      const result = await model.aiPlan.chat({
         messages: [{ role: 'user', content: prompt }]
       })
 

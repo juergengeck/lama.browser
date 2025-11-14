@@ -1,10 +1,12 @@
 /**
- * useChatKeywords Hook - Browser Platform
+ * useChatKeywords Hook - Platform-Agnostic
  * Non-blocking real-time single-word keyword extraction
+ * Uses usePlans() for platform-agnostic access to topicAnalysis plan
  */
 
 import { useState, useEffect, useRef } from 'react';
 import { getModel } from '../model';
+import { usePlans } from '@lama/ui';
 
 interface Message {
   id?: string;
@@ -16,6 +18,9 @@ interface Message {
 
 export function useChatKeywords(topicId: string, messages: Message[] = []) {
   console.log('[useChatKeywords] Hook called with topicId:', topicId, 'messages:', messages.length);
+
+  // Use Plans for platform-agnostic operations
+  const { topicAnalysis } = usePlans();
 
   const [keywords, setKeywords] = useState<any[]>([]); // Changed from string[] to any[] to hold full keyword objects
   const [loading, setLoading] = useState(false);
@@ -42,11 +47,10 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
         console.log(`[useChatKeywords-${topicId}] ✅ Fetching updated keywords`);
         // Trigger a refresh by incrementing request counter
         requestCounter.current++;
-        // Re-fetch keywords immediately
+        // Re-fetch keywords immediately (platform-agnostic)
         const fetchKeywords = async () => {
           try {
-            const model = getModel();
-            const response = await model.topicAnalysisHandler.getKeywords({
+            const response = await topicAnalysis.getKeywords({
               topicId,
               limit: 15
             });
@@ -71,7 +75,7 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
     return () => {
       window.removeEventListener('keywords:updated', handleKeywordsUpdated);
     };
-  }, [topicId]);
+  }, [topicId, topicAnalysis]);
 
   // Detect when keywords appear (0 -> N) and return flag
   const keywordsJustAppeared = prevKeywordCountRef.current === 0 && keywords.length > 0;
@@ -122,8 +126,8 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
           if (messages && messages.length > 0) {
             console.log('[useChatKeywords] Loading keywords from storage for', messages.length, 'messages');
 
-            // Get keywords from storage (populated by analyzeMessages)
-            const response = await model.topicAnalysisHandler.getKeywords({
+            // Get keywords from storage - platform-agnostic
+            const response = await topicAnalysis.getKeywords({
               topicId,
               limit: 15
             });
@@ -147,7 +151,7 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
             // Only try fallback if we have no keywords yet
             console.log('[useChatKeywords] No messages, trying fallback to subjects');
 
-            const subjectsResponse = await model.topicAnalysisHandler.getSubjects({
+            const subjectsResponse = await topicAnalysis.getSubjects({
               topicId,
               includeArchived: false
             });
@@ -197,7 +201,7 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
         clearTimeout(debounceTimer.current);
       }
     };
-  }, [topicId, messages.length]); // Only re-run when topic or message count changes
+  }, [topicId, messages.length, topicAnalysis]); // Only re-run when topic, message count, or plan changes
 
   // Non-blocking update for new message
   const updateKeywordsForNewMessage = (messageText: string) => {
@@ -217,7 +221,7 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
 
         console.log('[useChatKeywords] Updating keywords for new message (non-blocking)');
 
-        const response = await model.topicAnalysisHandler.extractRealtimeKeywords({
+        const response = await topicAnalysis.extractRealtimeKeywords({
           text: messageText,
           existingKeywords: keywords,
           maxKeywords: 15

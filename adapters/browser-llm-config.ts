@@ -1,26 +1,49 @@
 /**
  * Browser LLM Config Adapters
  *
- * Provides browser-based implementations using fetch() API.
+ * Provides browser-based implementations using fetch() API and ONE.core crypto.
  * Works with Ollama's HTTP API on localhost:11434 or remote servers.
  */
 
-import type { TestConnectionResponse } from '@lama/core/handlers/LLMConfigHandler';
+import type { TestConnectionResponse } from '@lama/core/plans/LLMConfigPlan';
+import {
+  createSymmetricKey,
+  symmetricEncryptAndEmbedNonce,
+  symmetricDecryptWithEmbeddedNonce,
+  type SymmetricKey,
+} from '@refinio/one.core/lib/crypto/encryption.js';
 
 /**
- * Browser implementation for Ollama connection testing using fetch()
+ * Detect if error is CORS-related
+ */
+function isCorsError(error: any): boolean {
+  // CORS errors typically appear as TypeError with specific messages
+  if (error instanceof TypeError) {
+    const message = error.message.toLowerCase();
+    return (
+      message.includes('cors') ||
+      message.includes('network request failed') ||
+      message.includes('failed to fetch') ||
+      error.name === 'TypeError' // Generic fetch failure often indicates CORS
+    );
+  }
+  return false;
+}
+
+/**
+ * Browser implementation for Ollama-compatible API connection testing using fetch()
+ * Works with Ollama, LM Studio, and other Ollama-compatible servers
  */
 export const browserOllamaValidator = {
   async testOllamaConnection(
     baseUrl: string,
-    authToken?: string
+    authToken?: string,
+    serviceName: string = 'Ollama'
   ): Promise<TestConnectionResponse> {
     try {
-      console.log('[Browser] Testing Ollama connection to:', baseUrl);
+      console.log(`[Browser] Testing ${serviceName} connection to:`, baseUrl);
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      };
+      const headers: Record<string, string> = {};
 
       if (authToken) {
         headers['Authorization'] = `Bearer ${authToken}`;
@@ -29,7 +52,7 @@ export const browserOllamaValidator = {
       // Test connection by fetching version info
       const response = await fetch(`${baseUrl}/api/version`, {
         method: 'GET',
-        headers,
+        headers: Object.keys(headers).length > 0 ? headers : undefined,
         signal: AbortSignal.timeout(5000) // 5 second timeout
       });
 
@@ -43,18 +66,32 @@ export const browserOllamaValidator = {
 
       const data = await response.json();
 
+      // Also fetch available models
+      const models = await this.fetchOllamaModels(baseUrl, authToken);
+
       return {
         success: true,
-        version: data.version || 'unknown'
+        version: data.version || 'unknown',
+        models
       };
     } catch (error: any) {
-      console.error('[Browser] Ollama connection test failed:', error);
+      console.warn(`[Browser] ${serviceName} connection test failed:`, error);
 
       if (error.name === 'TimeoutError') {
         return {
           success: false,
           error: 'Connection timeout - is Ollama running?',
           errorCode: 'TIMEOUT'
+        };
+      }
+
+      // Detect CORS errors - common when OLLAMA_ORIGINS is not set
+      if (isCorsError(error)) {
+        return {
+          success: false,
+          error: 'CORS policy blocked this request. Please configure OLLAMA_ORIGINS environment variable.',
+          errorCode: 'CORS_ERROR',
+          needsSetup: true // Flag for UI to show setup instructions
         };
       }
 
@@ -70,9 +107,7 @@ export const browserOllamaValidator = {
     try {
       console.log('[Browser] Fetching Ollama models from:', baseUrl);
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      };
+      const headers: Record<string, string> = {};
 
       if (authToken) {
         headers['Authorization'] = `Bearer ${authToken}`;
@@ -80,7 +115,7 @@ export const browserOllamaValidator = {
 
       const response = await fetch(`${baseUrl}/api/tags`, {
         method: 'GET',
-        headers,
+        headers: Object.keys(headers).length > 0 ? headers : undefined,
         signal: AbortSignal.timeout(5000)
       });
 
@@ -99,32 +134,107 @@ export const browserOllamaValidator = {
 };
 
 /**
- * Browser stub for config manager (encryption/decryption)
- * In browser, sensitive token handling should use Web Crypto API or backend
+ * Browser config manager using ONE.core's platform-agnostic crypto
+ *
+ * Uses symmetric encryption with a key derived from browser context.
+ * In production, this key should be derived from user authentication.
  */
-export const browserConfigManager = {
+class BrowserConfigManager {
+  private encryptionKey: SymmetricKey | null = null;
+
+  /**
+   * Initialize encryption key (should be called after user login)
+   * For now, creates a random key and stores it in sessionStorage
+   */
+  private getOrCreateEncryptionKey(): SymmetricKey {
+    if (this.encryptionKey) {
+      return this.encryptionKey;
+    }
+
+    // Try to load existing key from sessionStorage
+    const storedKey = sessionStorage.getItem('lama:encryption_key');
+    if (storedKey) {
+      // Convert base64 back to Uint8Array
+      const keyBytes = Uint8Array.from(atob(storedKey), c => c.charCodeAt(0));
+      this.encryptionKey = keyBytes as SymmetricKey;
+      return this.encryptionKey;
+    }
+
+    // Create new key
+    this.encryptionKey = createSymmetricKey();
+
+    // Store in sessionStorage (persists for session only)
+    const keyBase64 = btoa(String.fromCharCode(...this.encryptionKey));
+    sessionStorage.setItem('lama:encryption_key', keyBase64);
+
+    console.log('[BrowserConfigManager] Created new encryption key');
+    return this.encryptionKey;
+  }
+
+  /**
+   * Encrypt token using ONE.core's symmetric encryption
+   */
   encryptToken(token: string): string {
-    // Browser stub - no encryption (tokens should be handled by backend)
-    console.warn('[Browser] Token encryption not implemented - use backend for sensitive operations');
-    return token;
-  },
+    try {
+      const key = this.getOrCreateEncryptionKey();
 
+      // Convert string to Uint8Array
+      const encoder = new TextEncoder();
+      const data = encoder.encode(token);
+
+      // Encrypt with embedded nonce
+      const encrypted = symmetricEncryptAndEmbedNonce(data, key);
+
+      // Convert to base64 for storage
+      return btoa(String.fromCharCode(...encrypted));
+    } catch (error: any) {
+      console.error('[BrowserConfigManager] Encryption failed:', error);
+      throw new Error(`Token encryption failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Decrypt token using ONE.core's symmetric encryption
+   */
   decryptToken(encrypted: string): string {
-    // Browser stub - no decryption
-    console.warn('[Browser] Token decryption not implemented - use backend for sensitive operations');
-    return encrypted;
-  },
+    try {
+      const key = this.getOrCreateEncryptionKey();
 
+      // Convert from base64
+      const encryptedBytes = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
+
+      // Decrypt with embedded nonce
+      const decrypted = symmetricDecryptWithEmbeddedNonce(encryptedBytes, key);
+
+      // Convert back to string
+      const decoder = new TextDecoder();
+      return decoder.decode(decrypted);
+    } catch (error: any) {
+      console.error('[BrowserConfigManager] Decryption failed:', error);
+      throw new Error(`Token decryption failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Compute base URL for Ollama
+   */
   computeBaseUrl(modelType: string, baseUrl?: string): string {
     // Default Ollama URL for remote access
     if (modelType === 'local') {
       return 'http://localhost:11434';
     }
     return baseUrl || 'http://localhost:11434';
-  },
-
-  isEncryptionAvailable(): boolean {
-    // Encryption not available in browser (should use backend)
-    return false;
   }
-};
+
+  /**
+   * Check if encryption is available (always true now)
+   */
+  isEncryptionAvailable(): boolean {
+    return true;
+  }
+}
+
+/**
+ * Export singleton instance
+ */
+export const browserConfigManager = new BrowserConfigManager();

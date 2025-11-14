@@ -1,8 +1,9 @@
 /**
- * Invitation Acceptance Component
+ * Invitation Acceptance Component - Platform-Agnostic
  *
  * Handles both IoM (device) and IoP (partner) invitation acceptance
  * Following the one.leute pattern for invitation handling
+ * Uses usePlans() for platform-agnostic access to connection plan
  */
 
 import { useState, useEffect } from 'react'
@@ -11,10 +12,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from '@lama/ui'
 import { Loader2, CheckCircle2, XCircle, UserPlus, Smartphone } from 'lucide-react'
 import { parseInvitationUrl, type InvitationMode } from '@/utils/invitation-url-parser'
-import type Model from '@/model/Model'
+import { useModel } from '@/model'
+import { usePlans } from '@lama/ui'
 
 type InvitationAcceptanceProps = {
-  model: Model
   invitationUrl: string
   onComplete: (success: boolean) => void
 }
@@ -22,6 +23,12 @@ type InvitationAcceptanceProps = {
 export function InvitationAcceptance(props: InvitationAcceptanceProps) {
   console.log('[InvitationAcceptance] ========== COMPONENT RENDER ==========')
   console.log('[InvitationAcceptance] Invitation URL:', props.invitationUrl)
+
+  // Keep Model for platform-specific features (initialized, ownerId)
+  const model = useModel()
+
+  // Use Plans for platform-agnostic operations
+  const { connection } = usePlans()
 
   const [status, setStatus] = useState<'pending' | 'accepting' | 'success' | 'error'>('pending')
   const [error, setError] = useState<string | null>(null)
@@ -69,16 +76,15 @@ export function InvitationAcceptance(props: InvitationAcceptanceProps) {
         commServer: parsed.invitation.url
       })
 
-      // Use IOMHandler to accept invitation (follows one.leute pattern with retry logic)
-      const result = await props.model.iomHandler.acceptPairingInvitation({
+      // Platform-agnostic pairing invitation acceptance
+      const result = await connection.acceptPairingInvitation({
         invitationUrl: props.invitationUrl
       })
 
       if (result.success) {
-        console.log('[InvitationAcceptance] ✅ Invitation accepted successfully')
         console.log('[InvitationAcceptance] 🔍 PERSISTENCE DEBUG: Connection established, checking storage...')
-        console.log('[InvitationAcceptance] 🔍 Model initialized:', props.model.initialized)
-        console.log('[InvitationAcceptance] 🔍 Owner ID:', props.model.ownerId)
+        console.log('[InvitationAcceptance] 🔍 Model initialized:', model.initialized)
+        console.log('[InvitationAcceptance] 🔍 Owner ID:', model.ownerId)
 
         // Check if IndexedDB has data
         if (typeof indexedDB !== 'undefined' && 'databases' in indexedDB) {

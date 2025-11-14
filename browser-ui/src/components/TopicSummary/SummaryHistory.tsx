@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@lama/ui';
 import { Button } from '@lama/ui';
 import { Badge } from '@lama/ui';
+import { usePlans } from '@lama/ui';
 import { GitBranch, Clock, ChevronRight, Eye, EyeOff, FileText } from 'lucide-react';
 import type { Summary, GetSummaryResponse } from '../../types/topic-analysis.js';
 
@@ -23,6 +24,7 @@ export const SummaryHistory: React.FC<SummaryHistoryProps> = ({
   onVersionSelect,
   className = ''
 }) => {
+  const { topicAnalysis } = usePlans(); // Platform-agnostic topic analysis
   const [history, setHistory] = useState<Summary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,13 +41,10 @@ export const SummaryHistory: React.FC<SummaryHistoryProps> = ({
     setError(null);
 
     try {
-      const response: GetSummaryResponse = await window.electronAPI.invoke(
-        'topicAnalysis:getSummary',
-        {
-          topicId,
-          includeHistory: true
-        }
-      );
+      const response: GetSummaryResponse = await topicAnalysis.getSummary({
+        topicId,
+        includeHistory: true
+      });
 
       if (response.success && response.data) {
         setHistory(response.data.history || []);

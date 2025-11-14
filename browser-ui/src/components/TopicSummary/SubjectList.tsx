@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@lama/ui';
 import { Badge } from '@lama/ui';
 import { Button } from '@lama/ui';
+import { usePlans } from '@lama/ui';
 import { Merge, Archive, MessageSquare, Clock } from 'lucide-react';
 import type { Subject, GetSubjectsResponse } from '../../types/topic-analysis.js';
 import { addAIEventListener, AIEventNames } from '../../events/AIEventTypes.js';
@@ -26,6 +27,7 @@ export const SubjectList: React.FC<SubjectListProps> = ({
   showArchived = false,
   className = ''
 }) => {
+  const { topicAnalysis } = usePlans(); // Platform-agnostic topic analysis
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,13 +61,10 @@ export const SubjectList: React.FC<SubjectListProps> = ({
     setError(null);
 
     try {
-      const response: GetSubjectsResponse = await window.electronAPI.invoke(
-        'topicAnalysis:getSubjects',
-        {
-          topicId,
-          includeArchived: showArchived
-        }
-      );
+      const response: GetSubjectsResponse = await topicAnalysis.getSubjects({
+        topicId,
+        includeArchived: showArchived
+      });
 
       if (response.success && response.data) {
         console.log('[SubjectList] ✅ Subjects loaded:', {

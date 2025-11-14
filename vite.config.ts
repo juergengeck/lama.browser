@@ -8,6 +8,9 @@ export default defineConfig({
   // Root is project root, index.html loads /browser-ui/src/main.tsx
   root: '.',
 
+  // Public directory for static assets
+  publicDir: 'assets',
+
   // Build configuration for UI
   build: {
     target: 'esnext',
@@ -38,11 +41,24 @@ export default defineConfig({
 
       // Local lama packages
       '@lama/core': resolve(__dirname, '../lama.core'),
-      '@lama/connection.core': resolve(__dirname, '../connection.core')
+      '@lama/connection.core': resolve(__dirname, '../connection.core'),
+      '@chat/core': resolve(__dirname, '../chat.core'),
+      '@trust/core': resolve(__dirname, '../trust.core'),
+      '@connection/core': resolve(__dirname, '../connection.core')
     },
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
     // CRITICAL: Dedupe ONE.core to ensure single recipe registry instance
-    dedupe: ['react', 'react-dom', '@refinio/one.core', '@refinio/one.models']
+    dedupe: [
+      'react',
+      'react-dom',
+      '@refinio/one.core',
+      '@refinio/one.models',
+      '@lama/core',
+      '@chat/core',
+      '@trust/core',
+      '@connection/core',
+      '@lama/connection.core'
+    ]
   },
 
   // Development server

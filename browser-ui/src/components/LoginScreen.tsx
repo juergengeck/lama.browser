@@ -49,6 +49,13 @@ export function LoginScreen({ onLogin, onRegister }: LoginScreenProps) {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
+          <div className="flex justify-center mb-6">
+            <img
+              src="/assets/icons/lamaFilled.svg"
+              alt="LAMA Logo"
+              className="h-24 w-24 dark:invert"
+            />
+          </div>
           <CardTitle className="text-3xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             LAMA Desktop
           </CardTitle>

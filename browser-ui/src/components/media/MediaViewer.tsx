@@ -19,7 +19,7 @@ import {
 } from '@lama/ui'
 import type { MessageAttachment, BlobDescriptor } from '@/types/attachments'
 import { attachmentService } from '@/services/attachments/AttachmentService'
-import { createAttachmentView } from '@/components/attachments/AttachmentViewFactory'
+import { createAttachmentView } from '@lama/ui'
 import { formatFileSize, getAttachmentType } from '@/types/attachments'
 
 /**

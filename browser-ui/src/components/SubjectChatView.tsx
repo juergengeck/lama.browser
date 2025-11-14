@@ -17,6 +17,7 @@ import { attachmentService } from '@/services/attachments/AttachmentService'
 import type { MessageAttachment } from '@/types/attachments'
 import { EnhancedMessageInput } from './chat/EnhancedMessageInput'
 import { useModel } from '@/model/index.js'
+import { usePlans } from '@lama/ui'
 
 interface SubjectChatViewProps {
   conversationId: string
@@ -31,7 +32,8 @@ export const SubjectChatView: React.FC<SubjectChatViewProps> = ({
   llmContactId,
   participantName = 'Chat'
 }) => {
-  const model = useModel()
+  const model = useModel() // Keep for initialization checks
+  const { ai } = usePlans() // Platform-agnostic AI interactions
   const {
     messages,
     mediaItems,
@@ -86,8 +88,8 @@ export const SubjectChatView: React.FC<SubjectChatViewProps> = ({
         // Add Subject context to prompt
         const enhancedPrompt = `${context}\n\nUser: ${text}`
 
-        // Get LLM response
-        const result = await model.aiHandler.chat({
+        // Get LLM response using platform-agnostic AI plan
+        const result = await ai.chat({
           messages: [{ role: 'user', content: enhancedPrompt }]
         })
         const response = result.success ? result.data?.response || '' : ''
@@ -102,7 +104,7 @@ export const SubjectChatView: React.FC<SubjectChatViewProps> = ({
     } finally {
       setSending(false)
     }
-  }, [sendMessage, processLLMResponse, buildLLMContext, messages, llmContactId])
+  }, [sendMessage, processLLMResponse, buildLLMContext, messages, llmContactId, ai])
   
   /**
    * Handle Subject click - filter or explore

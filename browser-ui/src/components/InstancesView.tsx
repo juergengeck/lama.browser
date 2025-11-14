@@ -22,6 +22,7 @@ import {
   User
 } from 'lucide-react'
 import { useModel } from '@/model'
+import { usePlans } from '@lama/ui'
 
 interface Instance {
   id: string
@@ -46,7 +47,12 @@ interface Instance {
 }
 
 export default function InstancesView() {
+  // Keep Model for platform-specific features (initialized, ownerId)
   const model = useModel()
+
+  // Use Plans for platform-agnostic operations
+  const { contacts: contactsPlan, connection } = usePlans()
+
   const [browserInstance, setBrowserInstance] = useState<Instance | null>(null)
   const [nodeInstance, setNodeInstance] = useState<Instance | null>(null)
   const [myDevices, setMyDevices] = useState<Instance[]>([])
@@ -94,9 +100,9 @@ export default function InstancesView() {
       // No separate Node.js instance in browser-only architecture
       setNodeInstance(null)
 
-      // Get contacts from ONE.core
+      // Get contacts from ONE.core (platform-agnostic)
       try {
-        const result = await model.contactsHandler.getContacts()
+        const result = await contactsPlan.getContacts()
         const chumContacts: Instance[] = []
 
         if (result.success && result.data && Array.isArray(result.data)) {
@@ -138,8 +144,8 @@ export default function InstancesView() {
     try {
       console.log('[InstancesView] Creating invitation...')
 
-      // Use IOMHandler to create pairing invitation
-      const result = await model.iomHandler.createPairingInvitation({})
+      // Platform-agnostic pairing invitation creation
+      const result = await connection.createPairingInvitation({})
 
       if (result.success && result.invitation) {
         // Copy invitation URL to clipboard

@@ -1,9 +1,10 @@
 /**
- * useKeywordDetails Hook
- * Fetches keyword details including subjects and access states via IPC
+ * useKeywordDetails Hook - Platform-Agnostic
+ * Fetches keyword details including subjects and access states using usePlans()
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { usePlans } from '@lama/ui';
 import type {
   KeywordDetailData,
   KeywordDetailResponse
@@ -17,7 +18,7 @@ interface UseKeywordDetailsResult {
 }
 
 /**
- * Hook to fetch keyword details from Node.js via IPC
+ * Hook to fetch keyword details using platform-agnostic keywordDetail plan
  * @param keyword - The keyword term to fetch (null = no-op)
  * @param topicId - Optional topic ID to filter subjects
  * @returns Object with data, loading, error, and refetch function
@@ -26,6 +27,9 @@ export function useKeywordDetails(
   keyword: string | null,
   topicId?: string
 ): UseKeywordDetailsResult {
+  // Use Plans for platform-agnostic operations
+  const { keywordDetail } = usePlans();
+
   const [data, setData] = useState<KeywordDetailData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,13 +48,11 @@ export function useKeywordDetails(
     setError(null);
 
     try {
-      const response: KeywordDetailResponse = await window.electronAPI?.invoke(
-        'keywordDetail:getKeywordDetails',
-        {
-          keyword,
-          topicId
-        }
-      );
+      // Platform-agnostic keyword details fetching
+      const response: KeywordDetailResponse = await keywordDetail.getKeywordDetails({
+        keyword,
+        topicId
+      });
 
       if (response.success && response.data) {
         console.log('[useKeywordDetails] ✅ Details loaded:', {
@@ -72,7 +74,7 @@ export function useKeywordDetails(
     } finally {
       setLoading(false);
     }
-  }, [keyword, topicId]);
+  }, [keyword, topicId, keywordDetail]);
 
   // Fetch on mount and when dependencies change
   useEffect(() => {

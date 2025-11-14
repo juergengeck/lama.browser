@@ -1,6 +1,6 @@
 /**
  * LLM Proxy Service - NOT USED IN BROWSER
- * Browser uses Model handlers instead (model.aiHandler, model.llmConfigHandler)
+ * Browser uses Model handlers instead (model.aiPlan, model.llmConfigPlan)
  */
 
 export interface ChatMessage {
@@ -10,23 +10,23 @@ export interface ChatMessage {
 
 export class LLMProxy {
   constructor() {
-    throw new Error('LLMProxy not supported in browser - use Model handlers instead (model.aiHandler)')
+    throw new Error('LLMProxy not supported in browser - use Model handlers instead (model.aiPlan)')
   }
 
   async chat(messages: ChatMessage[], modelId?: string, topicId?: string): Promise<string> {
-    throw new Error('LLMProxy not supported in browser - use model.aiHandler.chat() instead')
+    throw new Error('LLMProxy not supported in browser - use model.aiPlan.chat() instead')
   }
 
   async getModels() {
-    throw new Error('LLMProxy not supported in browser - use model.aiHandler.getModels() instead')
+    throw new Error('LLMProxy not supported in browser - use model.aiPlan.getModels() instead')
   }
 
   async setDefaultModel(modelId: string) {
-    throw new Error('LLMProxy not supported in browser - use model.aiHandler.setDefaultModel() instead')
+    throw new Error('LLMProxy not supported in browser - use model.aiPlan.setDefaultModel() instead')
   }
 
   async setApiKey(provider: string, apiKey: string) {
-    throw new Error('LLMProxy not supported in browser - use model.llmConfigHandler instead')
+    throw new Error('LLMProxy not supported in browser - use model.llmConfigPlan instead')
   }
 
   async getTools() {

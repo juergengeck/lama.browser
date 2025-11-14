@@ -23,6 +23,7 @@ import ChannelManager from '@refinio/one.models/lib/models/ChannelManager.js';
 import ConnectionsModel from '@refinio/one.models/lib/models/ConnectionsModel.js';
 import LeuteModel from '@refinio/one.models/lib/models/Leute/LeuteModel.js';
 import TopicModel from '@refinio/one.models/lib/models/Chat/TopicModel.js';
+import PropertyTreeStore from '@refinio/one.models/lib/models/SettingsModel.js';
 import {OEvent} from '@refinio/one.models/lib/misc/OEvent.js';
 import RecipesStable from '@refinio/one.models/lib/recipes/recipes-stable.js';
 import RecipesExperimental from '@refinio/one.models/lib/recipes/recipes-experimental.js';
@@ -38,24 +39,32 @@ import {
 import type {AnyObjectResult} from '@refinio/one.models/lib/misc/ObjectEventDispatcher.js';
 import {objectEvents} from '@refinio/one.models/lib/misc/ObjectEventDispatcher.js';
 import GroupModel from '@refinio/one.models/lib/models/Leute/GroupModel.js';
+import ProfileModel from '@refinio/one.models/lib/models/Leute/ProfileModel.js';
 import {storeVersionedObject, getObjectByIdHash} from '@refinio/one.core/lib/storage-versioned-objects.js';
 import {getIdObject} from '@refinio/one.core/lib/storage-versioned-objects.js';
 import {getObject, storeUnversionedObject} from '@refinio/one.core/lib/storage-unversioned-objects.js';
+import {getAllEntries} from '@refinio/one.core/lib/reverse-map-query.js';
 import {createAccess} from '@refinio/one.core/lib/access.js';
 import {SET_ACCESS_MODE} from '@refinio/one.core/lib/storage-base-common.js';
 import {calculateHashOfObj, calculateIdHashOfObj} from '@refinio/one.core/lib/util/object.js';
 import {createDefaultKeys, hasDefaultKeys} from '@refinio/one.core/lib/keychain/keychain.js';
+import {getInstanceIdHash} from '@refinio/one.core/lib/instance.js';
 
-// LAMA core handlers (platform-agnostic business logic - AI-related)
-import {AIHandler} from '@lama/core/handlers/AIHandler';
-import {AIAssistantHandler} from '@lama/core/handlers/AIAssistantHandler';
-import {TopicAnalysisHandler} from '@lama/core/handlers/TopicAnalysisHandler';
-import {ProposalsHandler} from '@lama/core/handlers/ProposalsHandler';
-import {KeywordDetailHandler} from '@lama/core/handlers/KeywordDetailHandler';
-import {WordCloudSettingsHandler} from '@lama/core/handlers/WordCloudSettingsHandler';
-import {LLMConfigHandler} from '@lama/core/handlers/LLMConfigHandler';
-import {CryptoHandler} from '@lama/core/handlers/CryptoHandler';
-import {AuditHandler} from '@lama/core/handlers/AuditHandler';
+// LAMA core plans (platform-agnostic business logic - AI-related)
+import {AIPlan} from '@lama/core/plans/AIPlan';
+import {AIAssistantPlan} from '@lama/core/plans/AIAssistantPlan';
+import {TopicAnalysisPlan} from '@lama/core/plans/TopicAnalysisPlan';
+import {ProposalsPlan} from '@lama/core/plans/ProposalsPlan';
+import {KeywordDetailPlan} from '@lama/core/plans/KeywordDetailPlan';
+import {WordCloudSettingsPlan} from '@lama/core/plans/WordCloudSettingsPlan';
+import {LLMConfigPlan} from '@lama/core/plans/LLMConfigPlan';
+import {CryptoPlan} from '@lama/core/plans/CryptoPlan';
+import {AuditPlan} from '@lama/core/plans/AuditPlan';
+import {JournalPlan} from '@lama/core/plans/JournalPlan';
+import {SubjectsPlan} from '@lama/core/plans/SubjectsPlan';
+
+// LAMA core services
+import {SubjectService} from '@lama/core/services/SubjectService';
 
 // LAMA core AI models (message listener)
 import {AIMessageListener} from '@lama/core/models/ai';
@@ -65,12 +74,23 @@ import {ProposalEngine} from '@lama/core/services/proposal-engine';
 import {ProposalRanker} from '@lama/core/services/proposal-ranker';
 import {ProposalCache} from '@lama/core/services/proposal-cache';
 
-// Chat core handlers (platform-agnostic business logic - chat-related)
-import {ChatHandler} from '@chat/core/handlers/ChatHandler.js';
-import {ContactsHandler} from '@chat/core/handlers/ContactsHandler.js';
-import {ExportHandler} from '@chat/core/handlers/ExportHandler.js';
-import {FeedForwardHandler} from '@chat/core/handlers/FeedForwardHandler.js';
-import {IOMHandler} from '@chat/core/handlers/IOMHandler.js';
+// Chat core plans (platform-agnostic business logic - chat-related)
+import {ChatPlan} from '@chat/core/plans/ChatPlan.js';
+import {GroupPlan} from '@chat/core/plans/GroupPlan.js';
+import {ContactsPlan} from '@chat/core/plans/ContactsPlan.js';
+import {ExportPlan} from '@chat/core/plans/ExportPlan.js';
+import {FeedForwardPlan} from '@chat/core/plans/FeedForwardPlan.js';
+
+// Plan system for assembly tracking (browser-compatible stories-only export)
+import {StoryFactory, AssemblyPlan} from '@refinio/refinio-api/stories';
+
+// Connection core plans (platform-agnostic business logic - P2P connections and group chat)
+import {ConnectionPlan, type TrustPlanDependencies, type PairingEventCallbacks} from '@connection/core/plans/ConnectionPlan.js';
+import {GroupChatPlan, type GroupChatPlanDependencies} from '@connection/core/plans/GroupChatPlan.js';
+
+// Trust core (platform-agnostic trust management)
+import {TrustModel} from '@trust/core/models/TrustModel.js';
+import {TrustPlan} from '@trust/core/plans/TrustPlan.js';
 
 // Chat core services (contact creation, P2P topics)
 import {handleReceivedProfile, ensureContactExists} from '@chat/core/services/ContactCreation.js';
@@ -89,9 +109,15 @@ import {SummaryRecipe} from '@lama/core/one-ai/recipes/SummaryRecipe';
 import {KeywordAccessStateRecipe} from '@lama/core/one-ai/recipes/KeywordAccessState';
 import {WordCloudSettingsRecipe} from '@lama/core/one-ai/recipes/WordCloudSettingsRecipe';
 import {LLMRecipe} from '@lama/core/recipes/LLMRecipe';
+import {ProposalConfigRecipe} from '@lama/core/recipes/ProposalConfigRecipe';
+import {SubscriptionBalanceRecipe} from '../recipes/SubscriptionBalanceRecipe';
+import {MessageReadStatusRecipe} from '../recipes/MessageReadStatusRecipe';
 
 // LAMA core models (LLM object management)
 import {LLMObjectManager} from '@lama/core/models/LLMObjectManager';
+
+// Trust core recipes (identity subscription system)
+import {AllRecipes as TrustCoreRecipes, AllReverseMaps as TrustCoreReverseMaps} from '@trust/core/recipes/index.js';
 
 // Browser platform adapters
 import {browserOllamaValidator, browserConfigManager} from '../../../adapters/browser-llm-config';
@@ -109,6 +135,9 @@ import {LLMManager} from '@lama/core/services/llm-manager';
 
 export default class Model {
     public onOneModelsReady = new OEvent<() => void>();
+    public onContactsChanged = new OEvent<() => void>();
+    public onTopicsChanged = new OEvent<() => void>();
+    public onConnectionsChanged = new OEvent<() => void>();
     public initialized: boolean = false;
     public ownerId: string | null = null;
     private commServerUrl: string;
@@ -123,6 +152,10 @@ export default class Model {
         this.channelManager = new ChannelManager(this.leuteModel);
         this.topicModel = new TopicModel(this.channelManager, this.leuteModel);
 
+        // Settings model for storing secure configuration (API keys, etc.)
+        // Uses ONE.core's encrypted storage (master key protection)
+        this.settings = new PropertyTreeStore('lama.browser.settings');
+
         // Initialize MultiUser with all recipes
         // CRITICAL: Do NOT pass CORE_RECIPES - they're auto-added by MultiUser internally
         this.one = new MultiUser({
@@ -136,12 +169,18 @@ export default class Model {
                 SummaryRecipe,
                 KeywordAccessStateRecipe,
                 WordCloudSettingsRecipe,
-                LLMRecipe
+                LLMRecipe,
+                ProposalConfigRecipe,
+                SubscriptionBalanceRecipe,
+                MessageReadStatusRecipe,
+                // Trust.core recipes (identity subscription system)
+                ...TrustCoreRecipes
             ],
             reverseMaps: new Map([
                 ...ReverseMapsStable,
-                ...ReverseMapsExperimental
-                // TODO: Add LAMA reverse maps if needed
+                ...ReverseMapsExperimental,
+                // Trust.core reverse maps (identity subscription system)
+                ...TrustCoreReverseMaps
             ]),
             reverseMapsForIdObjects: new Map([
                 ...ReverseMapsForIdObjectsStable,
@@ -155,10 +194,12 @@ export default class Model {
         // TopicAnalysisModel requires topicModel and channelManager in constructor
         this.topicAnalysisModel = null as any; // Will be created in init()
 
-        // LLM management (browser platform) - MUST be created before AIAssistantHandler
+        // LLM management (browser platform) - MUST be created before AIAssistantPlan
         const llmPlatform = new BrowserLLMPlatform();
         this.llmManager = new LLMManager(llmPlatform);
-        console.log('[Model] Created LLMManager with BrowserLLMPlatform');
+
+        // No CORS proxy needed - Anthropic API supports CORS natively
+        // API calls are made directly from browser to api.anthropic.com
 
         // Create TopicGroupManager BEFORE ConnectionsModel (needed for filters)
         // TopicGroupManager needs oneCore instance + storageDeps
@@ -190,19 +231,40 @@ export default class Model {
         });
 
         // LLMObjectManager - platform-agnostic LLM object management using ONE.core abstractions
+        const that = this; // Capture 'this' for closure
         this.llmObjectManager = new LLMObjectManager(
             {
                 storeVersionedObject,
-                createAccess
+                createAccess,
+                queryAllLLMObjects: async function* () {
+                    // Query all LLM objects from storage using reverse map
+                    // This is needed to restore AI contacts on reload
+                    const myId = await that.leuteModel.myMainIdentity();
+                    console.log(`[Model/queryAllLLMObjects] Querying LLM objects for owner: ${myId.substring(0, 8)}...`);
+                    const llmEntries = await getAllEntries(myId, 'LLM');
+                    console.log(`[Model/queryAllLLMObjects] Found ${llmEntries.length} LLM entries in reverse map`);
+
+                    for (const entry of llmEntries) {
+                        console.log(`[Model/queryAllLLMObjects] Processing entry hash: ${entry.hash.substring(0, 8)}...`);
+                        // Get the actual LLM object using the hash from the reverse map entry
+                        const llmObject = await getObject(entry.hash);
+                        console.log(`[Model/queryAllLLMObjects] Retrieved object:`, llmObject);
+                        if (llmObject && llmObject.$type$ === 'LLM') {
+                            console.log(`[Model/queryAllLLMObjects] Yielding LLM object: ${llmObject.name}`);
+                            yield llmObject;
+                        }
+                    }
+                    console.log(`[Model/queryAllLLMObjects] Query complete`);
+                }
             }
             // No federation group for browser (optional parameter)
         );
 
-        // LAMA handlers (AI-related)
-        this.aiHandler = new AIHandler(this);
+        // LAMA Plans (AI-related)
+        this.aiPlan = new AIPlan(this);
 
-        // AIAssistantHandler with all dependencies ready
-        this.aiAssistantModel = new AIAssistantHandler({
+        // AI Assistant Plan with all dependencies ready
+        this.aiAssistantPlan = new AIAssistantPlan({
             oneCore: this,
             channelManager: this.channelManager,
             topicModel: this.topicModel,
@@ -214,34 +276,196 @@ export default class Model {
             contextEnrichmentService: undefined, // Optional - not used in browser
             topicAnalysisModel: undefined, // Will be set during init()
             topicGroupManager: this.topicGroupManager,
-            settingsPersistence: undefined, // Optional - use llmConfigHandler instead
-            llmConfigHandler: undefined, // Will be set right after
+            settingsPersistence: undefined, // Optional - use llmConfigPlan instead
+            llmConfigPlan: undefined, // Will be set right after
             storageDeps: {
                 storeVersionedObject,
+                storeUnversionedObject,
                 getIdObject,
                 createDefaultKeys,
-                hasDefaultKeys
+                hasDefaultKeys,
+                trustPlan: this.trustPlan,      // For assigning 'high' trust to AI contacts
+                journalPlan: this.journalPlan   // For recording AI contact creation as assemblies
             }
         });
 
-        // Create LLMConfigHandler now that aiAssistantModel exists
-        this.llmConfigHandler = new LLMConfigHandler(this, this.aiAssistantModel, browserOllamaValidator, browserConfigManager);
+        // Create LLMConfigPlan with settings for secure API key storage
+        // Settings uses ONE.core's master key encryption automatically
+        this.llmConfigPlan = new LLMConfigPlan(
+            this,
+            this.aiAssistantPlan,
+            this.llmManager,
+            this.settings, // ONE.core SettingsModel (encrypted storage)
+            browserOllamaValidator,
+            {
+                computeBaseUrl: browserConfigManager.computeBaseUrl.bind(browserConfigManager)
+            }
+        );
 
-        // topicAnalysisHandler, proposalsHandler, and aiMessageListener will be created in init()
-        this.topicAnalysisHandler = null as any;
-        this.proposalsHandler = null as any;
-        this.aiMessageListener = null; // Created in init() after aiAssistantModel
-        this.keywordDetailHandler = new KeywordDetailHandler(this);
-        this.wordCloudSettingsHandler = new WordCloudSettingsHandler(this);
-        this.cryptoHandler = new CryptoHandler(this);
-        this.auditHandler = new AuditHandler(this);
+        // Set llmConfigPlan on aiAssistantPlan for settings persistence
+        (this.aiAssistantPlan as any).llmConfigPlan = this.llmConfigPlan;
 
-        // Chat handlers (chat-related from chat.core)
-        this.chatHandler = new ChatHandler(this);
-        this.contactsHandler = new ContactsHandler(this);
-        this.exportHandler = new ExportHandler(this);
-        this.feedForwardHandler = new FeedForwardHandler(this);
-        this.iomHandler = new IOMHandler(this);
+        // topicAnalysisPlan, proposalsPlan, and aiMessageListener will be created in init()
+        this.topicAnalysisPlan = null as any;
+        this.proposalsPlan = null as any;
+        this.aiMessageListener = null; // Created in init() after aiAssistantPlan
+        this.keywordDetailPlan = new KeywordDetailPlan(this);
+        this.wordCloudSettingsPlan = new WordCloudSettingsPlan(this);
+        this.cryptoPlan = new CryptoPlan(this);
+        this.auditPlan = new AuditPlan(this);
+
+        // Chat plans (platform-agnostic from chat.core)
+        this.chatPlan = new ChatPlan(this);
+        this.contactsPlan = new ContactsPlan(this);
+        this.exportPlan = new ExportPlan(this);
+        this.feedForwardPlan = new FeedForwardPlan(this);
+
+        // Initialize GroupPlan with StoryFactory for assembly tracking
+        // This enables assembly creation through the proper abstraction layers
+        console.log('[Model] Initializing GroupPlan with StoryFactory and AssemblyPlan');
+
+        // Create AssemblyPlan (connects to ONE.core)
+        const assemblyPlan = new AssemblyPlan({
+            storeVersionedObject,
+            storeUnversionedObject,
+            getObjectByIdHash
+        });
+
+        // Create StoryFactory with AssemblyPlan
+        const storyFactory = new StoryFactory(assemblyPlan);
+        console.log('[Model] StoryFactory created with AssemblyPlan');
+
+        // Create GroupPlan with TopicGroupManager and StoryFactory
+        this.groupPlan = new GroupPlan(
+            this.topicGroupManager,
+            this,  // oneCore
+            storyFactory
+        );
+
+        // Inject GroupPlan into ChatPlan for assembly creation
+        this.chatPlan.setGroupPlan(this.groupPlan);
+        console.log('[Model] GroupPlan initialized and injected into ChatPlan');
+
+        // Trust management (platform-agnostic from trust.core)
+        // Initialize TrustModel and TrustPlan for trust level tracking and chain of trust
+        // TrustModel expects: (leuteModel, trustedKeysManager?)
+        this.trustModel = new TrustModel(this.leuteModel, undefined);
+        this.trustPlan = new TrustPlan(this.trustModel);
+
+        // Journal plan for recording LLM interactions and AI contact creation as assemblies
+        this.journalPlan = new JournalPlan({
+            storeVersionedObject,
+            getInstanceIdHash,
+            calculateIdHashOfObj
+        });
+
+        // Subjects plan for managing memory/topics/keywords (uses singleton SubjectService)
+        this.subjectsPlan = new SubjectsPlan(SubjectService.getInstance());
+
+        // Wire up JournalPlan's external dependencies for unified journal aggregation
+        this.journalPlan.setExternalDeps({
+            chatPlan: this.chatPlan,
+            subjectsPlan: this.subjectsPlan
+        });
+
+        // Prepare TrustPlan dependencies for automatic trust establishment
+        const trustDeps: TrustPlanDependencies = {
+            getAllEntries,
+            getObject,
+            ProfileModel,
+            leuteModel: this.leuteModel
+        };
+
+        // Prepare pairing event callbacks for browser-specific handling
+        const pairingCallbacks: PairingEventCallbacks = {
+            onContactCreated: async (contact) => {
+                console.log('[Model] Contact created:', contact.displayName);
+                // Contact is already in LeuteModel - browser just needs to refresh UI
+                this.onContactsChanged.emit();
+            },
+
+            onTopicCreated: async (topic) => {
+                console.log('[Model] Topic created:', topic.channelId);
+                // Topic is already created - browser just needs to refresh UI
+                this.onTopicsChanged.emit();
+            },
+
+            onPairingComplete: async (details) => {
+                console.log('[Model] ✅ Pairing complete:', details.type);
+                // Emit general event for UI updates
+                this.onConnectionsChanged.emit();
+            }
+        };
+
+        // Connection plan (platform-agnostic from connection.core)
+        // Now automatically handles trust establishment via integrated TrustPlan
+        // and fires callbacks for platform-specific UI updates
+        this.connectionPlan = new ConnectionPlan(
+            this as any,
+            undefined,     // No storage provider for browser
+            commServerUrl,
+            undefined,     // No discovery config for browser
+            trustDeps,     // Trust dependencies - enables automatic trust after pairing
+            pairingCallbacks,  // Platform-specific UI updates
+            this.trustPlan     // trust.core TrustPlan for automatic trust level assignment
+        );
+
+        // Group chat plan dependencies (platform-agnostic from connection.core)
+        const groupChatDeps: GroupChatPlanDependencies = {
+            // ONE.core storage functions
+            storeVersionedObject,
+            storeUnversionedObject,
+            getObjectByIdHash,
+            calculateIdHashOfObj,
+
+            // Access control - use ONE.core's createAccess API
+            grantReadAccess: async (hash: any, personId: any) => {
+                try {
+                    await createAccess([{
+                        object: hash,
+                        person: [personId],
+                        group: [],
+                        mode: SET_ACCESS_MODE.ADD
+                    }]);
+                } catch (error) {
+                    console.error('[GroupChatPlan] Failed to grant read access:', error);
+                    throw error;
+                }
+            },
+
+            // Leute model for trust and identity
+            leuteModel: {
+                myMainIdentity: async () => this.leuteModel.myMainIdentity(),
+                others: async () => {
+                    const others = await this.leuteModel.others();
+                    // Convert SomeoneModel[] to SHA256IdHash<Person>[]
+                    return others.map((someone: any) => someone.personId) as any[];
+                },
+                trust: {
+                    certify: (certType: 'AffirmationCertificate', params: any) => this.leuteModel.trust.certify(certType, params),
+                    isAffirmedBy: (hash: any, affirmerId: any) => this.leuteModel.trust.isAffirmedBy(hash, affirmerId),
+                    affirmedBy: (hash: any) => this.leuteModel.trust.affirmedBy(hash),
+                    refreshCaches: () => this.leuteModel.trust.refreshCaches()
+                }
+            },
+
+            // Channel manager for group chat channels
+            channelManager: {
+                getOrCreateChannel: async (channelId: string, owner: any) => {
+                    // Get existing channels
+                    const existingChannels = await this.channelManager.channels();
+                    const existing = existingChannels.find((ch: any) => ch.id === channelId && ch.owner === owner);
+                    if (existing) return existing;
+                    // Create new channel
+                    return this.channelManager.createChannel(channelId, owner);
+                },
+                postToChannel: (topicId: string, message: any, owner?: any) =>
+                    this.channelManager.postToChannel(topicId, message, owner)
+            }
+        };
+
+        // Group chat plan (platform-agnostic from connection.core)
+        this.groupChatPlan = new GroupChatPlan(groupChatDeps);
 
         // Setup event handler that initialize the models when somebody logged in
         // and shuts down the model when somebody logs out.
@@ -276,6 +500,52 @@ export default class Model {
             };
 
             await objectEvents.init();
+
+            // Initialize settings model (secure storage for API keys, etc.)
+            console.log('[Model] Initializing settings model...');
+            await this.settings.init();
+            console.log('[Model] ✅ Settings model initialized');
+
+            // Update LLMManager with settings wrapper (needed for API key retrieval)
+            console.log('[Model] Updating LLMManager with settings reference...');
+            this.llmManager.userSettingsManager = {
+                getApiKey: async (provider: string) => {
+                    console.log(`[Model] getApiKey called for provider: ${provider}`);
+                    // LLMConfigPlan stores keys as llm.{modelName}.apiKey
+                    // For discovery, we need to check by provider
+                    // Anthropic: Check common Claude model names
+                    // OpenAI: Check common GPT model names
+                    if (provider === 'anthropic') {
+                        // Try common Claude model names
+                        const models = ['claude-haiku-4-5', 'claude-sonnet-4-5', 'claude-opus-4-1'];
+                        for (const model of models) {
+                            const settingsKey = `llm.${model}.apiKey`;
+                            console.log(`[Model] Checking for key: ${settingsKey}`);
+                            const key = await this.settings.getValue(settingsKey);
+                            if (key) {
+                                console.log(`[Model] ✅ Found API key for ${model}: ${key.substring(0, 20)}...`);
+                                return key;
+                            }
+                        }
+                        console.log(`[Model] ❌ No Anthropic API key found`);
+                    } else if (provider === 'openai') {
+                        // Try common GPT model names
+                        const models = ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'];
+                        for (const model of models) {
+                            const settingsKey = `llm.${model}.apiKey`;
+                            console.log(`[Model] Checking for key: ${settingsKey}`);
+                            const key = await this.settings.getValue(settingsKey);
+                            if (key) {
+                                console.log(`[Model] ✅ Found API key for ${model}`);
+                                return key;
+                            }
+                        }
+                        console.log(`[Model] ❌ No OpenAI API key found`);
+                    }
+                    return null;
+                }
+            };
+            console.log('[Model] ✅ LLMManager now has access to encrypted settings');
 
             // Setup CHUM listeners for contact creation
             console.log('[Model] Setting up CHUM listeners for contact creation...');
@@ -333,7 +603,7 @@ export default class Model {
 
             // Use centralized initialization from lama.core
             // This enforces correct order: LeuteModel → LLM → Channels → Topics
-            const { initializeCoreModels } = await import('@lama/core/initialization/CoreInitializer.ts');
+            const { initializeCoreModels } = await import('@lama/core/initialization/CoreInitializer.js');
 
             await initializeCoreModels({
                 oneCore: this,
@@ -343,13 +613,18 @@ export default class Model {
                 connections: this.connections,
                 llmManager: this.llmManager,
                 llmObjectManager: this.llmObjectManager,
-                aiAssistantModel: this.aiAssistantModel,
-                chatHandler: this.chatHandler,
+                aiAssistantPlan: this.aiAssistantPlan,
+                chatHandler: this.chatPlan,
                 topicAnalysisModel: this.topicAnalysisModel,
                 topicGroupManager: this.topicGroupManager
             }, (progress) => {
                 console.log(`[Model] Init progress: ${progress.stage} (${progress.percent}%) - ${progress.message}`);
             });
+
+            // Initialize LLMManager to discover available models (Ollama, cloud APIs, etc.)
+            console.log('[Model] Initializing LLMManager to discover models...');
+            await this.llmManager.init();
+            console.log('[Model] ✅ LLMManager initialized - models discovered');
 
             // Now that LeuteModel is initialized, set up profile and groups
             const me = await this.leuteModel.me();
@@ -438,6 +713,11 @@ export default class Model {
             await this.channelManager.createChannel('lama', myMainId);
             console.log('[Model] Created lama channel for LLM config storage');
 
+            // Initialize AI Assistant Plan (required before message processing starts)
+            console.log('[Model] Initializing AIAssistantPlan...');
+            await this.aiAssistantPlan.init();
+            console.log('[Model] ✅ AIAssistantPlan initialized');
+
             // Initialize connection.core integration - DISABLED: Browser adapters not implemented yet
             // console.log('[Model] Initializing connection.core integration...');
             // const oneCoreAdapter = new BrowserOneCoreAdapter(
@@ -458,34 +738,21 @@ export default class Model {
             // this.connectionManagerOneCore.setOneCoreAdapter(oneCoreAdapter);
             // console.log('[Model] ✅ connection.core integration initialized');
 
-            // Setup pairing success handler to auto-create P2P topics
-            if (this.connections.pairing && (this.connections.pairing as any).onPairingSuccess) {
-                console.log('[Model] Setting up pairing success handler for P2P topic creation...');
-                (this.connections.pairing as any).onPairingSuccess(async (initiatedLocally: boolean, localPersonId: any, localInstanceId: any, remotePersonId: any, remoteInstanceId: any, token: any) => {
-                    console.log('[Model] ✅ PAIRING SUCCESS - Auto-creating P2P topic');
-                    console.log('[Model]   Initiated locally:', initiatedLocally);
-                    console.log('[Model]   Local person:', localPersonId?.substring(0, 8));
-                    console.log('[Model]   Remote person:', remotePersonId?.substring(0, 8));
+            // DEPRECATED: P2P topic creation is now handled by ConnectionPlan
+            // ConnectionPlan calls handlePairingCompletion() internally which creates the topic
+            // The onTopicCreated callback (defined above) will fire when topic is ready
+            //
+            // OLD CODE (for reference):
+            // this.connections.onProtocolStart(...) => autoCreateP2PTopicAfterPairing(...)
+            //
+            // NEW ARCHITECTURE:
+            // ConnectionPlan.handlePairingSuccess() => handlePairingCompletion() => onTopicCreated callback
+            console.log('[Model] ℹ️  P2P topic creation handled by ConnectionPlan (not onProtocolStart)');
 
-                    try {
-                        // Use chat.core's P2PTopicService to create the topic
-                        await autoCreateP2PTopicAfterPairing({
-                            topicModel: this.topicModel,
-                            channelManager: this.channelManager,
-                            localPersonId,
-                            remotePersonId,
-                            initiatedLocally,
-                            sendWelcomeMessage: initiatedLocally
-                        });
-                        console.log('[Model] ✅ P2P topic created successfully');
-                    } catch (error) {
-                        console.error('[Model] Failed to auto-create P2P topic:', error);
-                    }
-                });
-                console.log('[Model] ✅ Pairing success handler registered');
-            } else {
-                console.warn('[Model] ⚠️  Pairing model not available - P2P topics won\'t be auto-created');
-            }
+            // Initialize TrustModel for trust level tracking
+            console.log('[Model] Initializing TrustModel...');
+            await this.trustModel.init();
+            console.log('[Model] ✅ TrustModel initialized');
 
             // Initialize LAMA-specific models (create TopicAnalysisModel now that dependencies are ready)
             this.topicAnalysisModel = new TopicAnalysisModel(this.channelManager, this.topicModel);
@@ -494,30 +761,30 @@ export default class Model {
             // CRITICAL: Inject topicAnalysisModel into AIMessageProcessor so it can create subjects
             // The aiAssistantModel was created with topicAnalysisModel: undefined (line 214)
             // Now that topicAnalysisModel exists, we need to inject it
-            if (this.aiAssistantModel.messageProcessor) {
+            if (this.aiAssistantPlan.messageProcessor) {
                 console.log('[Model] 💉 Injecting topicAnalysisModel into AIMessageProcessor');
-                (this.aiAssistantModel.messageProcessor as any).topicAnalysisModel = this.topicAnalysisModel;
+                (this.aiAssistantPlan.messageProcessor as any).topicAnalysisModel = this.topicAnalysisModel;
             }
 
-            // Create TopicAnalysisHandler now that topicAnalysisModel is ready
-            this.topicAnalysisHandler = new TopicAnalysisHandler(this.topicAnalysisModel);
+            // Create TopicAnalysisPlan now that topicAnalysisModel is ready
+            this.topicAnalysisPlan = new TopicAnalysisPlan(this.topicAnalysisModel);
 
-            // Create ProposalsHandler with all dependencies
+            // Create ProposalsPlan with all dependencies
             const proposalEngine = new ProposalEngine(this.topicAnalysisModel);
             const proposalRanker = new ProposalRanker();
             const proposalCache = new ProposalCache();
-            this.proposalsHandler = new ProposalsHandler(
+            this.proposalsPlan = new ProposalsPlan(
                 this, // nodeOneCore
                 this.topicAnalysisModel,
                 proposalEngine,
                 proposalRanker,
                 proposalCache
             );
-            console.log('[Model] ✅ ProposalsHandler initialized');
+            console.log('[Model] ✅ ProposalsPlan initialized');
 
             // Check if user has a saved default model and create chats if needed
             // (AI was already initialized earlier, before channels)
-            const savedDefaultModel = this.aiAssistantModel.topicManager.getDefaultModel();
+            const savedDefaultModel = this.aiAssistantPlan.topicManager.getDefaultModel();
             if (savedDefaultModel) {
                 console.log('[Model] Found saved default model:', savedDefaultModel);
 
@@ -526,21 +793,32 @@ export default class Model {
                 const modelExists = availableModels.some((m: any) => m.id === savedDefaultModel);
 
                 if (modelExists) {
-                    // Call setDefaultModel to trigger chat creation
+                    // Call setConfig to trigger chat creation
+                    // Find the model to get its correct modelType
                     try {
-                        await this.llmConfigHandler.setConfig({ defaultModelId: savedDefaultModel });
+                        const modelInfo = availableModels.find((m: any) => m.id === savedDefaultModel);
+                        if (!modelInfo) {
+                            throw new Error(`Model ${savedDefaultModel} not found in available models`);
+                        }
+
+                        // Use the model's actual modelType (local for Ollama, remote for API services)
+                        await this.llmConfigPlan.setConfig({
+                            modelType: modelInfo.modelType || 'local',
+                            modelName: savedDefaultModel,
+                            setAsActive: true
+                        });
                         console.log('[Model] ✅ Default model restored and chats ensured');
                     } catch (error) {
                         console.error('[Model] ❌ Failed to restore default model and create chats:', error);
                         // Clear the problematic model and continue initialization
-                        this.aiAssistantModel.topicManager.setDefaultModel('');
+                        this.aiAssistantPlan.topicManager.setDefaultModel('');
                         console.warn('[Model] Cleared problematic model - user will need to reselect');
                     }
                 } else {
                     console.warn('[Model] ⚠️ Saved model no longer available:', savedDefaultModel);
                     console.warn('[Model] Available models:', availableModels.map((m: any) => m.id));
                     // Clear the invalid saved model
-                    this.aiAssistantModel.topicManager.setDefaultModel('');
+                    this.aiAssistantPlan.topicManager.setDefaultModel('');
                     console.log('[Model] Cleared invalid model - user will select via onboarding');
                 }
             } else {
@@ -551,38 +829,37 @@ export default class Model {
             this.aiMessageListener = new AIMessageListener({
                 channelManager: this.channelManager,
                 topicModel: this.topicModel,
-                aiHandler: this.aiAssistantModel,
+                aiPlan: this.aiAssistantPlan,
                 ownerId: myMainId
             });
             await this.aiMessageListener.start();
             console.log('[Model] ✅ AIMessageListener started');
 
             // Initialize remaining handlers (core models already initialized via CoreInitializer)
-            await this.topicAnalysisHandler.init?.();
-            await this.proposalsHandler.init?.();
-            await this.keywordDetailHandler.init?.();
-            await this.wordCloudSettingsHandler.init?.();
-            await this.llmConfigHandler.init?.();
-            await this.cryptoHandler.init?.();
-            await this.auditHandler.init?.();
+            await this.topicAnalysisPlan.init?.();
+            await this.proposalsPlan.init?.();
+            await this.keywordDetailPlan.init?.();
+            await this.wordCloudSettingsPlan.init?.();
+            await this.llmConfigPlan.init?.();
+            await this.cryptoPlan.init?.();
+            await this.auditPlan.init?.();
 
-            // Chat handlers (chatHandler already initialized via CoreInitializer)
-            await this.contactsHandler.init?.();
-            await this.exportHandler.init?.();
-            await this.feedForwardHandler.init?.();
-            await this.iomHandler.init?.();
+            // Chat plans (chatPlan already initialized via CoreInitializer)
+            await this.contactsPlan.init?.();
+            await this.exportPlan.init?.();
+            await this.feedForwardPlan.init?.();
             // NOTE: topicGroupManager has no init() method
 
-            // Initialize AIHandler with all dependencies
-            console.log('[Model] Initializing AIHandler with dependencies...');
-            this.aiHandler.setModels(
+            // Initialize AIPlan with all dependencies
+            console.log('[Model] Initializing AIPlan with dependencies...');
+            this.aiPlan.setModels(
                 this.llmManager,
-                this.aiAssistantModel,
+                this.aiAssistantPlan,
                 this.topicModel,
                 this, // nodeOneCore
                 undefined // stateManager (not used in browser)
             );
-            console.log('[Model] ✅ AIHandler initialized');
+            console.log('[Model] ✅ AIPlan initialized');
 
             // Mark as initialized for handlers
             this.initialized = true;
@@ -622,19 +899,18 @@ export default class Model {
 
         // Shutdown platform-specific handlers first
         const platformHandlers = [
-            { name: 'AuditHandler', fn: () => this.auditHandler?.shutdown?.() },
-            { name: 'CryptoHandler', fn: () => this.cryptoHandler?.shutdown?.() },
-            { name: 'LLMConfigHandler', fn: () => this.llmConfigHandler?.shutdown?.() },
-            { name: 'WordCloudSettingsHandler', fn: () => this.wordCloudSettingsHandler?.shutdown?.() },
-            { name: 'KeywordDetailHandler', fn: () => this.keywordDetailHandler?.shutdown?.() },
-            { name: 'ProposalsHandler', fn: () => this.proposalsHandler?.shutdown?.() },
-            { name: 'TopicAnalysisHandler', fn: () => this.topicAnalysisHandler?.shutdown?.() },
+            { name: 'AuditPlan', fn: () => this.auditPlan?.shutdown?.() },
+            { name: 'CryptoPlan', fn: () => this.cryptoPlan?.shutdown?.() },
+            { name: 'LLMConfigPlan', fn: () => this.llmConfigPlan?.shutdown?.() },
+            { name: 'WordCloudSettingsPlan', fn: () => this.wordCloudSettingsPlan?.shutdown?.() },
+            { name: 'KeywordDetailPlan', fn: () => this.keywordDetailPlan?.shutdown?.() },
+            { name: 'ProposalsPlan', fn: () => this.proposalsPlan?.shutdown?.() },
+            { name: 'TopicAnalysisPlan', fn: () => this.topicAnalysisPlan?.shutdown?.() },
             { name: 'AIMessageListener', fn: () => this.aiMessageListener?.stop?.() },
-            { name: 'AIHandler', fn: () => this.aiHandler?.shutdown?.() },
-            { name: 'IOMHandler', fn: () => this.iomHandler?.shutdown?.() },
-            { name: 'FeedForwardHandler', fn: () => this.feedForwardHandler?.shutdown?.() },
-            { name: 'ExportHandler', fn: () => this.exportHandler?.shutdown?.() },
-            { name: 'ContactsHandler', fn: () => this.contactsHandler?.shutdown?.() },
+            { name: 'AIPlan', fn: () => this.aiPlan?.shutdown?.() },
+            { name: 'FeedForwardPlan', fn: () => this.feedForwardPlan?.shutdown?.() },
+            { name: 'ExportPlan', fn: () => this.exportPlan?.shutdown?.() },
+            { name: 'ContactsPlan', fn: () => this.contactsPlan?.shutdown?.() },
         ];
 
         for (const handler of platformHandlers) {
@@ -646,7 +922,7 @@ export default class Model {
         }
 
         // Use centralized shutdown from lama.core for core models
-        const { shutdownCoreModels } = await import('@lama/core/initialization/CoreInitializer.ts');
+        const { shutdownCoreModels } = await import('@lama/core/initialization/CoreInitializer.js');
         await shutdownCoreModels({
             oneCore: this,
             leuteModel: this.leuteModel,
@@ -655,8 +931,8 @@ export default class Model {
             connections: this.connections,
             llmManager: this.llmManager,
             llmObjectManager: this.llmObjectManager,
-            aiAssistantModel: this.aiAssistantModel,
-            chatHandler: this.chatHandler,
+            aiAssistantPlan: this.aiAssistantPlan,
+            chatHandler: this.chatPlan,
             topicAnalysisModel: this.topicAnalysisModel,
         });
 
@@ -672,12 +948,27 @@ export default class Model {
         console.log('[Model] Shutdown complete');
     }
 
+    /**
+     * Setup access rights after pairing to enable CHUM sync
+     *
+     * @deprecated NO LONGER NEEDED - PairingManager in ONE.models handles this automatically via
+     * convertIdentityToProfile(). This method is kept as a no-op for compatibility.
+     *
+     * Historical context: This used to manually create Profile with TrustKeysCertificate, but
+     * that caused duplicate CHUM connection attempts. ONE.models now handles everything correctly.
+     */
+    public async setupPairingAccessRights(remotePersonId: string, localPersonId: string): Promise<void> {
+        console.log('[Model] setupPairingAccessRights called (no-op - handled by ONE.models)');
+        // Do nothing - PairingManager.convertIdentityToProfile() already did everything
+    }
+
     // ONE.core models
     public one: MultiUser;
     public leuteModel: LeuteModel;
     public channelManager: ChannelManager;
     public topicModel: TopicModel;
     public connections: ConnectionsModel;
+    public settings: PropertyTreeStore;
 
     // connection.core integration - DISABLED: Browser adapters not implemented yet
     // public connectionManagerOneCore!: ConnectionManagerOneCore;
@@ -690,24 +981,34 @@ export default class Model {
     // LAMA models
     public topicAnalysisModel: TopicAnalysisModel;
 
-    // LAMA handlers (AI-related from lama.core)
-    public aiHandler: AIHandler;
-    public aiAssistantModel: AIAssistantHandler;
+    // LAMA Plans (AI-related from lama.core)
+    public aiPlan: AIPlan;
+    public aiAssistantPlan: AIAssistantPlan;
     public aiMessageListener: AIMessageListener | null;
-    public topicAnalysisHandler: TopicAnalysisHandler;
-    public proposalsHandler: ProposalsHandler;
-    public keywordDetailHandler: KeywordDetailHandler;
-    public wordCloudSettingsHandler: WordCloudSettingsHandler;
-    public llmConfigHandler: LLMConfigHandler;
-    public cryptoHandler: CryptoHandler;
-    public auditHandler: AuditHandler;
+    public topicAnalysisPlan: TopicAnalysisPlan;
+    public proposalsPlan: ProposalsPlan;
+    public keywordDetailPlan: KeywordDetailPlan;
+    public wordCloudSettingsPlan: WordCloudSettingsPlan;
+    public llmConfigPlan: LLMConfigPlan;
+    public cryptoPlan: CryptoPlan;
+    public auditPlan: AuditPlan;
+    public journalPlan: JournalPlan;
+    public subjectsPlan: SubjectsPlan;
 
-    // Chat handlers (chat-related from chat.core)
-    public chatHandler: ChatHandler;
-    public contactsHandler: ContactsHandler;
-    public exportHandler: ExportHandler;
-    public feedForwardHandler: FeedForwardHandler;
-    public iomHandler: IOMHandler;
+    // Chat plans (platform-agnostic from chat.core)
+    public chatPlan: ChatPlan;
+    public groupPlan: GroupPlan;
+    public contactsPlan: ContactsPlan;
+    public exportPlan: ExportPlan;
+    public feedForwardPlan: FeedForwardPlan;
+
+    // Connection plans (platform-agnostic from connection.core)
+    public connectionPlan: ConnectionPlan;
+    public groupChatPlan: GroupChatPlan;
+
+    // Trust management (platform-agnostic from trust.core)
+    public trustModel: TrustModel;
+    public trustPlan: TrustPlan;
 
     // Chat models
     public topicGroupManager: TopicGroupManager;
@@ -715,6 +1016,46 @@ export default class Model {
     // LLM services
     public llmManager: LLMManager;
     public llmObjectManager: LLMObjectManager;
+
+    /**
+     * Send message - AIMessageListener will automatically trigger AI response
+     * IMPORTANT: Do NOT manually call aiAssistantPlan.processMessage() here!
+     * AIMessageListener (started in init()) listens to channelManager.onUpdated()
+     * and automatically triggers AI responses for AI topics.
+     */
+    async sendMessageWithAI(topicId: string, content: string, attachments?: any[]): Promise<any> {
+        // Send user message via ChatPlan
+        const response = await this.chatPlan.sendMessage({
+            conversationId: topicId,
+            content,
+            attachments
+        });
+
+        if (response.success && response.data) {
+            // Message sent successfully
+            // AIMessageListener will detect the channel update and trigger AI response automatically
+            console.log('[Model] Message sent, AIMessageListener will handle AI response');
+            return response.data;
+        }
+
+        throw new Error(response.error || 'Failed to send message');
+    }
+
+    /**
+     * Compatibility alias for UI components that expect llmHandler
+     * Maps to llmConfigPlan for LLM configuration operations
+     */
+    public get llmHandler() {
+        return this.llmConfigPlan;
+    }
+
+    /**
+     * Compatibility alias for ContactsPlan and other services
+     * Maps to aiAssistantPlan to identify AI contacts and topics
+     */
+    public get aiAssistantModel() {
+        return this.aiAssistantPlan;
+    }
 }
 
 // Global model instance (following one.leute pandorasModel pattern)

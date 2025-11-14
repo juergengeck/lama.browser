@@ -448,18 +448,102 @@
   background: #999;
 }
 
+/* Touch-friendly alternatives to hover states */
+@media (hover: none) and (pointer: coarse) {
+  /* Mobile touch devices */
+  .suggestion-chip:active {
+    background: #0056CC;
+    transform: translateY(-1px);
+  }
+
+  .action-button:active {
+    background: rgba(255, 255, 255, 0.15);
+    transform: scale(1.05);
+  }
+
+  .attach-button:active {
+    background: rgba(0, 122, 255, 0.1);
+  }
+
+  .send-button.active:active {
+    background: #0056CC;
+    transform: scale(1.05);
+  }
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
+  .enhanced-message-input {
+    /* Ensure it doesn't get covered by mobile keyboard */
+    position: relative;
+    z-index: 100;
+  }
+
+  .attachments-container {
+    max-height: 300px;
+    padding: 15px;
+  }
+
+  .attachment-thumbnail {
+    height: 200px;
+  }
+
   .attachment-preview {
     min-width: 150px;
   }
-  
+
   .attachment-name {
-    font-size: 12px;
+    font-size: 14px;
   }
-  
+
   .suggestions-container {
     max-height: 80px;
     overflow-y: auto;
+  }
+
+  .input-row {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .message-textarea {
+    font-size: 16px; /* Prevent iOS zoom on focus */
+    padding: 12px 16px;
+  }
+
+  .attach-button,
+  .send-button {
+    min-width: 44px; /* iOS touch target minimum */
+    min-height: 44px;
+  }
+}
+
+/* iOS-specific keyboard handling */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari specific */
+  .enhanced-message-input {
+    /* Ensure input stays visible above keyboard toolbar */
+    position: relative;
+    z-index: 100;
+  }
+
+  .message-textarea {
+    /* Prevent zoom on focus (already set to 16px, but ensure it applies) */
+    font-size: 16px !important;
+    /* Smooth scrolling for iOS */
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .message-textarea:focus {
+    /* Ensure focused input is visible */
+    scroll-margin-bottom: 60px; /* Extra space for keyboard toolbar */
+  }
+
+  /* iOS standalone mode (PWA) */
+  @media (display-mode: standalone) {
+    .enhanced-message-input {
+      /* Extra padding for safe area and keyboard toolbar */
+      padding-bottom: max(env(safe-area-inset-bottom, 0px), 8px);
+    }
   }
 }

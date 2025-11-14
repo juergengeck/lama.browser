@@ -18,6 +18,7 @@ export interface Topic {
   lastMessage?: string // Preview of the last message
   isAITopic?: boolean // Whether this topic has an AI participant
   aiModelId?: string // LLM model ID if this is an AI topic
+  modelName?: string // Human-readable model name (e.g., "Llama 3.2 3B")
 }
 
 interface UseTopicsReturn {
@@ -57,13 +58,13 @@ export function useTopics(): UseTopicsReturn {
       // No need to call ensureDefaultChats() here - it's handled during initialization
 
       // Call ChatHandler.getConversations (topics and conversations are the same)
-      console.log('[useTopics] 📞 Calling ChatHandler.getConversations...');
-      const response = await model.chatHandler.getConversations({
+      console.log('[useTopics] 📞 Calling ChatPlan.getConversations...');
+      const response = await model.chatPlan.getConversations({
         limit: 100,  // Get all topics
         offset: 0
       })
 
-      console.log('[useTopics] 📨 ChatHandler response:', {
+      console.log('[useTopics] 📨 ChatPlan response:', {
         success: response.success,
         dataLength: response.data?.length || 0,
         firstTopic: response.data?.[0],
@@ -93,7 +94,7 @@ export function useTopics(): UseTopicsReturn {
 
   const createTopic = useCallback(async (name: string, participantIds: string[], aiModelId?: string): Promise<Topic> => {
     try {
-      const response = await model.chatHandler.createConversation({
+      const response = await model.chatPlan.createConversation({
         name,
         participants: participantIds,
         type: participantIds.length > 1 ? 'group' : 'direct',
@@ -120,7 +121,7 @@ export function useTopics(): UseTopicsReturn {
     try {
       // TODO: ChatHandler doesn't have deleteTopic yet
       console.log('[useTopics] Delete topic (not implemented):', topicId)
-      // When implemented: await model.chatHandler.deleteTopic({ topicId })
+      // When implemented: await model.chatPlan.deleteTopic({ topicId })
     } catch (err) {
       console.error('[useTopics] Failed to delete topic:', err)
       // Reload to restore if delete failed
@@ -136,7 +137,7 @@ export function useTopics(): UseTopicsReturn {
     try {
       // TODO: ChatHandler doesn't have renameTopic yet
       console.log('[useTopics] Rename topic (not implemented):', topicId, 'to', newName)
-      // When implemented: await model.chatHandler.renameTopic({ topicId, newName })
+      // When implemented: await model.chatPlan.renameTopic({ topicId, newName })
     } catch (err) {
       console.error('[useTopics] Failed to rename topic:', err)
       // Reload to restore if rename failed

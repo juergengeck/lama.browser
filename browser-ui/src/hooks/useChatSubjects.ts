@@ -1,14 +1,18 @@
 /**
- * useChatSubjects Hook - Browser Platform
- * Fetches and manages subjects for a chat topic using Model handlers
+ * useChatSubjects Hook - Platform-Agnostic
+ * Fetches and manages subjects for a chat topic using usePlans()
  */
 
 import { useState, useEffect, useRef } from 'react';
 import type { Subject } from '../types/topic-analysis';
 import { getModel } from '../model';
+import { usePlans } from '@lama/ui';
 import { addAIEventListener, AIEventNames } from '../events/AIEventTypes';
 
 export function useChatSubjects(topicId: string) {
+  // Use Plans for platform-agnostic operations
+  const { topicAnalysis } = usePlans();
+
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,8 +62,8 @@ export function useChatSubjects(topicId: string) {
 
       setLoading(true);
 
-      // Use Model's topicAnalysisHandler instead of Electron IPC
-      const response = await model.topicAnalysisHandler.getSubjects({
+      // Platform-agnostic subject fetching
+      const response = await topicAnalysis.getSubjects({
         topicId,
         includeArchived: false
       });

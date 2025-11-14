@@ -1,11 +1,12 @@
 /**
- * useMessages Hook
+ * useMessages Hook - Platform-Agnostic
  *
- * React hook for managing messages in a topic using Model and ChatHandler
+ * React hook for managing messages in a topic using usePlans()
  */
 
 import { useState, useEffect, useCallback } from 'react'
 import { useModel } from '@/model/index.js'
+import { usePlans } from '@lama/ui'
 
 export interface Message {
   $type$: 'Message'
@@ -13,7 +14,7 @@ export interface Message {
   topic: string
   author: any // SHA256IdHash<Person>
   sender?: any // Alias for author (for compatibility)
-  senderName?: string // Human-readable sender name (from ChatHandler)
+  senderName?: string // Human-readable sender name (from ChatPlan)
   content: string
   timestamp: number
   attachments?: any[]
@@ -41,7 +42,12 @@ export function useMessages({
   limit = 50,
   autoRefresh = false
 }: UseMessagesOptions): UseMessagesReturn {
+  // Keep Model for platform-specific features (initialized, channelManager)
   const model = useModel()
+
+  // Use Plans for platform-agnostic operations
+  const { chat } = usePlans()
+
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
@@ -55,9 +61,9 @@ export function useMessages({
       setIsLoading(true)
       setError(null)
 
-      // Call ChatHandler.getMessages
-      console.log(`[useMessages] 📞 Calling ChatHandler.getMessages...`);
-      const response = await model.chatHandler.getMessages({
+      // Platform-agnostic message fetching
+      console.log(`[useMessages] 📞 Calling ChatPlan.getMessages...`);
+      const response = await chat.getMessages({
         conversationId: topicId,
         limit,
         offset: 0
@@ -113,7 +119,7 @@ export function useMessages({
       setIsLoading(false)
       console.log(`[useMessages] ✅ Refresh complete - ${messages.length} messages in state`);
     }
-  }, [topicId, limit, model])
+  }, [topicId, limit, chat])
 
   const loadMore = useCallback(async () => {
     if (!hasMore || isLoading) return
@@ -123,7 +129,7 @@ export function useMessages({
 
       const newOffset = offset + limit
 
-      const response = await model.chatHandler.getMessages({
+      const response = await chat.getMessages({
         conversationId: topicId,
         limit,
         offset: newOffset
@@ -143,29 +149,20 @@ export function useMessages({
     } finally {
       setIsLoading(false)
     }
-  }, [topicId, limit, hasMore, isLoading, offset, model])
+  }, [topicId, limit, hasMore, isLoading, offset, chat])
 
   const sendMessage = useCallback(async (
     content: string,
     attachments?: any[]
   ): Promise<Message> => {
     try {
-      const response = await model.chatHandler.sendMessage({
-        conversationId: topicId,
-        content,  // Fixed from 'text' to 'content'
-        attachments
-      })
+      // Use Model's wrapper that triggers AI response
+      const message = await model.sendMessageWithAI(topicId, content, attachments)
 
-      if (response.success && response.data) {
-        const message = response.data as Message
+      // Don't optimistically add - channel listener will handle it
+      // This prevents duplicate messages (one from optimistic add, one from channel update)
 
-        // Don't optimistically add - channel listener will handle it
-        // This prevents duplicate messages (one from optimistic add, one from channel update)
-
-        return message
-      } else {
-        throw new Error(response.error || 'Failed to send message')
-      }
+      return message as Message
     } catch (err) {
       console.error('[useMessages] Failed to send message:', err)
       throw err

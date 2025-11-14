@@ -4,8 +4,9 @@ import { Button } from '@lama/ui'
 import { Input } from '@lama/ui'
 import { Label } from '@lama/ui'
 import { Badge } from '@lama/ui'
-import { Package, Plus, Trash2, RefreshCw, CheckCircle, Circle } from 'lucide-react'
+import { Package, Plus, Trash2, RefreshCw, CheckCircle, Circle, Brain, Server, ChevronDown, ChevronRight } from 'lucide-react'
 import { useModel } from '@/model/ModelContext'
+import { Separator } from '@lama/ui'
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,15 @@ export function MCPSettings() {
   })
   const [argsInput, setArgsInput] = useState('')
   const [directoryPath, setDirectoryPath] = useState('')
+
+  // LAMA's own MCP server state
+  const [lamaServerExpanded, setLamaServerExpanded] = useState(true)
+  const lamaServerCapabilities = [
+    { category: 'Chat', tools: ['send_message', 'get_messages', 'list_topics'] },
+    { category: 'Contacts', tools: ['get_contacts', 'search_contacts'] },
+    { category: 'Connections', tools: ['get_connections', 'create_invitation'] },
+    { category: 'AI Assistant', tools: ['get_ai_contacts', 'send_ai_message'] }
+  ]
 
   useEffect(() => {
     loadServers()
@@ -178,24 +188,118 @@ export function MCPSettings() {
           Manage Model Context Protocol servers for AI tool integration
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-6">
         <p className="text-xs text-muted-foreground">
           MCP (Model Context Protocol) servers provide tools and resources that AI models can use during conversations.
         </p>
 
-        {loading ? (
-          <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+        {/* LAMA's Own MCP Server */}
+        <div className="space-y-3">
+          <div className="flex items-center space-x-2">
+            <Brain className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+            <h3 className="text-sm font-semibold">LAMA MCP Server</h3>
+            <Badge variant="default" className="text-xs bg-green-600">Running</Badge>
           </div>
-        ) : servers.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            <Package className="h-12 w-12 mx-auto mb-2 opacity-50" />
-            <p>No MCP servers configured</p>
-            <p className="text-xs mt-1">Click "Add Server" to get started</p>
+
+          <Card className="border-2 border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-950">
+            <CardContent className="p-4 space-y-3">
+              {/* Header */}
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Server className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                    <span className="font-semibold text-sm">lama-app</span>
+                    <Badge variant="outline" className="text-xs">v1.0.0</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    LAMA's built-in MCP server provides access to chat, contacts, connections, and AI assistant features.
+                  </p>
+
+                  {/* Capabilities List */}
+                  <div
+                    className="flex items-center space-x-2 cursor-pointer hover:text-primary transition-colors"
+                    onClick={() => setLamaServerExpanded(!lamaServerExpanded)}
+                  >
+                    {lamaServerExpanded ? (
+                      <ChevronDown className="h-3 w-3" />
+                    ) : (
+                      <ChevronRight className="h-3 w-3" />
+                    )}
+                    <span className="text-xs font-medium">
+                      Capabilities ({lamaServerCapabilities.reduce((acc, cat) => acc + cat.tools.length, 0)} tools)
+                    </span>
+                  </div>
+
+                  {lamaServerExpanded && (
+                    <div className="mt-3 space-y-3 pl-5 border-l-2 border-purple-300 dark:border-purple-700">
+                      {lamaServerCapabilities.map((capability) => (
+                        <div key={capability.category} className="space-y-1">
+                          <div className="text-xs font-medium text-purple-700 dark:text-purple-300">
+                            {capability.category}
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {capability.tools.map((tool) => (
+                              <Badge
+                                key={tool}
+                                variant="secondary"
+                                className="text-xs font-mono bg-white dark:bg-purple-900"
+                              >
+                                {tool}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Status Info */}
+              <div className="flex items-center justify-between pt-2 border-t border-purple-200 dark:border-purple-800">
+                <div className="flex items-center space-x-4 text-xs text-muted-foreground">
+                  <div className="flex items-center space-x-1">
+                    <CheckCircle className="h-3 w-3 text-green-600" />
+                    <span>Active</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <Server className="h-3 w-3" />
+                    <span>stdio transport</span>
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Built-in server
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Separator />
+
+        {/* External MCP Servers Section */}
+        <div className="space-y-3">
+          <div className="flex items-center space-x-2">
+            <Package className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+            <h3 className="text-sm font-semibold">External MCP Servers</h3>
+            {servers.length > 0 && (
+              <Badge variant="outline" className="text-xs">{servers.length}</Badge>
+            )}
           </div>
-        ) : (
-          <div className="space-y-2">
-            {servers.map((server) => (
+
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+            </div>
+          ) : servers.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Package className="h-12 w-12 mx-auto mb-2 opacity-50" />
+              <p>No external MCP servers configured</p>
+              <p className="text-xs mt-1">Click "Add Server" to get started</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {servers.map((server) => (
               <div key={server.name} className="border rounded-lg p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
@@ -249,9 +353,10 @@ export function MCPSettings() {
                   )}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
 
         <Dialog open={showDialog} onOpenChange={setShowDialog}>
           <DialogContent>

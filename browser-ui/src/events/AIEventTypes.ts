@@ -33,12 +33,16 @@ export interface AIMessageStreamData {
   topicId: string;
   messageId: string;
   partial: string;
+  modelId?: string;
+  modelName?: string;
 }
 
 export interface AIMessageCompleteData {
   topicId: string;
   messageId: string;
   response: string;
+  modelId?: string;
+  modelName?: string;
 }
 
 export interface AIErrorData {

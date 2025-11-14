@@ -276,6 +276,82 @@ export const EnhancedMessageInput: React.FC<EnhancedMessageInputProps> = ({
     }
   }, [conversationId, disabled]);
 
+  // iOS keyboard handling - scroll input above keyboard toolbar
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    // Detect iOS
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    if (!isIOS) return;
+
+    let keyboardTimeout: NodeJS.Timeout;
+    let viewportResizeTimeout: NodeJS.Timeout;
+
+    const scrollTextareaIntoView = () => {
+      // Clear any pending scroll attempts
+      clearTimeout(keyboardTimeout);
+
+      keyboardTimeout = setTimeout(() => {
+        // Get the input container (the div with input controls)
+        const inputContainer = textarea.closest('.input-container, .message-input, [class*="input"]');
+        const targetElement = inputContainer || textarea;
+
+        // Scroll the element into view at the bottom of the viewport
+        // This ensures it's visible above the keyboard toolbar
+        targetElement.scrollIntoView({
+          behavior: 'smooth',
+          block: 'end',
+          inline: 'nearest'
+        });
+
+        // Additional adjustment for keyboard toolbar (chevrons and checkmark)
+        // iOS keyboard toolbar is approximately 44px
+        setTimeout(() => {
+          const scrollContainer = textarea.closest('.overflow-y-auto, .ios-scroll, [class*="overflow"]') as HTMLElement;
+          if (scrollContainer) {
+            // Scroll down slightly to ensure clearance above keyboard toolbar
+            scrollContainer.scrollTop += 50; // 50px provides comfortable clearance
+          }
+        }, 100);
+      }, 350); // Wait for keyboard animation (typically 300ms on iOS)
+    };
+
+    // Handle focus events (when user taps input)
+    const handleFocus = () => {
+      scrollTextareaIntoView();
+    };
+
+    // Handle viewport resize (iOS fires this when keyboard appears/disappears)
+    const handleViewportResize = () => {
+      // Only scroll if textarea is focused
+      if (document.activeElement === textarea) {
+        clearTimeout(viewportResizeTimeout);
+        viewportResizeTimeout = setTimeout(() => {
+          scrollTextareaIntoView();
+        }, 100);
+      }
+    };
+
+    // Listen for events
+    textarea.addEventListener('focus', handleFocus);
+    window.addEventListener('resize', handleViewportResize);
+    // Visual viewport API for more accurate keyboard detection on iOS
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportResize);
+    }
+
+    return () => {
+      clearTimeout(keyboardTimeout);
+      clearTimeout(viewportResizeTimeout);
+      textarea.removeEventListener('focus', handleFocus);
+      window.removeEventListener('resize', handleViewportResize);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportResize);
+      }
+    };
+  }, []);
+
   // Handle text input changes and hashtag detection
   const handleTextChange = useCallback(async (text: string) => {
     setMessageText(text);

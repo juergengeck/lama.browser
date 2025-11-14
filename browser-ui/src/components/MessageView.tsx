@@ -1,10 +1,10 @@
 /**
- * MessageView - Browser Platform
+ * MessageView - Platform-Agnostic Component
  *
- * Uses Model handlers from lama.core and chat.core.
- * - Message data through model.chatHandler
- * - Proposal system through model.proposalsHandler
- * - Attachment handling through model handlers
+ * Uses usePlans() for platform-agnostic access to contacts plan.
+ * - Contact names loaded through contacts plan
+ * - Proposals handled by useProposals hook
+ * - Attachments managed by AttachmentService
  */
 
 import { useState, useEffect, useRef } from 'react'
@@ -12,6 +12,7 @@ import { Avatar, AvatarFallback } from '@lama/ui'
 import { Loader2, ChevronDown } from 'lucide-react'
 import './MessageView.css'
 import { useModel } from '@/model/index.js'
+import { usePlans } from '@lama/ui'
 
 // TODO: Replace with proper types from worker messages
 type Message = {
@@ -27,7 +28,7 @@ import { EnhancedMessageBubble, type EnhancedMessageData } from './chat/Enhanced
 
 // Import attachment system
 import { attachmentService } from '@/services/attachments/AttachmentService'
-import { createAttachmentView } from '@/components/attachments/AttachmentViewFactory'
+import { createAttachmentView } from '@lama/ui'
 import type { MessageAttachment, BlobDescriptor } from '@/types/attachments'
 
 // Import keyword detail panel
@@ -50,6 +51,7 @@ interface MessageViewProps {
   participants?: string[] // List of participant IDs to determine if multiple people
   isAIProcessing?: boolean // Show typing indicator when AI is processing
   aiStreamingContent?: string // Show partial AI response while streaming
+  aiModelName?: string // Model name for streaming responses
   aiError?: string | null // Error message from AI processing
   topicId?: string // Topic ID for context panel
   subjectsJustAppeared?: boolean // Flag indicating subjects just appeared
@@ -66,16 +68,23 @@ export function MessageView({
   participants = [],
   isAIProcessing = false,
   aiStreamingContent = '',
+  aiModelName,
   aiError = null,
   topicId,
   subjectsJustAppeared = false,
   chatHeaderRef
 }: MessageViewProps) {
+  // Keep Model for platform-specific features (initialized, currentUserId)
   const model = useModel()
+
+  // Use Plans for platform-agnostic operations
+  const { contacts } = usePlans()
+
   const [contactNames, setContactNames] = useState<Record<string, string>>({})
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false)
+  const [viewportHeight, setViewportHeight] = useState(window.visualViewport?.height || window.innerHeight)
 
   // Store attachment descriptors for display
   const [attachmentDescriptors, setAttachmentDescriptors] = useState<Map<string, BlobDescriptor>>(new Map())
@@ -101,14 +110,37 @@ export function MessageView({
     topicId: topicId || '',
     autoRefresh: true
   })
-  
+
+  // Handle viewport changes for mobile keyboard
+  useEffect(() => {
+    const handleViewportChange = () => {
+      const newHeight = window.visualViewport?.height || window.innerHeight
+      setViewportHeight(newHeight)
+
+      // Auto-scroll to bottom when keyboard opens (viewport shrinks)
+      if (newHeight < (window.visualViewport?.height || window.innerHeight) && !isUserScrolledUp) {
+        requestAnimationFrame(() => {
+          if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
+          }
+        })
+      }
+    }
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportChange)
+      return () => window.visualViewport?.removeEventListener('resize', handleViewportChange)
+    }
+  }, [isUserScrolledUp])
+
   // Load contact names
   useEffect(() => {
     const loadContactNames = async () => {
       if (!model.initialized) return
 
       try {
-        const result = await model.contactsHandler.getContacts()
+        // Platform-agnostic contact loading
+        const result = await contacts.getContacts()
         if (!result.success || !result.data) return
 
         const names: Record<string, string> = {}
@@ -129,7 +161,7 @@ export function MessageView({
     }
 
     loadContactNames()
-  }, [currentUserId])
+  }, [currentUserId, contacts])
   
   // Track user scroll position
   const handleScroll = () => {
@@ -352,7 +384,7 @@ export function MessageView({
     <div className="flex flex-col h-full overflow-hidden relative">
       {/* Keyword Detail Panel - Inline at top */}
       {showKeywordDetail && selectedKeyword && topicId && (
-        <div className="border-b border-gray-700 bg-gray-900/50 max-h-[25vh] overflow-y-auto">
+        <div className="border-b border-gray-700 bg-gray-900/50 max-h-[25vh] overflow-y-auto ios-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
           <KeywordDetailPanel
             keyword={selectedKeyword}
             topicId={topicId}
@@ -361,7 +393,16 @@ export function MessageView({
         </div>
       )}
 
-      <div className="flex-1 px-4 py-2 overflow-y-auto" ref={scrollAreaRef} onScroll={handleScroll} style={{ minHeight: 0 }}>
+      <div
+        className="flex-1 px-4 py-2 overflow-y-auto ios-scroll"
+        ref={scrollAreaRef}
+        onScroll={handleScroll}
+        style={{
+          minHeight: 0,
+          WebkitOverflowScrolling: 'touch',
+          overflowScrolling: 'touch'
+        }}
+      >
         <div className="space-y-4" style={{ paddingBottom: proposals.length > 0 ? '120px' : '0' }}>
           {messages.length === 0 && !loading && !isAIProcessing && !aiStreamingContent && (
             <div className="text-center py-8 text-muted-foreground">
@@ -464,7 +505,7 @@ export function MessageView({
                     id: 'streaming',
                     content: throttledStreamingContent,
                     senderId: 'ai',
-                    senderName: 'AI Assistant',
+                    senderName: aiModelName!,
                     timestamp: Date.now(),
                     isOwn: false,
                     subjects: [],
@@ -547,6 +588,8 @@ export function MessageView({
         placeholder={placeholder}
         theme="dark"
         conversationId={topicId}
+        disabled={loading || isAIProcessing}
+        isStreaming={isAIProcessing && !!aiStreamingContent}
       />
     </div>
   )

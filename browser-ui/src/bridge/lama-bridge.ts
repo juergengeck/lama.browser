@@ -45,7 +45,7 @@ class LamaBridge {
 
   async getMessages(conversationId: string): Promise<Message[]> {
     const model = getModel()
-    const result = await model.chatHandler.getMessages({ topicId: conversationId })
+    const result = await model.chatPlan.getMessages({ topicId: conversationId })
 
     if (!result.success || !result.data) {
       return []
@@ -57,7 +57,7 @@ class LamaBridge {
       content: msg.text || msg.content,
       timestamp: new Date(msg.timestamp || msg.createdAt),
       encrypted: false,
-      isAI: false,
+      isAI: msg.isAI || false,  // Use isAI from ChatPlan (AI detection happens server-side)
       attachments: msg.attachments,
       topicId: conversationId
     }))
@@ -65,7 +65,7 @@ class LamaBridge {
 
   async sendMessage(topicId: string, content: string, attachments?: any[]): Promise<string> {
     const model = getModel()
-    const result = await model.chatHandler.sendMessage({
+    const result = await model.chatPlan.sendMessage({
       topicId,
       content,
       attachments
@@ -85,7 +85,7 @@ class LamaBridge {
 
   async getPeerList(): Promise<Peer[]> {
     const model = getModel()
-    const result = await model.contactsHandler.getContacts()
+    const result = await model.contactsPlan.getContacts()
 
     if (!result.success || !result.data) {
       return []
@@ -110,7 +110,7 @@ class LamaBridge {
 
   async queryLocalAI(prompt: string): Promise<string> {
     const model = getModel()
-    const result = await model.aiHandler.chat({
+    const result = await model.aiPlan.chat({
       messages: [{ role: 'user', content: prompt }]
     })
 
@@ -152,7 +152,7 @@ class LamaBridge {
 
   async setDefaultModel(modelId: string): Promise<void> {
     const model = getModel()
-    const result = await model.llmConfigHandler.setConfig({
+    const result = await model.llmConfigPlan.setConfig({
       modelType: 'local',
       modelName: modelId,
       setAsActive: true
@@ -165,7 +165,7 @@ class LamaBridge {
 
   async getDefaultModel(): Promise<string | null> {
     const model = getModel()
-    const result = await model.llmConfigHandler.getConfig({})
+    const result = await model.llmConfigPlan.getConfig({})
 
     if (result.success && result.config) {
       return result.config.modelName || null

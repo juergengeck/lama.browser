@@ -1,11 +1,9 @@
 /**
- * GroupChatDialog - Browser Platform
+ * GroupChatDialog - Platform-Agnostic Component
  *
- * Uses Model handlers from chat.core.
- * - Loading contacts through model.contactsHandler
- * - Group chat creation through model.chatHandler
- *
- * TODO: Replace Electron event listeners with Model-based events.
+ * Uses usePlans() for platform-agnostic access to contacts and chat plans.
+ * - Loading contacts through contacts plan
+ * - Group chat creation through chat plan
  */
 
 import { useState, useEffect } from 'react'
@@ -17,6 +15,7 @@ import { Checkbox } from '@lama/ui'
 import { ScrollArea } from '@lama/ui'
 import { User, Search, Loader2, Users, Bot } from 'lucide-react'
 import { useModel } from '@/model/ModelContext'
+import { usePlans } from '@lama/ui'
 
 interface Contact {
   id: string
@@ -39,7 +38,12 @@ export function GroupChatDialog({
   onOpenChange,
   onSubmit
 }: GroupChatDialogProps) {
+  // Keep Model for platform-specific features (initialized, ownerId)
   const model = useModel()
+
+  // Use Plans for platform-agnostic operations
+  const { contacts: contactsPlan } = usePlans()
+
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -82,7 +86,8 @@ export function GroupChatDialog({
 
     setLoading(true)
     try {
-      const result = await model.contactsHandler.getContacts()
+      // Platform-agnostic contact loading
+      const result = await contactsPlan.getContacts()
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to load contacts')

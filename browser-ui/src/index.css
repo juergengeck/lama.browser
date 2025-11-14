@@ -65,4 +65,99 @@
     -ms-overflow-style: none;  /* IE and Edge */
     scrollbar-width: none;  /* Firefox */
   }
+
+  /* Mobile safe area support */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* Touch-friendly tap targets */
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+/* Mobile viewport fixes */
+@supports (height: 100dvh) {
+  /* Use dynamic viewport height on modern browsers */
+  .h-screen {
+    height: 100dvh;
+  }
+}
+
+/* iOS-specific scrolling fixes */
+.ios-scroll {
+  -webkit-overflow-scrolling: touch;
+  overflow-scrolling: touch;
+}
+
+/* Fix for iOS momentum scrolling in all overflow containers */
+@supports (-webkit-touch-callout: none) {
+  /* iOS Safari specific */
+  [class*="overflow-y-auto"],
+  [class*="overflow-auto"],
+  .overflow-y-auto,
+  .overflow-auto {
+    -webkit-overflow-scrolling: touch;
+    overflow-scrolling: touch;
+  }
+}
+
+/* Touch device specific styles */
+@media (hover: none) and (pointer: coarse) {
+  /* Replace hover states with active states on touch devices */
+  button:active {
+    opacity: 0.8;
+  }
+
+  /* Larger tap targets for better usability */
+  button, a, input, textarea, select {
+    min-height: 44px;
+  }
+
+  /* Prevent iOS text size adjust after orientation change */
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* Fix for iOS standalone mode scrolling */
+    height: 100%;
+    overflow: hidden;
+  }
+
+  /* Body should fill viewport and prevent pull-to-refresh */
+  body {
+    height: 100%;
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+  }
+
+  /* Root element needs proper height for flex layout */
+  #root {
+    height: 100%;
+    overflow: hidden;
+  }
+}
+
+/* Mobile-specific adjustments */
+@media (max-width: 768px) {
+  /* Make text inputs 16px to prevent iOS zoom */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* iOS standalone mode specific fixes */
+  @media (display-mode: standalone) {
+    html {
+      /* Disable pull-to-refresh in standalone mode */
+      overscroll-behavior-y: contain;
+    }
+  }
 }

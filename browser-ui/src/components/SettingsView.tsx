@@ -41,7 +41,11 @@ import InstancesView from './InstancesView'
 import { MCPSettings } from './settings/MCPSettings'
 import { StorageQuota } from './Settings/StorageQuota'
 import { DataCleanup } from './Settings/DataCleanup'
+import { SubscriptionSettings } from './Settings/SubscriptionSettings'
+import { LLMSettings } from './Settings/LLMSettings'
+import { ProposalSettings } from './Settings/ProposalSettings'
 import { useModel } from '@/model/ModelContext'
+import { usePlans } from '@lama/ui'
 
 interface NetworkSettings {
   relayServer: string
@@ -82,6 +86,7 @@ interface SystemObject {
 
 export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
   const model = useModel()
+  const plans = usePlans()
   const [models, setModels] = useState<ModelInfo[]>([])
   const [loadingModels, setLoadingModels] = useState(true)
   const [loadingStates, setLoadingStates] = useState<Record<string, boolean>>({})
@@ -919,194 +924,15 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
             </CardContent>
           </Card>
 
-          {/* AI Configuration */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center space-x-2">
-                <Brain className="h-4 w-4" />
-                <CardTitle className="text-lg">AI Configuration</CardTitle>
-              </div>
-              <CardDescription>Configure API keys and AI model providers</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Ollama Configuration */}
-              <div className="space-y-2">
-                <Label>Ollama Service URL</Label>
-                <div className="flex items-center space-x-2">
-                  <Input
-                    type="text"
-                    value={ollamaUrl}
-                    onChange={(e) => setOllamaUrl(e.target.value)}
-                    placeholder="http://localhost:11434"
-                  />
-                  <Button
-                    size="sm"
-                    onClick={handleSaveOllamaConfig}
-                    disabled={ollamaStatus === 'testing'}
-                  >
-                    {ollamaStatus === 'testing' ? 'Testing...' : 'Save'}
-                  </Button>
-                </div>
-                {ollamaStatus === 'valid' && (
-                  <p className="text-xs text-green-500">✓ Ollama service configured</p>
-                )}
-                {ollamaStatus === 'invalid' && (
-                  <p className="text-xs text-red-500">✗ Failed to configure Ollama service</p>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  URL of your Ollama service (local or remote). Default: http://localhost:11434
-                </p>
-              </div>
+          {/* LLM Configuration */}
+          <LLMSettings
+            llmConfig={plans.llmConfig}
+            chat={plans.chat}
+            aiAssistant={plans.aiAssistant}
+          />
 
-              <Separator />
-
-              {/* Claude API Key Configuration */}
-              <div className="space-y-2">
-                <Label htmlFor="claude-api-key">Claude API Key</Label>
-                <form onSubmit={(e) => { e.preventDefault(); handleSaveClaudeApiKey(); }}>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      id="claude-api-key"
-                      type={showApiKey ? "text" : "password"}
-                      value={claudeApiKey}
-                      onChange={(e) => setClaudeApiKey(e.target.value)}
-                      placeholder="sk-ant-..."
-                      autoComplete="off"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowApiKey(!showApiKey)}
-                    >
-                      {showApiKey ? 'Hide' : 'Show'}
-                    </Button>
-                    <Button
-                      type="submit"
-                      size="sm"
-                      disabled={apiKeyStatus === 'testing'}
-                    >
-                      {apiKeyStatus === 'testing' ? 'Testing...' : 'Save'}
-                    </Button>
-                  </div>
-                </form>
-                {apiKeyStatus === 'valid' && (
-                  <p className="text-xs text-green-500">✓ API key is valid</p>
-                )}
-                {apiKeyStatus === 'invalid' && (
-                  <p className="text-xs text-red-500">✗ Invalid API key</p>
-                )}
-              </div>
-
-              <Separator />
-
-              {/* AI Model Management */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label>Available AI Models</Label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      if (onNavigate) {
-                        onNavigate('contacts')
-                      }
-                    }}
-                  >
-                    <MessageSquare className="h-3 w-3 mr-1" />
-                    Go to Contacts
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  AI models are automatically added as contacts. Go to Contacts tab to start chatting with them.
-                </p>
-                {loadingModels ? (
-                  <div className="flex items-center justify-center py-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                  </div>
-                ) : models.length === 0 ? (
-                  <Alert>
-                    <AlertTriangle className="h-4 w-4" />
-                    <AlertDescription>
-                      No AI models available. Configure Claude API key or Ollama above to add models.
-                    </AlertDescription>
-                  </Alert>
-                ) : (
-                  <div className="space-y-2">
-                    {models.map((model) => (
-                      <div key={model.id} className="border rounded-lg p-3 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-2">
-                            {getProviderIcon(model.provider)}
-                            <span className="font-medium">{model.name}</span>
-                            <Badge variant="outline" className="text-xs">
-                              {model.provider}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            {/* Local models (Ollama) need to be loaded, remote/API models are always ready */}
-                            {model.modelType === 'local' && !model.isLoaded && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleLoadModel(model.id)}
-                                disabled={loadingStates[model.id]}
-                              >
-                                {loadingStates[model.id] ? (
-                                  <>
-                                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary mr-1" />
-                                    Loading...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Download className="h-3 w-3 mr-1" />
-                                    Load
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                            {model.isLoaded && (
-                              <Badge variant="secondary" className="text-xs">
-                                <CheckCircle className="h-3 w-3 mr-1" />
-                                Loaded
-                              </Badge>
-                            )}
-                            {model.modelType === 'remote' && (
-                              <Badge variant="secondary" className="text-xs">
-                                <CheckCircle className="h-3 w-3 mr-1" />
-                                Ready
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {model.description}
-                        </div>
-                        <div className="flex items-center space-x-4 text-xs text-muted-foreground">
-                          {model.size !== undefined && <span>{formatSize(model.size)}</span>}
-                          {model.size !== undefined && <span>·</span>}
-                          {model.contextLength !== undefined && <span>{model.contextLength.toLocaleString()} tokens</span>}
-                          {model.capabilities && model.capabilities.length > 0 && (
-                            <>
-                              <span>·</span>
-                              <div className="flex items-center space-x-1">
-                                {model.capabilities.map((cap) => (
-                                  <Badge key={cap} variant="secondary" className="text-xs py-0">
-                                    {getCapabilityIcon(cap)}
-                                    <span className="ml-1">{cap}</span>
-                                  </Badge>
-                                ))}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          {/* Proposal Configuration */}
+          <ProposalSettings />
 
           {/* MCP Server Configuration */}
           <MCPSettings />
@@ -1531,6 +1357,9 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
               )}
             </CardContent>
           </Card>
+
+          {/* Subscription Settings */}
+          <SubscriptionSettings onNavigateToPurchase={() => onNavigate?.('purchase')} />
 
           {/* Storage Quota */}
           <StorageQuota />

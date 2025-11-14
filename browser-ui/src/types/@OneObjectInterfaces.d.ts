@@ -45,6 +45,12 @@ declare module '@OneObjectInterfaces' {
 
         // UI Preferences (lama.core)
         AvatarPreference: AvatarPreference;
+
+        // Message Read Status (browser-ui)
+        MessageReadStatus: MessageReadStatus;
+
+        // Subscription Management (trust.core)
+        SubscriptionBalance: SubscriptionBalance;
     }
 
     // ============================================================================
@@ -59,7 +65,9 @@ declare module '@OneObjectInterfaces' {
         MCPServerConfig: Pick<MCPServerConfig, '$type$' | 'userEmail'>;
         ProposalConfig: Pick<ProposalConfig, '$type$' | 'userEmail'>;
         AvatarPreference: Pick<AvatarPreference, '$type$' | 'personId'>;
+        MessageReadStatus: Pick<MessageReadStatus, '$type$' | 'conversationId'>;
         Keyword: Pick<Keyword, '$type$' | 'term'>;
+        SubscriptionBalance: Pick<SubscriptionBalance, '$type$' | 'userId'>;
     }
 
     // ============================================================================
@@ -183,6 +191,14 @@ declare module '@OneObjectInterfaces' {
         checksum?: string;
         provider?: string;
         downloadUrl?: string;
+
+        // System prompt
+        systemPrompt?: string;
+
+        // Network configuration (for remote Ollama)
+        baseUrl?: string;
+        authType?: 'none' | 'bearer';
+        encryptedAuthToken?: string;
 
         // API key for remote providers (Claude, OpenAI, etc.)
         encryptedApiKey?: string;
@@ -308,5 +324,33 @@ declare module '@OneObjectInterfaces' {
         color: string; // Hex color code
         mood?: 'happy' | 'sad' | 'angry' | 'calm' | 'excited' | 'tired' | 'focused' | 'neutral';
         updatedAt: number; // Unix timestamp
+    }
+
+    /**
+     * MessageReadStatus - Tracks read/unread status of messages in conversations
+     * Each status object is owned by a specific user and tracks their read state
+     */
+    export interface MessageReadStatus {
+        $type$: 'MessageReadStatus';
+        conversationId: string; // ID property - Conversation/Topic ID
+        userId: string; // Owner's Person ID hash
+        lastReadMessageHash?: string; // Hash of last read message (undefined if no messages read)
+        lastReadTimestamp: number; // Unix timestamp of last read
+        unreadCount: number; // Cached unread count for performance
+        updatedAt: number; // Last update timestamp
+    }
+
+    // --- Subscription Management (trust.core) ---
+
+    /**
+     * SubscriptionBalance - User subscription balance tracking
+     */
+    export interface SubscriptionBalance {
+        $type$: 'SubscriptionBalance';
+        userId: SHA256IdHash<Person>; // ID property - user's Person ID
+        balance: number; // Current balance in EUR
+        totalDeposited: number; // Total deposited (all time)
+        lastUpdated: number; // Timestamp of last update
+        version: number; // Version number for optimistic locking
     }
 }

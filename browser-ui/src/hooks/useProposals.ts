@@ -67,7 +67,7 @@ export function useProposals({
       setError(null);
 
       try {
-        const response: GetProposalsResponse = await model.proposalsHandler.getForTopic({
+        const response: GetProposalsResponse = await model.proposalsPlan.getForTopic({
           topicId,
           currentSubjects,
           forceRefresh,
@@ -119,7 +119,7 @@ export function useProposals({
     async (proposalId: string, pastSubjectIdHash: string) => {
       try {
         const model = getModel();
-        const response: DismissProposalResponse = await model.proposalsHandler.dismiss({
+        const response: DismissProposalResponse = await model.proposalsPlan.dismiss({
           proposalId,
           topicId,
           pastSubjectIdHash,
@@ -156,7 +156,7 @@ export function useProposals({
     ): Promise<ShareProposalResponse> => {
       try {
         const model = getModel();
-        const response: ShareProposalResponse = await model.proposalsHandler.share({
+        const response: ShareProposalResponse = await model.proposalsPlan.share({
           proposalId,
           topicId,
           pastSubjectIdHash,

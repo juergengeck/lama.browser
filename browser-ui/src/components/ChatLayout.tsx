@@ -1,50 +1,33 @@
 import { useState, useEffect, useCallback } from 'react'
-import { MessageSquare, Plus, Trash2, Bot, Loader2, MoreVertical, Edit, CheckCheck, UserPlus, Users, ChevronLeft, ChevronRight } from 'lucide-react'
+import { MessageSquare, Plus, Users, ChevronLeft, ChevronRight, Menu } from 'lucide-react'
 import { ChatView } from './ChatView'
 import { Button } from '@lama/ui'
-import { ScrollArea } from '@lama/ui'
 import { Input } from '@lama/ui'
 import { useTopics } from '@/hooks/useTopics'
 import { useModel } from '@/model/index.js'
+import { usePlans } from '@lama/ui'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  ConversationList,
+  type Conversation
 } from '@lama/ui'
 import { InputDialog } from './InputDialog'
 import { UserSelectionDialog } from './UserSelectionDialog'
 import { GroupChatDialog } from './GroupChatDialog'
-import { ParticipantAvatars } from './ParticipantAvatars'
-
-interface Participant {
-  id: string
-  name: string
-  isAI: boolean
-  color?: string
-}
-
-interface Conversation {
-  id: string
-  name: string
-  type?: 'direct' | 'group'
-  participants: Participant[]  // Array of participant objects with enriched data
-  participantCount?: number
-  lastMessage?: string
-  lastMessageTime?: Date | string
-  modelName?: string
-  isGroup?: boolean
-  hasAIParticipant?: boolean
-  isAITopic?: boolean
-}
 
 interface ChatLayoutProps {
   selectedConversationId?: string
 }
 
 export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
-  // Get model instance for owner ID
+  // Get model instance for owner ID and platform-specific features
   const model = useModel()
+
+  // Get Plans for platform-agnostic operations
+  const { contacts: contactsPlan } = usePlans()
 
   // Use topics hook to manage conversations
   const { topics, isLoading: topicsLoading, createTopic, deleteTopic, renameTopic, refreshTopics, updateTopicLastMessage } = useTopics()
@@ -61,6 +44,37 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
   const [sidebarWidth, setSidebarWidth] = useState(300)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
+  const [contactsMap, setContactsMap] = useState<Map<string, { name: string; isLLM: boolean; color?: string }>>(new Map())
+  const [touchStartX, setTouchStartX] = useState<number | null>(null)
+  const [touchStartWidth, setTouchStartWidth] = useState<number | null>(null)
+
+  // Load contacts when model is initialized
+  useEffect(() => {
+    if (!model.initialized) return
+
+    async function loadContacts() {
+      try {
+        // Using platform-agnostic ContactsPlan via usePlans()
+        const response = await contactsPlan.getContacts()
+        if (response.success && response.contacts) {
+          const map = new Map()
+          for (const contact of response.contacts) {
+            map.set(contact.personId, {
+              name: contact.name,
+              isLLM: contact.isAI,
+              color: undefined // TODO: Get from avatar preferences
+            })
+          }
+          setContactsMap(map)
+        }
+      } catch (error) {
+        console.error('[ChatLayout] Failed to load contacts:', error)
+      }
+    }
+
+    loadContacts()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model.initialized]) // contactsPlan is stable, no need to re-run
 
   // Convert topics to conversations format
   const conversations: Conversation[] = topics.map(topic => {
@@ -68,11 +82,28 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
     const isGeneratingWelcome = model.initialized &&
       model.aiAssistantModel?.topicManager?.isTopicLoading?.(topic.id) || false;
 
+    // Enrich participants with contact information
+    const enrichedParticipants = (topic.participants || []).map(participant => {
+      // Participant might be a string (hash) or an object with properties
+      // Ensure we extract the ID as a string
+      const participantId = typeof participant === 'string'
+        ? participant
+        : (participant?.id || participant?.personId || String(participant))
+
+      const contactInfo = contactsMap.get(participantId)
+      return {
+        id: participantId,
+        name: contactInfo?.name || `Contact ${participantId.substring(0, 8)}`,
+        isLLM: contactInfo?.isLLM || false,
+        color: contactInfo?.color
+      }
+    })
+
     return {
       id: topic.id,
       name: topic.name,
-      participants: topic.participants || [],
-      participantCount: topic.participants?.length || 0,
+      participants: enrichedParticipants,
+      participantCount: enrichedParticipants.length,
       lastMessage: isGeneratingWelcome ? 'Generating welcome message...' : (topic.lastMessage || ''),
       lastMessageTime: new Date(topic.lastActivity),
       modelName: topic.modelName || topic.aiModelId,
@@ -126,15 +157,18 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
       const newWidth = window.innerWidth
       setWindowWidth(newWidth)
 
-      // Auto-collapse sidebar on small screens
-      if (newWidth < 768 && !isCollapsed) {
+      // Auto-collapse sidebar on mobile screens
+      if (newWidth < 768) {
         setIsCollapsed(true)
+      } else if (isCollapsed && newWidth >= 768) {
+        // Auto-expand when transitioning to desktop
+        setIsCollapsed(false)
       }
 
       // Adjust sidebar width based on window size
       if (!isCollapsed) {
         if (newWidth < 1024) {
-          setSidebarWidth(Math.max(280, Math.min(300, newWidth * 0.25)))
+          setSidebarWidth(Math.max(250, Math.min(300, newWidth * 0.3)))
         } else if (newWidth < 1440) {
           setSidebarWidth(300)
         } else {
@@ -323,16 +357,68 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
   // Note: Message preview updates removed since conversations is derived from topics
   // Preview updates will come from worker via refreshTopics()
 
+  // Touch handlers for swipe to open/close sidebar on mobile
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (windowWidth >= 768) return // Only on mobile
+
+    const touch = e.touches[0]
+    const isLeftEdge = touch.clientX < 20 && isCollapsed
+    const isSidebar = !isCollapsed
+
+    if (isLeftEdge || isSidebar) {
+      setTouchStartX(touch.clientX)
+    }
+  }, [isCollapsed, windowWidth])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (touchStartX === null || windowWidth >= 768) return
+
+    const touch = e.touches[0]
+    const deltaX = touch.clientX - touchStartX
+
+    // Swipe right to open (when collapsed)
+    if (isCollapsed && deltaX > 50) {
+      setIsCollapsed(false)
+      setTouchStartX(null)
+    }
+    // Swipe left to close (when open)
+    else if (!isCollapsed && deltaX < -50) {
+      setIsCollapsed(true)
+      setTouchStartX(null)
+    }
+  }, [touchStartX, isCollapsed, windowWidth])
+
+  const handleTouchEnd = useCallback(() => {
+    setTouchStartX(null)
+  }, [])
+
   return (
     <>
-    <div className="flex h-full overflow-hidden">
+    <div
+      className="flex h-full relative"
+      style={{ overflow: 'hidden' }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
+      {/* Sidebar overlay backdrop on mobile when open */}
+      {!isCollapsed && windowWidth < 768 && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
+          onClick={() => setIsCollapsed(true)}
+        />
+      )}
+
       {/* Sidebar with conversation list */}
       <div
-        className="border-r border-border bg-card flex flex-col flex-shrink-0 transition-all duration-300"
+        className={`border-r border-border bg-card flex flex-col flex-shrink-0 transition-all duration-300 ${
+          windowWidth < 768 ? 'fixed left-0 top-0 bottom-0 z-50' : 'relative'
+        }`}
         style={{
-          width: isCollapsed ? 48 : sidebarWidth,
-          minWidth: isCollapsed ? '48px' : '280px',
-          maxWidth: isCollapsed ? '48px' : `${Math.min(450, windowWidth * 0.35)}px`
+          width: isCollapsed ? (windowWidth < 768 ? 0 : 48) : sidebarWidth,
+          minWidth: isCollapsed ? (windowWidth < 768 ? '0' : '48px') : '250px',
+          maxWidth: isCollapsed ? (windowWidth < 768 ? '0' : '48px') : `${Math.min(450, windowWidth * 0.85)}px`,
+          transform: windowWidth < 768 && isCollapsed ? 'translateX(-100%)' : 'translateX(0)'
         }}
       >
         {/* Header */}
@@ -388,149 +474,23 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
 
         <>
           {/* Conversation list */}
-          <ScrollArea className="flex-1">
-            <div className={isCollapsed ? "py-2 space-y-1" : "p-2 space-y-1"}>
-              {filteredConversations.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  {isCollapsed ? (
-                    <Bot className="h-6 w-6 mx-auto opacity-50" />
-                  ) : (
-                    <>
-                      <Bot className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                      <p className="text-sm">No matches found</p>
-                      <p className="text-xs">Try a different search</p>
-                    </>
-                  )}
-                </div>
-              ) : (
-                filteredConversations.map((conv) =>
-                  isCollapsed ? (
-                    // Collapsed: minimal avatar only
-                    <div
-                      key={conv.id}
-                      onClick={() => setSelectedConversation(conv.id)}
-                      className={`cursor-pointer transition-all mx-auto ${
-                        selectedConversation === conv.id
-                          ? 'ring-1 ring-primary/50'
-                          : ''
-                      }`}
-                      title={conv.name}
-                    >
-                      {processingConversations.has(conv.id) ? (
-                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                          <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                        </div>
-                      ) : (
-                        <div className="w-8 h-8 flex items-center justify-center">
-                          <ParticipantAvatars participants={conv.participants} size="md" maxDisplay={1} />
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    // Expanded: full conversation card
-                    <div
-                      key={conv.id}
-                      onClick={() => setSelectedConversation(conv.id)}
-                      className={`group flex items-start p-2 rounded-lg cursor-pointer transition-colors ${
-                        selectedConversation === conv.id
-                          ? 'bg-primary/10 border border-primary/30'
-                          : 'hover:bg-muted/50 border border-transparent'
-                      }`}
-                    >
-                      {/* Content - full width */}
-                      <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2 mb-0.5">
-                        <h3 className="font-medium text-xs truncate">{conv.name}</h3>
-                        {/* Time, Avatar, Menu */}
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <span className="text-[10px] text-muted-foreground">{formatTime(conv.lastMessageTime)}</span>
-                          {processingConversations.has(conv.id) ? (
-                            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
-                              <Loader2 className="w-3 h-3 text-primary animate-spin" />
-                            </div>
-                          ) : (
-                            <ParticipantAvatars participants={conv.participants} size="sm" maxDisplay={2} />
-                          )}
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              onClick={(e) => e.stopPropagation()}
-                              size="icon"
-                              variant="ghost"
-                              className="h-5 w-5 flex-shrink-0 opacity-0 group-hover:opacity-100"
-                            >
-                              <MoreVertical className="h-3 w-3" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                openRenameDialog(conv.id)
-                              }}
-                            >
-                              <Edit className="mr-2 h-4 w-4" />
-                              Rename
-                            </DropdownMenuItem>
-                            {/* Show Add User option for all chats */}
-                            {/* For P2P chats, this will create a new group chat */}
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                openAddUsersDialog(conv.id)
-                              }}
-                            >
-                              <UserPlus className="mr-2 h-4 w-4" />
-                              Add User
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                deleteConversation(conv.id)
-                              }}
-                              className="text-destructive"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                        </div>
-                      </div>
+          <ConversationList
+            conversations={filteredConversations}
+            selectedConversationId={selectedConversation}
+            processingConversations={processingConversations}
+            isCollapsed={isCollapsed}
+            onSelectConversation={setSelectedConversation}
+            onRenameConversation={openRenameDialog}
+            onAddUsers={openAddUsersDialog}
+            onDeleteConversation={deleteConversation}
+            formatTime={formatTime}
+            stripMarkdown={stripMarkdown}
+          />
 
-                      {conv.lastMessage && (
-                        <p className="text-[10px] text-muted-foreground mb-0.5 line-clamp-1">
-                          {(() => {
-                            const cleaned = stripMarkdown(conv.lastMessage)
-                            return cleaned.length > 40
-                              ? cleaned.substring(0, 40) + '...'
-                              : cleaned
-                          })()}
-                        </p>
-                      )}
-
-                      <div className="flex items-center justify-between gap-1">
-                        <div className="flex items-center gap-1">
-                          {conv.lastMessage && (
-                            <CheckCheck className="h-3 w-3 text-primary/70" />
-                          )}
-                        </div>
-                        {conv.modelName && (
-                          <span className="text-primary text-[10px] font-medium">{conv.modelName}</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  )
-                ))
-              }
-            </div>
-          </ScrollArea>
-
-          {/* Resize handle */}
-          {!isCollapsed && (
+          {/* Resize handle - Desktop only */}
+          {!isCollapsed && windowWidth >= 768 && (
             <div
-              className="w-1 cursor-col-resize hover:bg-primary/20 transition-colors"
+              className="w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors touch-none"
               onMouseDown={(e) => {
                 e.preventDefault()
                 const startX = e.clientX
@@ -538,7 +498,7 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
 
                 const handleMouseMove = (e: MouseEvent) => {
                   const diff = e.clientX - startX
-                  const minWidth = 280
+                  const minWidth = 250
                   const maxWidth = Math.min(450, windowWidth * 0.35)
                   const newWidth = Math.max(minWidth, Math.min(maxWidth, startWidth + diff))
                   setSidebarWidth(newWidth)
@@ -552,13 +512,43 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
                 document.addEventListener('mousemove', handleMouseMove)
                 document.addEventListener('mouseup', handleMouseUp)
               }}
+              onTouchStart={(e) => {
+                const touch = e.touches[0]
+                setTouchStartX(touch.clientX)
+                setTouchStartWidth(sidebarWidth)
+              }}
+              onTouchMove={(e) => {
+                if (touchStartX === null || touchStartWidth === null) return
+                const touch = e.touches[0]
+                const diff = touch.clientX - touchStartX
+                const minWidth = 250
+                const maxWidth = Math.min(450, windowWidth * 0.35)
+                const newWidth = Math.max(minWidth, Math.min(maxWidth, touchStartWidth + diff))
+                setSidebarWidth(newWidth)
+              }}
+              onTouchEnd={() => {
+                setTouchStartX(null)
+                setTouchStartWidth(null)
+              }}
             />
           )}
         </>
       </div>
 
       {/* Main chat area */}
-      <div className="flex-1 min-w-0 overflow-hidden">
+      <div className="flex-1 min-w-0 relative" style={{ overflow: 'hidden' }}>
+        {/* Hamburger menu button - Mobile only, when sidebar is collapsed */}
+        {windowWidth < 768 && isCollapsed && (
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsCollapsed(false)}
+            className="absolute top-2 left-2 z-30 md:hidden h-10 w-10 bg-card/80 backdrop-blur-sm"
+          >
+            <Menu className="h-5 w-5" />
+          </Button>
+        )}
+
         {selectedConversation ? (
           <ChatView
             key={selectedConversation}

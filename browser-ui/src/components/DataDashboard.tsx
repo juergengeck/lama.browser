@@ -7,6 +7,7 @@ import { Button } from '@lama/ui'
 import { ScrollArea } from '@lama/ui'
 import { ObjectHierarchyView } from '@/components/ObjectHierarchyView'
 import { useModel } from '@/model/index.js'
+import { usePlans } from '@lama/ui'
 import {
   HardDrive,
   Cloud,
@@ -73,7 +74,12 @@ interface DataDashboardProps {
 }
 
 export function DataDashboard({ onNavigate, showHierarchyView = false }: DataDashboardProps) {
+  // Keep Model for platform-specific features (initialized state)
   const model = useModel()
+
+  // Use Plans for platform-agnostic operations
+  const { chat, contacts } = usePlans()
+
   const [instances, setInstances] = useState<LAMAInstance[]>([])
   const [replicationEvents, setReplicationEvents] = useState<ReplicationEvent[]>([])
   const [dataStats, setDataStats] = useState<DataStats>({
@@ -137,8 +143,8 @@ export function DataDashboard({ onNavigate, showHierarchyView = false }: DataDas
 
       // Count messages from current conversations
       try {
-        // Get conversations from Model
-        const convsResult = await model.chatHandler.getConversations()
+        // Platform-agnostic conversation loading
+        const convsResult = await chat.getConversations()
         if (convsResult.success && convsResult.data) {
           const conversations = convsResult.data
           stats.conversations = conversations.length
@@ -146,7 +152,7 @@ export function DataDashboard({ onNavigate, showHierarchyView = false }: DataDas
           // Count messages in each conversation
           for (const conv of conversations) {
             try {
-              const messagesResult = await model.chatHandler.getMessages({ topicId: conv.id })
+              const messagesResult = await chat.getMessages({ topicId: conv.id })
               if (messagesResult.success && messagesResult.data) {
                 stats.messages += messagesResult.data.length
               }
@@ -158,7 +164,7 @@ export function DataDashboard({ onNavigate, showHierarchyView = false }: DataDas
 
         // Also check the default conversation
         try {
-          const defaultMessagesResult = await model.chatHandler.getMessages({ topicId: 'default' })
+          const defaultMessagesResult = await chat.getMessages({ topicId: 'default' })
           if (defaultMessagesResult.success && defaultMessagesResult.data) {
             stats.messages += defaultMessagesResult.data.length
             if (!stats.conversations) {
@@ -174,7 +180,7 @@ export function DataDashboard({ onNavigate, showHierarchyView = false }: DataDas
 
       // Count contacts
       try {
-        const contactsResult = await model.contactsHandler.getContacts()
+        const contactsResult = await contacts.getContacts()
         if (contactsResult.success && contactsResult.data) {
           stats.contacts = contactsResult.data.length
         }

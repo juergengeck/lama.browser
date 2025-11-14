@@ -30,12 +30,6 @@ if (!(versionedObjects as any).__INSTANCE_ID) {
   console.log('[main.tsx] INSTANCE CHECK: Found existing instance ID:', (versionedObjects as any).__INSTANCE_ID);
 }
 
-// Imported for the side effect of loading these certificate types
-import '@refinio/one.models/lib/recipes/Certificates/AffirmationCertificate.js';
-import '@refinio/one.models/lib/recipes/Certificates/TrustKeysCertificate.js';
-import '@refinio/one.models/lib/recipes/Certificates/RightToDeclareTrustedKeysForEverybodyCertificate.js';
-import '@refinio/one.models/lib/recipes/Certificates/RightToDeclareTrustedKeysForSelfCertificate.js';
-
 // ============================================================================
 // React and UI imports (AFTER platform loading)
 // ============================================================================
@@ -85,6 +79,18 @@ async function startLama(): Promise<void> {
     console.error('[LAMA] 🔍 Filename:', event.filename);
     console.error('[LAMA] 🔍 This error might trigger a page reload');
   });
+
+  // Auto-login if user is already registered (following one.leute pattern)
+  // This MUST happen BEFORE rendering React to avoid race conditions
+  if (await model.one.isRegistered()) {
+    console.log('[LAMA] ✅ User already registered, auto-logging in...');
+    await model.one.login().catch(err => {
+      console.error('[LAMA] ⚠️ Auto-login failed:', err);
+      // Don't throw - allow UI to show login screen on failure
+    });
+  } else {
+    console.log('[LAMA] ⚠️ User not registered, will show login screen');
+  }
 
   // Render UI - login screen will handle authentication
   const rootElement = document.getElementById('root');

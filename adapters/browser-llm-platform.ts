@@ -43,7 +43,9 @@ export class BrowserLLMPlatform implements LLMPlatform {
     topicId: string,
     messageId: string,
     content: string | { thinking?: string; response: string; raw?: string },
-    status: string
+    status: string,
+    modelId?: string,
+    modelName?: string
   ): void {
     if (typeof window === 'undefined') return;
 
@@ -57,12 +59,16 @@ export class BrowserLLMPlatform implements LLMPlatform {
         topicId,
         messageId,
         partial: normalized,
+        modelId,
+        modelName,
       });
     } else if (status === 'complete' || status === 'error') {
       emitAIEvent(AIEventNames.MESSAGE_COMPLETE, {
         topicId,
         messageId,
         response: normalized,
+        modelId,
+        modelName,
       });
     }
   }
@@ -77,6 +83,32 @@ export class BrowserLLMPlatform implements LLMPlatform {
         topicId,
         type: updateType,
       });
+    }
+  }
+
+  /**
+   * Emit thinking stream update (for models with extended thinking like DeepSeek R1)
+   * Browser implementation logs to console for debugging
+   */
+  emitThinkingUpdate(topicId: string, messageId: string, thinkingContent: string): void {
+    if (typeof window !== 'undefined') {
+      // Reduced logging - only log completion, not every chunk
+      // console.log(`[BrowserLLMPlatform] 🧠 Thinking update for ${topicId}/${messageId}: ${thinkingContent.length} chars`);
+      // Future: Could emit a custom event for UI visualization of thinking process
+      // emitAIEvent(AIEventNames.THINKING_UPDATE, { topicId, messageId, thinkingContent });
+    }
+  }
+
+  /**
+   * Emit thinking status update during AI response generation
+   * Browser implementation logs to console for debugging
+   */
+  emitThinkingStatus(topicId: string, status: string): void {
+    if (typeof window !== 'undefined') {
+      // Reduced logging - only log significant status changes
+      // console.log(`[BrowserLLMPlatform] 🤔 Thinking status for ${topicId}: ${status}`);
+      // Future: Could emit a custom event for UI status indicators
+      // emitAIEvent(AIEventNames.THINKING_STATUS, { topicId, status });
     }
   }
 

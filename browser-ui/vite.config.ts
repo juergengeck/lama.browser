@@ -32,6 +32,8 @@ export default defineConfig({
       { find: '@lama/core', replacement: path.resolve(__dirname, '../../lama.core') },
       { find: '@lama/ui', replacement: path.resolve(__dirname, '../../lama.ui/src') },
       { find: '@chat/core', replacement: path.resolve(__dirname, '../../chat.core') },
+      { find: '@connection/core', replacement: path.resolve(__dirname, '../../connection.core/src') },
+      { find: '@trust/core', replacement: path.resolve(__dirname, '../../trust.core') },
 
       // CRITICAL: Use the ONE.core packages directly - NO duplication
       { find: '@refinio/one.core', replacement: path.resolve(__dirname, '../packages/one.core') },
@@ -52,10 +54,13 @@ export default defineConfig({
       'react',
       'react-dom',
       'tweetnacl',
+      'scrypt-js',
       // CRITICAL: Include ONE.core modules that need deduplication
       // This forces Vite to treat them as a single module instance
       '@refinio/one.core/lib/object-recipes',
-      '@refinio/one.core/lib/util/object'
+      '@refinio/one.core/lib/util/object',
+      '@refinio/one.core/lib/system/browser/crypto-scrypt',
+      '@refinio/one.core/lib/system/browser/storage-crypto'
     ],
     exclude: [
       'electron'

@@ -1,6 +1,7 @@
 /**
- * KeywordDetailPanel Component
+ * KeywordDetailPanel Component - Platform-Agnostic
  * Main panel displaying keyword details, subjects, and access control
+ * Uses usePlans() for platform-agnostic access to keywordDetail plan
  */
 
 import React, { useState } from 'react';
@@ -13,6 +14,7 @@ import { SortControls } from './SortControls.js';
 import { SubjectList } from './SubjectList.js';
 import { AccessControlList } from './AccessControlList.js';
 import { useModel } from '../../model/ModelContext.js';
+import { usePlans } from '@lama/ui';
 import type {
   SubjectSortMode,
   AccessStateValue,
@@ -37,7 +39,12 @@ export const KeywordDetailPanel: React.FC<KeywordDetailPanelProps> = ({
   allPrincipals,
   className = ''
 }) => {
+  // Keep Model for platform-specific features (initialized state)
   const model = useModel();
+
+  // Use Plans for platform-agnostic operations
+  const { keywordDetail } = usePlans();
+
   const { data, loading, error, refetch } = useKeywordDetails(keyword, topicId);
   const [sortMode, setSortMode] = useState<SubjectSortMode>('relevance');
 
@@ -59,7 +66,8 @@ export const KeywordDetailPanel: React.FC<KeywordDetailPanelProps> = ({
     }
 
     try {
-      const response = await model.keywordDetailHandler.updateKeywordAccessState({
+      // Platform-agnostic access control update
+      const response = await keywordDetail.updateKeywordAccessState({
         keyword,
         principalId,
         principalType,

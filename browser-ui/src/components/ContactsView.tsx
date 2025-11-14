@@ -1,12 +1,10 @@
 /**
- * ContactsView - Browser Platform
+ * ContactsView - Platform-Agnostic Component
  *
- * Uses lamaBridge to access Model handlers from lama.core and chat.core.
- * - bridge.getContacts() → model.contactsHandler.getContacts()
- * - bridge.getOrCreateTopicForContact() → model.chatHandler methods
- *
- * TODO: Remove Electron IPC event listeners (window.electronAPI.on) and replace
- * with Model-based event subscriptions when available.
+ * Uses usePlans() for platform-agnostic access to contacts, chat, and IOM plans.
+ * - contacts.getContacts() → ContactsPlan
+ * - chat.getOrCreateTopicForContact() → ChatPlan
+ * - connection.createPairingInvitation() → ConnectionPlan (IOM)
  */
 
 import { useState, useEffect } from 'react'
@@ -16,34 +14,57 @@ import { Button } from '@lama/ui'
 import { Badge } from '@lama/ui'
 import { Input } from '@lama/ui'
 import { ScrollArea } from '@lama/ui'
-import { Users, UserPlus, Search, Circle, Bot, MessageSquare, Download, CheckCircle, User, Edit } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@lama/ui'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@lama/ui'
+import { Users, UserPlus, Search, Circle, Bot, MessageSquare, Download, CheckCircle, User, Edit, MoreVertical, Shield, UserCheck, Ban, Trash2, Link as LinkIcon } from 'lucide-react'
 import { useModel } from '@/model/ModelContext'
+import { usePlans } from '@lama/ui'
 import { ProfileDialog } from './ProfileDialog'
+import { ChainOfTrustView } from './ChainOfTrustView'
 
 interface ContactsViewProps {
   onNavigateToChat?: (topicId: string, contactName: string) => void
 }
 
 export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
+  // Keep Model for platform-specific features (initialized state)
   const model = useModel()
+
+  // Use Plans for platform-agnostic operations
+  const { contacts: contactsPlan, connection } = usePlans()
+
   const [contacts, setContacts] = useState<any[]>([])
-  const [ownerContact, setOwnerContact] = useState<any | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [creatingTopic, setCreatingTopic] = useState<string | null>(null)
   const [loadingModel, setLoadingModel] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [profileDialogOpen, setProfileDialogOpen] = useState(false)
-  const [profileDialogRequired, setProfileDialogRequired] = useState(false)
+  const [editingContactId, setEditingContactId] = useState<string | null>(null)
+  const [chainOfTrustDialogOpen, setChainOfTrustDialogOpen] = useState(false)
+  const [selectedContactForTrust, setSelectedContactForTrust] = useState<any | null>(null)
 
   useEffect(() => {
     loadContacts()
-    
+
     // Listen for contact updates
     const handleContactsUpdated = () => {
       console.log('[ContactsView] Contacts updated event received')
       loadContacts()
     }
-    
+
     // Listen for browser event (dispatched when contacts change)
     const handleContactAdded = () => {
       console.log('[ContactsView] Contact added event received')
@@ -52,15 +73,15 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
 
     window.addEventListener('contacts:updated', handleContactsUpdated)
     window.addEventListener('contact:added', handleContactAdded)
-    
+
     // Also refresh contacts periodically
     const interval = setInterval(loadContacts, 5000)
-    
+
     return () => {
       window.removeEventListener('contacts:updated', handleContactsUpdated)
       clearInterval(interval)
     }
-  }, [model])
+  }, [model, contactsPlan])
 
   const loadContacts = async () => {
     if (!model.initialized) {
@@ -70,31 +91,25 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
 
     setLoading(true)
     try {
-      // Get real contacts from Model
-      const result = await model.contactsHandler.getContacts()
+      // Platform-agnostic contact loading WITH TRUST INFORMATION
+      const result = await contactsPlan.getContactsWithTrust()
 
-      if (!result.success || !result.data) {
+      if (!result.success || !result.contacts) {
         setContacts([])
         setLoading(false)
         return
       }
 
-      const allContacts = result.data
-      console.log('[ContactsView] Loaded contacts:', allContacts)
+      const allContacts = result.contacts
+      console.log('[ContactsView] Loaded contacts with trust:', allContacts)
       console.log('[ContactsView] Contact count:', allContacts?.length)
       allContacts?.forEach((c, i) => {
-        console.log(`[ContactsView]   Contact ${i}: ${c.name || c.displayName} (${c.id?.substring(0, 8)}...) status=${c.status}`)
+        console.log(`[ContactsView]   Contact ${i}: ${c.name} (${c.id?.substring(0, 8)}...) trust=${c.trustLevel} connected=${c.isConnected}`)
       })
-
-      // Separate owner from other contacts
-      const owner = (allContacts || []).find(c => c.status === 'owner')
-      const nonOwnerContacts = (allContacts || []).filter(c => c.status !== 'owner')
-
-      setOwnerContact(owner || null)
 
       // Enrich AI contacts with model information
       const enrichedContacts = await Promise.all(
-        nonOwnerContacts.map(async (contact) => {
+        (allContacts || []).map(async (contact) => {
           if (contact.isAI) {
             try {
               // TODO: Implement getAvailableModels via Model
@@ -110,7 +125,14 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
         })
       )
 
-      setContacts(enrichedContacts)
+      // Sort: Owner (self) first, then others
+      const sortedContacts = enrichedContacts.sort((a, b) => {
+        if (a.trustLevel === 'self') return -1
+        if (b.trustLevel === 'self') return 1
+        return 0
+      })
+
+      setContacts(sortedContacts)
     } finally {
       setLoading(false)
     }
@@ -139,6 +161,87 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
     }
   }
 
+  const getTrustIcon = (trustLevel: string) => {
+    switch (trustLevel) {
+      case 'high':
+        return <Shield className="h-3 w-3 text-blue-500" />
+      case 'medium':
+        return <Shield className="h-3 w-3 text-pink-500" />
+      case 'low':
+        return <Shield className="h-3 w-3 text-gray-400" />
+      case 'discovered':
+        return <Shield className="h-3 w-3 text-yellow-500" />
+      case 'blocked':
+        return <Ban className="h-3 w-3 text-red-500" />
+      default:
+        return <Shield className="h-3 w-3 text-gray-400" />
+    }
+  }
+
+  const getTrustBadgeVariant = (trustLevel: string): "default" | "secondary" | "destructive" | "outline" => {
+    switch (trustLevel) {
+      case 'high':
+        return 'default'
+      case 'medium':
+        return 'secondary'
+      case 'low':
+      case 'discovered':
+        return 'outline'
+      case 'blocked':
+        return 'destructive'
+      default:
+        return 'outline'
+    }
+  }
+
+  const handleAcceptContact = async (contactId: string) => {
+    try {
+      const result = await contactsPlan.acceptContact(contactId, {
+        canMessage: true,
+        canSync: true
+      })
+      if (result.success) {
+        loadContacts() // Refresh the list
+      } else {
+        alert(result.error || 'Failed to accept contact')
+      }
+    } catch (error: any) {
+      console.error('[ContactsView] Failed to accept contact:', error)
+      alert(error.message || 'Failed to accept contact')
+    }
+  }
+
+  const handleBlockContact = async (contactId: string) => {
+    try {
+      const result = await contactsPlan.blockContact(contactId, 'User blocked')
+      if (result.success) {
+        loadContacts() // Refresh the list
+      } else {
+        alert(result.error || 'Failed to block contact')
+      }
+    } catch (error: any) {
+      console.error('[ContactsView] Failed to block contact:', error)
+      alert(error.message || 'Failed to block contact')
+    }
+  }
+
+  const handleRemoveContact = async (contactId: string) => {
+    if (!confirm('Are you sure you want to remove this contact?')) {
+      return
+    }
+    try {
+      const result = await contactsPlan.removeContact(contactId)
+      if (result.success) {
+        loadContacts() // Refresh the list
+      } else {
+        alert(result.error || 'Failed to remove contact')
+      }
+    } catch (error: any) {
+      console.error('[ContactsView] Failed to remove contact:', error)
+      alert(error.message || 'Failed to remove contact')
+    }
+  }
+
   const handleMessageClick = async (contact: any) => {
     console.log('[ContactsView] Message clicked for contact:', contact)
 
@@ -151,7 +254,7 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
     setCreatingTopic(contact.id)
 
     try {
-      // TODO: Implement getOrCreateTopicForContact via model.chatHandler
+      // TODO: Implement getOrCreateTopicForContact via model.chatPlan
       console.log('[ContactsView] TODO: Implement getOrCreateTopicForContact for:', contact.id)
 
       // For now, just log
@@ -185,9 +288,9 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
         return
       }
 
-      // Create pairing invitation using IOMHandler
+      // Platform-agnostic pairing invitation creation
       console.log('[ContactsView] Creating pairing invitation...')
-      const result = await model.iomHandler.createPairingInvitation({})
+      const result = await connection.createPairingInvitation({})
 
       if (result.success && result.invitation) {
         // Copy invitation URL to clipboard
@@ -209,44 +312,6 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
 
   return (
     <div className="h-full flex flex-col space-y-4">
-      {/* My Profile Card */}
-      {ownerContact && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <User className="h-5 w-5 text-primary" />
-                <CardTitle>My Profile</CardTitle>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setProfileDialogRequired(false)
-                  setProfileDialogOpen(true)
-                }}
-              >
-                <Edit className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center space-x-3">
-              <Avatar className="h-12 w-12">
-                <AvatarFallback style={{ backgroundColor: ownerContact.color }}>
-                  {(ownerContact.displayName || ownerContact.name || 'ME').substring(0, 2).toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <p className="font-medium">{ownerContact.displayName || ownerContact.name || 'Set your name'}</p>
-                <p className="text-sm text-muted-foreground">{ownerContact.email}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Search and Add Contact */}
       <Card>
         <CardHeader>
@@ -287,10 +352,10 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
                 </div>
               ) : (
                 filteredContacts.map((contact) => (
-                  <Card key={contact.id} className="hover:bg-accent transition-colors cursor-pointer">
+                  <Card key={contact.id} className="hover:bg-accent transition-colors">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
+                        <div className="flex items-center space-x-3 flex-1 min-w-0">
                           <Avatar>
                             <AvatarFallback className={contact.isAI ? 'bg-purple-100 dark:bg-purple-900' : ''}>
                               {contact.isAI ? (
@@ -303,44 +368,56 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center space-x-2">
                               <span className="font-medium truncate">{contact.displayName || contact.name || 'Unknown'}</span>
-                              <Badge 
-                                variant={contact.isAI ? "secondary" : "outline"} 
+                              <Badge
+                                variant={contact.isAI ? "secondary" : "outline"}
                                 className="text-xs flex-shrink-0"
                               >
                                 {contact.isAI ? 'AI' : 'P2P'}
                               </Badge>
+                              {contact.trustLevel && (
+                                <Badge
+                                  variant={getTrustBadgeVariant(contact.trustLevel)}
+                                  className="text-xs flex-shrink-0"
+                                >
+                                  {getTrustIcon(contact.trustLevel)}
+                                  <span className="ml-1">{contact.trustLevel}</span>
+                                </Badge>
+                              )}
                             </div>
-                            <div className="flex items-center space-x-2 mt-1">
+                            <div className="flex items-center space-x-2 mt-1 flex-wrap">
                               <Circle className={`h-2 w-2 fill-current ${
                                 contact.isAI
                                   ? (contact.modelInfo?.isLoaded ? 'text-green-500' : 'text-yellow-500')
-                                  : getStatusColor(contact.status)
+                                  : (contact.isConnected ? 'text-green-500' : 'text-gray-400')
                               }`} />
-                              <span className="text-xs text-muted-foreground truncate">
+                              <span className="text-xs text-muted-foreground">
                                 {contact.isAI
                                   ? (contact.modelInfo?.isLoaded ? 'Ready' : 'Not Loaded')
-                                  : getStatusLabel(contact.status)}
+                                  : (contact.isConnected ? 'Connected' : 'Offline')}
                               </span>
-                              {contact.lastSeen && !contact.isAI && (
-                                <span className="text-xs text-muted-foreground">
-                                  · Last seen {new Date(contact.lastSeen).toLocaleTimeString()}
-                                </span>
+                              {contact.discoverySource && (
+                                <>
+                                  <span className="text-xs text-muted-foreground">·</span>
+                                  <Badge variant="outline" className="text-xs">
+                                    <LinkIcon className="h-2 w-2 mr-1" />
+                                    {contact.discoverySource}
+                                  </Badge>
+                                </>
+                              )}
+                              {contact.canMessage && (
+                                <Badge variant="outline" className="text-xs">
+                                  Messages
+                                </Badge>
+                              )}
+                              {contact.canSync && (
+                                <Badge variant="outline" className="text-xs">
+                                  Sync
+                                </Badge>
                               )}
                             </div>
                           </div>
                         </div>
                         <div className="flex items-center space-x-2">
-                          {/* Debug logging for button rendering */}
-                          {contact.isAI && (() => {
-                            console.log(`[ContactsView] Rendering buttons for ${contact.name}:`, {
-                              isAI: contact.isAI,
-                              hasModelInfo: !!contact.modelInfo,
-                              modelType: contact.modelInfo?.modelType,
-                              isLoaded: contact.modelInfo?.isLoaded
-                            })
-                            return null
-                          })()}
-
                           {/* For AI contacts with local models that aren't loaded, show Load button */}
                           {contact.isAI && contact.modelInfo?.modelType === 'local' && !contact.modelInfo?.isLoaded && (
                             <Button
@@ -365,13 +442,6 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
                               )}
                             </Button>
                           )}
-                          {/* For loaded models or remote API models, show Ready badge */}
-                          {contact.isAI && (contact.modelInfo?.isLoaded || contact.modelInfo?.modelType === 'remote') && (
-                            <Badge variant="secondary" className="text-xs">
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Ready
-                            </Badge>
-                          )}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -387,6 +457,71 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
                               </>
                             )}
                           </Button>
+
+                          {/* Context Menu */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>
+                                {contact.trustLevel === 'self' ? 'My Profile' : 'Contact Actions'}
+                              </DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+
+                              {contact.trustLevel === 'self' ? (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setEditingContactId(contact.id)
+                                    setProfileDialogOpen(true)
+                                  }}
+                                >
+                                  <Edit className="h-4 w-4 mr-2" />
+                                  Edit Profile
+                                </DropdownMenuItem>
+                              ) : (
+                                <>
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setSelectedContactForTrust(contact)
+                                      setChainOfTrustDialogOpen(true)
+                                    }}
+                                  >
+                                    <Shield className="h-4 w-4 mr-2" />
+                                    View Chain of Trust
+                                  </DropdownMenuItem>
+
+                                  <DropdownMenuSeparator />
+
+                                  {contact.trustLevel === 'discovered' && (
+                                    <DropdownMenuItem onClick={() => handleAcceptContact(contact.id)}>
+                                      <UserCheck className="h-4 w-4 mr-2" />
+                                      Accept Contact
+                                    </DropdownMenuItem>
+                                  )}
+
+                                  {contact.trustLevel !== 'blocked' && contact.trustLevel !== 'self' && (
+                                    <DropdownMenuItem onClick={() => handleBlockContact(contact.id)}>
+                                      <Ban className="h-4 w-4 mr-2" />
+                                      Block Contact
+                                    </DropdownMenuItem>
+                                  )}
+
+                                  {contact.trustLevel !== 'self' && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleRemoveContact(contact.id)}
+                                      className="text-red-600 dark:text-red-400"
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Remove Contact
+                                    </DropdownMenuItem>
+                                  )}
+                                </>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     </CardContent>
@@ -402,10 +537,29 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
       <ProfileDialog
         open={profileDialogOpen}
         onOpenChange={setProfileDialogOpen}
-        currentName={ownerContact?.displayName || ownerContact?.name || ''}
-        required={profileDialogRequired}
+        currentName={contacts.find(c => c.trustLevel === 'self')?.name || ''}
+        required={false}
         onSave={handleProfileSaved}
       />
+
+      {/* Chain of Trust Dialog */}
+      <Dialog open={chainOfTrustDialogOpen} onOpenChange={setChainOfTrustDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Chain of Trust</DialogTitle>
+            <DialogDescription>
+              Trust path for {selectedContactForTrust?.name || 'contact'}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedContactForTrust && (
+            <ChainOfTrustView
+              personId={selectedContactForTrust.personId || selectedContactForTrust.id}
+              model={model}
+              className="mt-4"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

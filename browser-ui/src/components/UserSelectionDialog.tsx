@@ -1,10 +1,10 @@
 /**
- * UserSelectionDialog - Browser Platform
+ * UserSelectionDialog - Platform-Agnostic
  *
- * Uses Model handlers from chat.core.
- * - Loading contacts through model.contactsHandler
- * - Multi-user conversation support through model.chatHandler
- * - Adding participants through model.chatHandler
+ * Uses usePlans() for platform-agnostic access to contacts plan
+ * - Loading contacts through contacts plan
+ * - Multi-user conversation support
+ * - Adding participants
  */
 
 import { useState, useEffect } from 'react'
@@ -15,6 +15,7 @@ import { Checkbox } from '@lama/ui'
 import { ScrollArea } from '@lama/ui'
 import { User, Search, Loader2 } from 'lucide-react'
 import { useModel } from '@/model/ModelContext'
+import { usePlans } from '@lama/ui'
 
 interface Contact {
   id: string
@@ -41,7 +42,12 @@ export function UserSelectionDialog({
   description = "Select users to add to the conversation",
   excludeUserIds = []
 }: UserSelectionDialogProps) {
+  // Keep Model for platform-specific features (initialized, ownerId)
   const model = useModel()
+
+  // Use Plans for platform-agnostic operations
+  const { contacts: contactsPlan } = usePlans()
+
   const [contacts, setContacts] = useState<Contact[]>([])
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -65,7 +71,8 @@ export function UserSelectionDialog({
 
     setLoading(true)
     try {
-      const result = await model.contactsHandler.getContacts()
+      // Platform-agnostic contact loading
+      const result = await contactsPlan.getContacts()
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to load contacts')

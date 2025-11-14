@@ -35,7 +35,7 @@ export function ModelProvider({ model, children }: ModelProviderProps) {
  * ```tsx
  * function MyComponent() {
  *   const model = useModel();
- *   const contacts = await model.contactsHandler.getContacts();
+ *   const contacts = await model.contactsPlan.getContacts();
  *   return <div>...</div>;
  * }
  * ```

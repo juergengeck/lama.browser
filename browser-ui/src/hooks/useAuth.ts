@@ -44,10 +44,20 @@ export function useAuth(): UseAuthReturn {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    // SingleUserNoAuth doesn't have isAuthenticated() method
-    // Authentication state is tracked via onLogin/onLogout callbacks
-    setIsInitialized(true);
-    setIsLoading(false);
+    // Check authentication state on mount
+    const checkAuthState = async () => {
+      try {
+        const isRegistered = await model.one.isRegistered();
+        console.log('[useAuth] Initial auth check:', isRegistered);
+        setIsAuthenticated(isRegistered);
+      } catch (e) {
+        console.error('[useAuth] Failed to check auth state:', e);
+        setIsAuthenticated(false);
+      } finally {
+        setIsInitialized(true);
+        setIsLoading(false);
+      }
+    };
 
     // Listen for login/logout events
     const handleLogin = () => {
@@ -63,6 +73,8 @@ export function useAuth(): UseAuthReturn {
 
     model.one.onLogin(handleLogin);
     model.one.onLogout(handleLogout);
+
+    checkAuthState();
 
     // Cleanup listeners on unmount
     return () => {

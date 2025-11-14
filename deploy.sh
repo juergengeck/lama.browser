@@ -1,9 +1,10 @@
 #!/bin/bash
 set -e
 
-# LAMA Browser Deployment Script
-# Usage: ./deploy.sh [server] [path]
-# Example: ./deploy.sh user@lama.one /var/www/lama.one
+# LAMA Browser Build Script
+# Usage: ./deploy.sh
+#
+# Builds the browser UI and creates deployment packages in ./deploy/
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -12,22 +13,15 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Configuration (can be overridden by arguments)
-REMOTE_HOST="${1:-user@lama.one}"
-REMOTE_PATH="${2:-/var/www/lama.one}"
 BUILD_DIR="browser-ui/dist"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_NAME="lama-browser-backup-${TIMESTAMP}.tar.gz"
 
 echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║   LAMA Browser Deployment Script      ║${NC}"
+echo -e "${BLUE}║   LAMA Browser Build Script           ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
-echo ""
-echo -e "${YELLOW}Target:${NC} $REMOTE_HOST:$REMOTE_PATH"
 echo ""
 
 # Step 1: Build
-echo -e "${BLUE}[1/5]${NC} 🔨 Building LAMA Browser..."
+echo -e "${BLUE}[1/3]${NC} 🔨 Building LAMA Browser..."
 if npm run build; then
     echo -e "${GREEN}✓ Build successful${NC}"
 else
@@ -37,7 +31,7 @@ fi
 echo ""
 
 # Step 2: Verify build
-echo -e "${BLUE}[2/5]${NC} 🔍 Verifying build output..."
+echo -e "${BLUE}[2/3]${NC} 🔍 Verifying build output..."
 if [ ! -f "$BUILD_DIR/index.html" ]; then
     echo -e "${RED}✗ Build verification failed: index.html not found${NC}"
     exit 1
@@ -46,7 +40,7 @@ echo -e "${GREEN}✓ Build verified${NC}"
 echo ""
 
 # Step 3: Create packages
-echo -e "${BLUE}[3/5]${NC} 📦 Creating deployment packages..."
+echo -e "${BLUE}[3/3]${NC} 📦 Creating deployment packages..."
 mkdir -p deploy
 rm -rf deploy/lama.browser deploy/lama-browser.tar.gz deploy/lama-browser.zip
 cp -r browser-ui/dist deploy/lama.browser
@@ -58,77 +52,17 @@ cd ..
 echo -e "${GREEN}✓ Packages created in deploy/${NC}"
 echo ""
 
-# Step 4: Upload
-echo -e "${BLUE}[4/5]${NC} ⬆️  Uploading to remote server..."
-if scp deploy/lama-browser.tar.gz $REMOTE_HOST:/tmp/; then
-    echo -e "${GREEN}✓ Upload successful${NC}"
-else
-    echo -e "${RED}✗ Upload failed${NC}"
-    exit 1
-fi
-echo ""
-
-# Step 5: Deploy on remote
-echo -e "${BLUE}[5/5]${NC} 🚀 Deploying on remote server..."
-ssh $REMOTE_HOST << EOF
-    set -e
-
-    # Create backup of current deployment
-    if [ -d "$REMOTE_PATH" ]; then
-        echo "Creating backup..."
-        sudo tar -czf /tmp/$BACKUP_NAME -C $REMOTE_PATH .
-        echo "Backup saved: /tmp/$BACKUP_NAME"
-    fi
-
-    # Deploy new version
-    echo "Removing old deployment..."
-    sudo rm -rf ${REMOTE_PATH}.new
-    sudo mkdir -p ${REMOTE_PATH}.new
-
-    echo "Extracting new version..."
-    sudo tar -xzf /tmp/lama-browser.tar.gz -C ${REMOTE_PATH}.new --strip-components=1
-
-    echo "Switching to new version..."
-    sudo rm -rf ${REMOTE_PATH}.old
-    if [ -d "$REMOTE_PATH" ]; then
-        sudo mv $REMOTE_PATH ${REMOTE_PATH}.old
-    fi
-    sudo mv ${REMOTE_PATH}.new $REMOTE_PATH
-
-    echo "Setting permissions..."
-    sudo chown -R www-data:www-data $REMOTE_PATH 2>/dev/null || sudo chown -R nginx:nginx $REMOTE_PATH 2>/dev/null || true
-    sudo chmod -R 755 $REMOTE_PATH
-
-    # Cleanup
-    rm /tmp/lama-browser.tar.gz
-
-    echo "Deployment complete!"
-EOF
-
-if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✓ Deployment successful${NC}"
-else
-    echo -e "${RED}✗ Deployment failed${NC}"
-    echo -e "${YELLOW}To rollback, SSH to server and run:${NC}"
-    echo -e "${YELLOW}  sudo rm -rf $REMOTE_PATH${NC}"
-    echo -e "${YELLOW}  sudo mv ${REMOTE_PATH}.old $REMOTE_PATH${NC}"
-    exit 1
-fi
-echo ""
-
 # Success message
 echo -e "${GREEN}╔════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║     ✓ Deployment Completed!           ║${NC}"
+echo -e "${GREEN}║     ✓ Build Completed!                ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "${BLUE}🌐 Your application should now be live at:${NC}"
-echo -e "   https://lama.one"
+echo -e "${BLUE}📦 Deployment packages:${NC}"
+echo -e "   deploy/lama-browser.tar.gz"
+echo -e "   deploy/lama-browser.zip"
+echo -e "   deploy/lama.browser/ (directory)"
 echo ""
-echo -e "${YELLOW}📝 Backup location on server:${NC}"
-echo -e "   /tmp/$BACKUP_NAME"
-echo ""
-echo -e "${YELLOW}🔄 To rollback:${NC}"
-echo -e "   ssh $REMOTE_HOST"
-echo -e "   sudo rm -rf $REMOTE_PATH"
-echo -e "   sudo mv ${REMOTE_PATH}.old $REMOTE_PATH"
+echo -e "${YELLOW}💡 Next steps:${NC}"
+echo -e "   Upload these files to your web server manually"
+echo -e "   Extract to your web root directory"
 echo ""

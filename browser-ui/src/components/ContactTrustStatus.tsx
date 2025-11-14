@@ -27,7 +27,7 @@ import {
 interface Contact {
   personId: string
   name: string
-  trustLevel: 'discovered' | 'pending' | 'accepted' | 'trusted' | 'blocked'
+  trustLevel: 'self' | 'high' | 'medium' | 'low' | 'discovered' | 'pending' | 'accepted' | 'trusted' | 'blocked'
   discoverySource: string
   discoveredAt: number
   acceptedAt?: number
@@ -109,8 +109,20 @@ export function ContactTrustStatus() {
 
   const getTrustIcon = (trustLevel: string) => {
     switch (trustLevel) {
+      case 'self':
+        // Dark blue - highest trust (lama gradient bottom)
+        return <Shield className="h-4 w-4 text-blue-900 dark:text-blue-400" />
+      case 'high':
+        // Blue - high trust (lama gradient lower-middle)
+        return <ShieldCheck className="h-4 w-4 text-blue-500 dark:text-blue-400" />
+      case 'medium':
+        // Pink/Magenta - medium trust (lama gradient middle)
+        return <ShieldCheck className="h-4 w-4 text-pink-500 dark:text-pink-400" />
+      case 'low':
+        // Light gray - low trust (lama gradient top)
+        return <ShieldAlert className="h-4 w-4 text-gray-500 dark:text-gray-400" />
       case 'discovered':
-        return <Shield className="h-4 w-4 text-yellow-500" />
+        return <Shield className="h-4 w-4 text-gray-400 dark:text-gray-500" />
       case 'pending':
         return <ShieldAlert className="h-4 w-4 text-orange-500" />
       case 'accepted':

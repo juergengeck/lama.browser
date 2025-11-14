@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lama/ui';
 import { Badge } from '@lama/ui';
 import { Button } from '@lama/ui';
+import { usePlans } from '@lama/ui';
 import { RefreshCw, History, ChevronDown, ChevronUp, Loader2, Sparkles } from 'lucide-react';
 import { KeywordCloud } from './KeywordCloud.js';
 import { KeywordDetailPanel } from '../KeywordDetail/KeywordDetailPanel.js';
@@ -25,6 +26,7 @@ export const TopicSummary: React.FC<TopicSummaryProps> = ({
   className = '',
   messages = []
 }) => {
+  const { topicAnalysis } = usePlans(); // Platform-agnostic topic analysis
   const [summary, setSummary] = useState<Summary | null>(null);
   const [history, setHistory] = useState<Summary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -54,14 +56,11 @@ export const TopicSummary: React.FC<TopicSummaryProps> = ({
     setError(null);
 
     try {
-      const response: GetSummaryResponse = await window.electronAPI.invoke(
-        'topicAnalysis:getSummary',
-        {
-          topicId,
-          version,
-          includeHistory: showHistory
-        }
-      );
+      const response: GetSummaryResponse = await topicAnalysis.getSummary({
+        topicId,
+        version,
+        includeHistory: showHistory
+      });
 
       if (response.success && response.data) {
         console.log('[TopicSummary] ✅ Summary loaded:', {
@@ -92,12 +91,10 @@ export const TopicSummary: React.FC<TopicSummaryProps> = ({
     setError(null);
 
     try {
-      const response = await window.electronAPI.invoke(
-        'topicAnalysis:analyzeMessages',
-        {
-          topicId,
-          messages: messages.map(m => ({
-            id: m.id,
+      const response = await topicAnalysis.analyzeMessages({
+        topicId,
+        messages: messages.map(m => ({
+          id: m.id,
             content: m.content || m.text,
             sender: m.sender || m.author,
             timestamp: m.timestamp || Date.now()
@@ -334,7 +331,7 @@ export const TopicSummary: React.FC<TopicSummaryProps> = ({
         {showHistory && history.length > 1 && (
           <div className="mt-4 pt-3 border-t">
             <p className="text-sm font-medium mb-2">Version History</p>
-            <div className="space-y-2 max-h-40 overflow-y-auto">
+            <div className="space-y-2 max-h-40 overflow-y-auto ios-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
               {history.map((historicalSummary) => (
                 <button
                   key={historicalSummary.version}

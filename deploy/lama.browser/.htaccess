@@ -11,7 +11,8 @@
 
   # Serve index.html for all other routes (SPA routing)
   # This makes /invites/invitePartner/ work
-  RewriteRule ^ index.html [L]
+  # QSA flag preserves query string, hash is preserved automatically by browser
+  RewriteRule ^ /index.html [L,QSA]
 </IfModule>
 
 # Disable directory browsing

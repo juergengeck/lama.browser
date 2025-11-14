@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ipcStorage } from '@/services/ipc-storage'
+import { usePlans } from '@lama/ui'
+import { useModel } from '@/model/index.js'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@lama/ui'
 import { Button } from '@lama/ui'
 import { Input } from '@lama/ui'
@@ -10,11 +11,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@lama/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@lama/ui'
 import { Alert, AlertDescription } from '@lama/ui'
 import { 
-  Users, UserPlus, Link, QrCode, Copy, Check, Circle, 
+  Users, UserPlus, Link, QrCode, Copy, Check, Circle,
   RefreshCw, Wifi, WifiOff, Shield, X, AlertTriangle,
   Loader2, ExternalLink, Network
 } from 'lucide-react'
-import { lamaBridge } from '@/bridge/lama-bridge'
 import { QRCodeSVG } from 'qrcode.react'
 
 interface Connection {
@@ -40,6 +40,8 @@ interface ConnectionsViewProps {
 }
 
 export function ConnectionsView({ onNavigateToChat }: ConnectionsViewProps = {}) {
+  const model = useModel() // For initialization checks
+  const { connection } = usePlans() // Platform-agnostic connection operations
   const [connections, setConnections] = useState<Connection[]>([])
   const [isCreatingInvitation, setIsCreatingInvitation] = useState(false)
   const [currentInvitation, setCurrentInvitation] = useState<PairingInvitation | null>(null)
@@ -89,17 +91,21 @@ export function ConnectionsView({ onNavigateToChat }: ConnectionsViewProps = {})
       }
     }
 
-    // Register CHUM sync listener
-    const unsubscribe = window.electronAPI?.on?.('chum:sync', handleChumSync)
-    
-    // Initial load and periodic updates (fallback)
+    // In browser platform, use channelManager.onUpdated for real-time updates
+    // (No Electron IPC events needed)
+    const unsubscribe = model.channelManager?.onUpdated?.(async () => {
+      // Reload connections when channel updates occur
+      await loadConnections()
+    })
+
+    // Initial load and periodic updates
     loadConnections()
     checkNetworkStatus()
-    
+
     const interval = setInterval(() => {
       checkNetworkStatus() // Keep network status polling
     }, 10000)
-    
+
     return () => {
       clearInterval(interval)
       if (unsubscribe) {
@@ -181,23 +187,23 @@ export function ConnectionsView({ onNavigateToChat }: ConnectionsViewProps = {})
     try {
       // User authentication is handled by Node.js instance
       
-      console.log('[ConnectionsView] Requesting invitation from Node.js instance via IPC...')
-      
-      // Request invitation from Node.js instance via IPC
-      const result = await window.electronAPI.createInvitation()
-      
+      console.log('[ConnectionsView] Creating pairing invitation...')
+
+      // Create invitation using platform-agnostic connection plan
+      const result = await connection.createPairingInvitation({})
+
       if (!result.success) {
         throw new Error(result.error || 'Failed to create invitation')
       }
+
+      console.log('[ConnectionsView] Invitation created:', result.data)
       
-      console.log('[ConnectionsView] Received invitation from Node.js:', result.invitation)
-      
-      // Use the invitation data from Node.js instance
+      // Use the invitation data from connection plan
       const invitation: PairingInvitation = {
-        url: result.invitation.url,
-        token: result.invitation.token,
-        publicKey: result.invitation.publicKey,
-        expiresAt: new Date(result.invitation.expiresAt)
+        url: result.data.url,
+        token: result.data.token,
+        publicKey: result.data.publicKey,
+        expiresAt: new Date(result.data.expiresAt)
       }
       
       setCurrentInvitation(invitation)
@@ -229,9 +235,9 @@ export function ConnectionsView({ onNavigateToChat }: ConnectionsViewProps = {})
     setError(null)
     
     try {
-      // Call the Node.js handler to accept the invitation
-      const result = await window.electronAPI.invoke('iom:acceptPairingInvitation', invitationUrl)
-      
+      // Accept invitation using platform-agnostic connection plan
+      const result = await connection.acceptPairingInvitation({ url: invitationUrl })
+
       if (result.success) {
         console.log('[ConnectionsView] Invitation accepted successfully')
         // Close dialog and refresh connections

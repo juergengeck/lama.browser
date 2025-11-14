@@ -1,6 +1,7 @@
 /**
- * KeywordSettingsPage Component
+ * KeywordSettingsPage Component - Platform-Agnostic
  * Full keyword management page with access control
+ * Uses usePlans() for platform-agnostic access to keywordDetail plan
  */
 
 import React, { useState, useEffect } from 'react';
@@ -19,6 +20,7 @@ import {
   Shield
 } from 'lucide-react';
 import { useModel } from '../../model/ModelContext.js';
+import { usePlans } from '@lama/ui';
 import type {
   AggregatedKeyword,
   AllKeywordsResponse,
@@ -27,7 +29,12 @@ import type {
 } from '../../types/keyword-detail.js';
 
 export const KeywordSettingsPage: React.FC = () => {
+  // Keep Model for platform-specific features (initialized check)
   const model = useModel();
+
+  // Use Plans for platform-agnostic operations
+  const { keywordDetail } = usePlans();
+
   const [keywords, setKeywords] = useState<AggregatedKeyword[]>([]);
   const [filteredKeywords, setFilteredKeywords] = useState<AggregatedKeyword[]>([]);
   const [loading, setLoading] = useState(false);
@@ -69,7 +76,7 @@ export const KeywordSettingsPage: React.FC = () => {
     setError(null);
 
     try {
-      const response = await model.keywordDetailHandler.getAllKeywords({
+      const response = await keywordDetail.getAllKeywords({
         sortBy,
         limit: pageSize,
         offset: page * pageSize,
@@ -153,13 +160,12 @@ export const KeywordSettingsPage: React.FC = () => {
     }
 
     try {
-      const response = await model.keywordDetailHandler.updateKeywordAccessState({
+      const response = await keywordDetail.updateKeywordAccessState({
         keyword,
         principalId,
         principalType,
-          state: newState
-        }
-      );
+        state: newState
+      });
 
       if (response.success) {
         console.log('[KeywordSettingsPage] ✅ Access state updated');

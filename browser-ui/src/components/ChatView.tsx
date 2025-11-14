@@ -2,7 +2,7 @@
  * ChatView - Browser Platform
  *
  * Uses Model handlers from lama.core and chat.core via hooks.
- * - useMessages hook provides access to model.chatHandler
+ * - useMessages hook provides access to model.chatPlan
  * - AI streaming through model.aiAssistantModel
  *
  * TODO: Remove Electron IPC event listeners and replace with Model-based
@@ -65,6 +65,7 @@ export const ChatView = memo(function ChatView({
   const [isProcessing, setIsProcessing] = useState(false)
   const [isAIProcessing, setIsAIProcessing] = useState(isInitiallyProcessing)
   const [aiStreamingContent, setAiStreamingContent] = useState('')
+  const [aiModelName, setAiModelName] = useState<string | undefined>()
   const [aiError, setAiError] = useState<string | null>(null)
   const [streamingTimeout, setStreamingTimeout] = useState<NodeJS.Timeout | null>(null)
   const [lastAnalysisMessageCount, setLastAnalysisMessageCount] = useState(0)
@@ -163,6 +164,7 @@ export const ChatView = memo(function ChatView({
       if (data.topicId === conversationId) {
         // Keep isAIProcessing=true during streaming - only set to false on complete
         setAiStreamingContent(data.partial);
+        setAiModelName(data.modelName); // Capture model name from streaming event
         setAiError(null); // Clear any errors during successful streaming
       }
     });
@@ -328,9 +330,9 @@ export const ChatView = memo(function ChatView({
   
   const handleClearConversation = async () => {
     if (confirm('Clear all messages in this conversation? This cannot be undone.')) {
-      // TODO: Implement clearConversation via model.chatHandler
+      // TODO: Implement clearConversation via model.chatPlan
       console.log('[ChatView] TODO: Implement clearConversation for:', conversationId)
-      // When implemented: await model.chatHandler.clearConversation({ conversationId })
+      // When implemented: await model.chatPlan.clearConversation({ conversationId })
       // Reload the page to reset everything
       // window.location.reload()
     }
@@ -378,7 +380,7 @@ export const ChatView = memo(function ChatView({
           );
 
           return (
-            <div className="border-b bg-muted/30 max-h-[40vh] overflow-y-auto">
+            <div className="border-b bg-muted/30 max-h-[40vh] overflow-y-auto ios-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
               <div className="p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div>
@@ -441,6 +443,7 @@ export const ChatView = memo(function ChatView({
           loading={loading}
           isAIProcessing={isAIProcessing}
           aiStreamingContent={aiStreamingContent}
+          aiModelName={aiModelName}
           aiError={aiError}
           topicId={conversationId}
           subjectsJustAppeared={subjectsJustAppeared}
