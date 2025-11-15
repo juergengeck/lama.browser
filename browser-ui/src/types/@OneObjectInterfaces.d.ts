@@ -14,6 +14,8 @@
 
 import type { SHA256IdHash, SHA256Hash } from '@refinio/one.core/lib/util/type-checks.js';
 import type { Person } from '@refinio/one.core/lib/recipes.js';
+import type { Story } from '../recipes/StoryRecipe';
+import type { Assembly } from '@assembly/core/types/Assembly.js';
 
 declare module '@OneObjectInterfaces' {
     // ============================================================================
@@ -51,6 +53,10 @@ declare module '@OneObjectInterfaces' {
 
         // Subscription Management (trust.core)
         SubscriptionBalance: SubscriptionBalance;
+
+        // Assembly Tracking (assembly.core)
+        Story: Story;
+        Assembly: Assembly;
     }
 
     // ============================================================================
@@ -68,6 +74,8 @@ declare module '@OneObjectInterfaces' {
         MessageReadStatus: Pick<MessageReadStatus, '$type$' | 'conversationId'>;
         Keyword: Pick<Keyword, '$type$' | 'term'>;
         SubscriptionBalance: Pick<SubscriptionBalance, '$type$' | 'userId'>;
+        Story: Pick<Story, '$type$' | 'id'>;
+        Assembly: Pick<Assembly, '$type$' | 'storyRef'>;
     }
 
     // ============================================================================

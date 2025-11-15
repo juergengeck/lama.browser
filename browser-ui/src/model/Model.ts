@@ -112,6 +112,10 @@ import {LLMRecipe} from '@lama/core/recipes/LLMRecipe';
 import {ProposalConfigRecipe} from '@lama/core/recipes/ProposalConfigRecipe';
 import {SubscriptionBalanceRecipe} from '../recipes/SubscriptionBalanceRecipe';
 import {MessageReadStatusRecipe} from '../recipes/MessageReadStatusRecipe';
+import {StoryRecipe} from '../recipes/StoryRecipe';
+
+// Assembly.core recipes
+import {AssemblyRecipe} from '@assembly/core/recipes/index.js';
 
 // LAMA core models (LLM object management)
 import {LLMObjectManager} from '@lama/core/models/LLMObjectManager';
@@ -173,6 +177,8 @@ export default class Model {
                 ProposalConfigRecipe,
                 SubscriptionBalanceRecipe,
                 MessageReadStatusRecipe,
+                StoryRecipe,  // Assembly tracking
+                AssemblyRecipe,  // Assembly (Product) tracking
                 // Trust.core recipes (identity subscription system)
                 ...TrustCoreRecipes
             ],
@@ -185,7 +191,7 @@ export default class Model {
             reverseMapsForIdObjects: new Map([
                 ...ReverseMapsForIdObjectsStable,
                 ...ReverseMapsForIdObjectsExperimental
-                // TODO: Add LAMA reverse maps for ID objects if needed
+                // ONE.core automatically creates reverse maps for versioned objects (isId: true)
             ]),
             storageInitTimeout: 20000
         });
@@ -255,6 +261,9 @@ export default class Model {
                         }
                     }
                     console.log(`[Model/queryAllLLMObjects] Query complete`);
+                },
+                getOwnerId: async () => {
+                    return await that.leuteModel.myMainIdentity();
                 }
             }
             // No federation group for browser (optional parameter)

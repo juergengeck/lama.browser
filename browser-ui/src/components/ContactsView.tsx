@@ -32,8 +32,9 @@ import {
 import { Users, UserPlus, Search, Circle, Bot, MessageSquare, Download, CheckCircle, User, Edit, MoreVertical, Shield, UserCheck, Ban, Trash2, Link as LinkIcon } from 'lucide-react'
 import { useModel } from '@/model/ModelContext'
 import { usePlans } from '@lama/ui'
-import { ProfileDialog } from './ProfileDialog'
+import { ProfileEditor } from './ProfileEditor'
 import { ChainOfTrustView } from './ChainOfTrustView'
+import { ContactAvatar } from './ContactAvatar'
 
 interface ContactsViewProps {
   onNavigateToChat?: (topicId: string, contactName: string) => void
@@ -356,15 +357,11 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3 flex-1 min-w-0">
-                          <Avatar>
-                            <AvatarFallback className={contact.isAI ? 'bg-purple-100 dark:bg-purple-900' : ''}>
-                              {contact.isAI ? (
-                                <Bot className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                              ) : (
-                                (contact.displayName || contact.name || 'UN').substring(0, 2).toUpperCase()
-                              )}
-                            </AvatarFallback>
-                          </Avatar>
+                          <ContactAvatar
+                            personId={contact.personId || contact.id}
+                            name={contact.displayName || contact.name || 'Unknown'}
+                            isAI={contact.isAI}
+                          />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center space-x-2">
                               <span className="font-medium truncate">{contact.displayName || contact.name || 'Unknown'}</span>
@@ -533,8 +530,8 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
         </CardContent>
       </Card>
 
-      {/* Profile Dialog */}
-      <ProfileDialog
+      {/* Profile Editor */}
+      <ProfileEditor
         open={profileDialogOpen}
         onOpenChange={setProfileDialogOpen}
         currentName={contacts.find(c => c.trustLevel === 'self')?.name || ''}

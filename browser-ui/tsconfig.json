@@ -27,7 +27,9 @@
       "@components/*": ["./src/components/*"],
       "@lib/*": ["./src/lib/*"],
       "@lama/ui": ["../../lama.ui/src"],
-      "@lama/ui/*": ["../../lama.ui/src/*"]
+      "@lama/ui/*": ["../../lama.ui/src/*"],
+      "@assembly/core": ["../../assembly.core"],
+      "@assembly/core/*": ["../../assembly.core/*"]
     }
   },
   "include": [

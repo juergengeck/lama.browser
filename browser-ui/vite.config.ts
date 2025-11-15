@@ -34,6 +34,7 @@ export default defineConfig({
       { find: '@chat/core', replacement: path.resolve(__dirname, '../../chat.core') },
       { find: '@connection/core', replacement: path.resolve(__dirname, '../../connection.core/src') },
       { find: '@trust/core', replacement: path.resolve(__dirname, '../../trust.core') },
+      { find: '@assembly/core', replacement: path.resolve(__dirname, '../../assembly.core') },
 
       // CRITICAL: Use the ONE.core packages directly - NO duplication
       { find: '@refinio/one.core', replacement: path.resolve(__dirname, '../packages/one.core') },
@@ -114,7 +115,7 @@ export default defineConfig({
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
-      'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' ws://localhost:* http://localhost:* wss://comm.refinio.net wss://comm10.dev.refinio.one wss://*.refinio.net wss://*.refinio.one https://*.refinio.net https://*.refinio.one https://huggingface.co https://*.huggingface.co http://localhost:11434; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"
+      'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' ws: http: https: wss://comm.refinio.net wss://comm10.dev.refinio.one wss://*.refinio.net wss://*.refinio.one https://*.refinio.net https://*.refinio.one https://huggingface.co https://*.huggingface.co; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"
     }
   }
 })

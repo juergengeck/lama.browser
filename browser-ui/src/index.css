@@ -123,23 +123,18 @@
   /* Prevent iOS text size adjust after orientation change */
   html {
     -webkit-text-size-adjust: 100%;
-    /* Fix for iOS standalone mode scrolling */
     height: 100%;
-    overflow: hidden;
   }
 
-  /* Body should fill viewport and prevent pull-to-refresh */
+  /* Body should fill viewport without breaking scroll */
   body {
     height: 100%;
-    overflow: hidden;
-    position: fixed;
     width: 100%;
   }
 
   /* Root element needs proper height for flex layout */
   #root {
     height: 100%;
-    overflow: hidden;
   }
 }
 

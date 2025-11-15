@@ -89,6 +89,45 @@ export function MessageView({
   // Store attachment descriptors for display
   const [attachmentDescriptors, setAttachmentDescriptors] = useState<Map<string, BlobDescriptor>>(new Map())
 
+  // Load attachments for received messages
+  useEffect(() => {
+    const loadAttachments = async () => {
+      for (const msg of messages) {
+        if (msg.attachments && msg.attachments.length > 0) {
+          for (const attachment of msg.attachments) {
+            const hash = attachment.hash.toString()
+            // Check against current state value, not stale closure
+            setAttachmentDescriptors(prev => {
+              if (!prev.has(hash)) {
+                // Load attachment asynchronously
+                attachmentService.getAttachment(attachment.hash)
+                  .then(result => {
+                    if (result) {
+                      // Transform AttachmentService response to BlobDescriptor
+                      // Use metadata from MessageAttachment if available, otherwise from BLOB storage
+                      const descriptor: BlobDescriptor = {
+                        data: result.data,
+                        type: attachment.mimeType || result.metadata.mimeType,
+                        name: attachment.name || result.metadata.name,
+                        size: attachment.size || result.metadata.size,
+                        lastModified: Date.now() // ONE.core BLOBs don't store lastModified
+                      }
+                      setAttachmentDescriptors(current => new Map(current).set(hash, descriptor))
+                    }
+                  })
+                  .catch(error => {
+                    console.error(`[MessageView] Failed to load attachment ${hash}:`, error)
+                  })
+              }
+              return prev
+            })
+          }
+        }
+      }
+    }
+    loadAttachments()
+  }, [messages])
+
   // Throttle streaming content updates for better markdown rendering performance
   const throttledStreamingContent = useThrottledStreamingContent(aiStreamingContent, isAIProcessing)
 
