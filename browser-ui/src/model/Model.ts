@@ -247,10 +247,13 @@ export default class Model {
                 queryAllLLMObjects: async function* () {
                     // Query all LLM objects from storage using reverse map
                     // This is needed to restore AI contacts on reload
+                    console.log('[Model/queryAllLLMObjects] 🔍 Step 1: Getting owner ID...');
                     const myId = await that.leuteModel.myMainIdentity();
-                    console.log(`[Model/queryAllLLMObjects] Querying LLM objects for owner: ${myId.substring(0, 8)}...`);
+                    console.log(`[Model/queryAllLLMObjects] 🔍 Step 2: Got owner ID: ${myId.substring(0, 8)}...`);
+
+                    console.log(`[Model/queryAllLLMObjects] 🔍 Step 3: Calling getAllEntries(${myId.substring(0, 8)}, 'LLM')...`);
                     const llmEntries = await getAllEntries(myId, 'LLM');
-                    console.log(`[Model/queryAllLLMObjects] Found ${llmEntries.length} LLM entries in reverse map`);
+                    console.log(`[Model/queryAllLLMObjects] 🔍 Step 4: getAllEntries returned ${llmEntries.length} LLM entries`);
 
                     for (const entry of llmEntries) {
                         console.log(`[Model/queryAllLLMObjects] Processing entry hash: ${entry.hash.substring(0, 8)}...`);
