@@ -186,7 +186,9 @@ export default class Model {
                 ...ReverseMapsStable,
                 ...ReverseMapsExperimental,
                 // Trust.core reverse maps (identity subscription system)
-                ...TrustCoreReverseMaps
+                ...TrustCoreReverseMaps,
+                // LAMA reverse maps for querying objects by owner
+                ['LLM', new Set(['owner'])]
             ]),
             reverseMapsForIdObjects: new Map([
                 ...ReverseMapsForIdObjectsStable,
