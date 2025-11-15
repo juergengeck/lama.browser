@@ -254,11 +254,16 @@ export default class Model {
                     console.log(`[Model/queryAllLLMObjects] 🔍 Step 3: Calling getAllEntries(${myId.substring(0, 8)}, 'LLM')...`);
                     const llmEntries = await getAllEntries(myId, 'LLM');
                     console.log(`[Model/queryAllLLMObjects] 🔍 Step 4: getAllEntries returned ${llmEntries.length} LLM entries`);
+                    console.log(`[Model/queryAllLLMObjects] 🔍 First entry structure:`, llmEntries[0]);
 
                     for (const entry of llmEntries) {
-                        console.log(`[Model/queryAllLLMObjects] Processing entry hash: ${entry.hash.substring(0, 8)}...`);
+                        // getAllEntries returns objects with 'obj' property, not 'hash'
+                        const objectHash = entry.obj || entry.hash || entry;
+                        console.log(`[Model/queryAllLLMObjects] Processing entry:`, entry);
+                        console.log(`[Model/queryAllLLMObjects] Extracted hash: ${objectHash?.toString().substring(0, 8)}...`);
+
                         // Get the actual LLM object using the hash from the reverse map entry
-                        const llmObject = await getObject(entry.hash);
+                        const llmObject = await getObject(objectHash);
                         console.log(`[Model/queryAllLLMObjects] Retrieved object:`, llmObject);
                         if (llmObject && llmObject.$type$ === 'LLM') {
                             console.log(`[Model/queryAllLLMObjects] Yielding LLM object: ${llmObject.name}`);
