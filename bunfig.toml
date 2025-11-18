@@ -1,0 +1,3 @@
+[install]
+# Disable workspace detection
+workspaces = false

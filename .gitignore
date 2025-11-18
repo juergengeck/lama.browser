@@ -73,3 +73,6 @@ archive/code.core/
 archive/flexibel.electron.old/
 archive/lama.app.old/
 archive/lama.worker/
+
+# Exclude lama subdirectory (separate project)
+lama/
