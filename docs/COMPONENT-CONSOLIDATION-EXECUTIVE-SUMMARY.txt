@@ -1,0 +1,311 @@
+================================================================================
+                 LAMA BROWSER COMPONENT CONSOLIDATION
+                         COMPREHENSIVE ANALYSIS
+================================================================================
+
+SUMMARY OF FINDINGS
+================================================================================
+
+Total Components Analyzed:     87 React (.tsx/.jsx) files
+Already in lama.ui (Duplicates): 23 (26%)
+Ready to Consolidate:           47 (54%)
+Platform-Specific (Needs Hooks): 16 (18%)
+Deprecated/Cleanup:             1+ (?)
+
+KEY STATISTICS
+================================================================================
+
+Component Distribution by Category:
+  Chat Components (chat/)           13 files - DUPLICATED IN LAMA.UI
+  TopicSummary (TopicSummary/)       6 files - DUPLICATED IN LAMA.UI
+  KeywordDetail (KeywordDetail/)      5 files - DUPLICATED IN LAMA.UI
+  Settings (Settings/)               8 files - MOSTLY READY
+  Attachments (attachments/)         6 files - PLATFORM-AGNOSTIC
+  Audit Trail (audit/)               4 files - ELECTRON-SPECIFIC
+  Root Level                        39 files - MIXED
+
+Import Dependencies:
+  @lama/ui (good sign):            30 components already using
+  lucide-react (icons):            40+ components
+  useModel() hook:                  8 components
+  usePlans() hook:                 12 components
+  window.electronAPI (Electron):   16 components
+
+CONSOLIDATION READINESS ANALYSIS
+================================================================================
+
+TIER 1: HIGH PRIORITY (Ready Now - 47 Components)
+  ├─ Dialogs (6)              - User selection, pairing, profiles, etc.
+  ├─ Views (7)                - Contacts, connections, journal, etc.
+  ├─ Device/Trust (6)         - Device management, chain of trust, etc.
+  ├─ Settings (8)             - LLM, keywords, proposals, etc.
+  ├─ Attachments (6)          - Image, video, audio, document viewers
+  └─ Utilities (10)           - Avatars, badges, status indicators, etc.
+
+  Effort: LOW - Copy → Update imports → Test
+  Timeline: 2-3 sprints
+  Risk: LOW
+
+TIER 2: MEDIUM PRIORITY (Refactor Then Move - 4+ Components)
+  ├─ AuditTrailView.tsx       → useAuditTrail() hook
+  ├─ AuditPanel.tsx           → useAudit() hook
+  ├─ ChatHeader.tsx (export)  → useExport() hook
+  └─ AISettingsView.tsx       → useAISettings() hook
+
+  Effort: MEDIUM - Extract logic → Create hooks → Move
+  Timeline: 1-2 sprints
+  Risk: MEDIUM
+
+TIER 3: CLEANUP (Post-Migration)
+  ├─ FeedForward/             - Deprecated folder
+  ├─ WorkerInit/              - Legacy folder
+  └─ media/                   - Superseded by attachments/
+
+  Effort: LOW
+  Timeline: 1 sprint
+  Risk: LOW
+
+DETAILED COMPONENT BREAKDOWN
+================================================================================
+
+ROOT LEVEL COMPONENTS (39 files)
+
+CHAT-RELATED (3):
+  ✓ ChatLayout.tsx           - Layout container for chat
+  ✓ ChatView.tsx             - Full chat view component
+  ✓ MessageView.tsx          - Message display container
+
+DIALOGS/MODALS (6):
+  ✓ GroupChatDialog.tsx      - Create/edit group chat
+  ✓ UserSelectionDialog.tsx  - User selection UI
+  ✓ ProfileDialog.tsx        - User profile display
+  ✓ PairingDialog.tsx        - Device pairing UI
+  ✓ InputDialog.tsx          - Generic input dialog
+  ✓ ObjectHierarchyDialog.tsx- Object hierarchy browser
+
+VIEW COMPONENTS (7):
+  ✓ ContactsView.tsx         - List/manage contacts
+  ✓ ConnectionsView.tsx      - P2P connections status
+  ✓ JournalView.tsx          - Conversation journal
+  ✓ InstancesView.tsx        - Instance management
+  ✓ VerificationView.tsx     - Verification process
+  ✓ SubjectChatView.tsx      - Subject-filtered chat
+  ✓ ObjectHierarchyView.tsx  - Object hierarchy display
+
+DEVICE/TRUST (6):
+  ✓ DeviceManager.tsx        - Device management
+  ✓ DeviceSetup.tsx          - Device setup wizard
+  ✓ DevicesView.tsx          - Devices list/view
+  ✓ ChainOfTrustView.tsx     - Trust chain display
+  ✓ ContactTrustStatus.tsx   - Trust status indicator
+  ✓ PendingContacts.tsx      - Pending contact requests
+
+UTILITIES (10):
+  ★ ParticipantAvatars.tsx   - Already in lama.ui
+  ★ ProposalCard.tsx         - Already in lama.ui
+  ★ ProposalCarousel.tsx     - Already in lama.ui
+  ✓ ConnectionStatus.tsx     - Connection status badge
+  ✓ SyncProgress.tsx         - Sync progress indicator
+  ✓ StorageWarning.tsx       - Storage quota warning
+  ✓ InstanceManager.tsx      - Instance switching
+  ✓ ErrorBoundary.tsx        - Error boundary wrapper
+  ✓ MobileTabBar.tsx         - Mobile navigation
+  ✓ FaviconBadgeManager.tsx  - Favicon notification
+  ✓ AppStateJournal.tsx      - App state journal
+  ✓ SubscriptionExport.tsx   - Subscription export
+
+SETTINGS (2):
+  ✓ SettingsView.tsx         - Settings container
+  ⚠️ AISettingsView.tsx       - AI settings (has IPC)
+
+OTHER (5):
+  ★ LoginScreen.tsx          - Already in lama.ui
+  ✓ DataDashboard.tsx        - Statistics dashboard
+  ✓ InvitationAcceptance.tsx - Invitation acceptance
+  ✓ PurchaseView.tsx         - Payment/subscription UI
+  ⚠️ AuditTrailView.tsx       - Audit logs (has IPC)
+
+CHAT SUBDIRECTORY (13 files) - ALL DUPLICATED
+  ★ ChatContext.tsx
+  ★ ChatHeader.tsx
+  ★ EnhancedMessageBubble.tsx
+  ★ EnhancedMessageInput.tsx
+  ★ FormattedMessageContent.tsx
+  ★ KeywordDisplay.tsx
+  ★ KeywordLine.tsx
+  ★ LLMErrorRecovery.tsx
+  ★ MessageContextMenu.tsx
+  ★ MessageHistory.tsx
+
+TOPICSUMMARY SUBDIRECTORY (6 files) - ALL DUPLICATED
+  ★ index.tsx
+  ★ TopicSummary.tsx
+  ★ SubjectList.tsx
+  ★ KeywordCloud.tsx
+  ★ SummaryHistory.tsx
+  ★ WordCloudSettings.tsx
+
+KEYWORDDETAIL SUBDIRECTORY (5 files) - ALL DUPLICATED
+  ★ KeywordDetailPanel.tsx
+  ★ SubjectList.tsx
+  ★ SubjectItem.tsx
+  ★ AccessControlList.tsx
+  ★ SortControls.tsx
+
+SETTINGS SUBDIRECTORY (8 files)
+  ✓ LLMSettings.tsx          - LLM configuration
+  ✓ KeywordLineSettings.tsx  - Keyword line settings
+  ✓ KeywordSettingsPage.tsx  - Keyword settings page
+  ✓ SubscriptionSettings.tsx - Subscription settings
+  ✓ ProposalSettings.tsx     - Proposal algorithm config
+  ✓ MCPSettings.tsx          - MCP settings
+  ✓ StorageQuota.tsx         - Storage quota display
+  ✓ DataCleanup.tsx          - Data cleanup UI
+
+ATTACHMENTS SUBDIRECTORY (6 files) - PLATFORM-AGNOSTIC DISPLAY
+  ✓ AttachmentViewFactory.tsx
+  ✓ ImageAttachmentView.tsx
+  ✓ VideoAttachmentView.tsx
+  ✓ AudioAttachmentView.tsx
+  ✓ DocumentAttachmentView.tsx
+  ✓ UnknownAttachmentView.tsx
+
+AUDIT SUBDIRECTORY (4 files) - MIXED
+  ⚠️ AuditPanel.tsx          - Needs useAudit() hook
+  ⚠️ AuditTrailView.tsx      - Needs useAuditTrail() hook
+  ✓ AttestationStatus.tsx    - Display only
+  ✓ AuditorBadge.tsx         - Display only
+  ✓ QRCodeDisplay.tsx        - Display only
+
+UI SUBDIRECTORY (1 file)
+  ✓ HorizontalTreeView.tsx   - Tree view primitive
+
+LEGEND
+  ★ = Already consolidated (duplicates in lama.ui)
+  ✓ = Ready to consolidate (platform-agnostic)
+  ⚠️ = Needs refactoring (Electron-specific)
+
+DEPENDENCY ANALYSIS
+================================================================================
+
+PLATFORM-AGNOSTIC DEPENDENCIES (Good for sharing):
+  - React / React DOM
+  - @lama/ui (already using!)
+  - lucide-react (icons)
+  - marked / react-markdown (markdown)
+  - highlight.js (code highlighting)
+  - DOMPurify (HTML sanitization)
+  - react-swipeable (gestures)
+  - @radix-ui/* (UI primitives)
+  - class-variance-authority / clsx (CSS utilities)
+
+CUSTOM HOOKS (Platform-agnostic):
+  - usePlans() → @lama/ui/hooks/useLamaClient
+  - useModel() → lama.browser context
+  - useThrottledStreamingContent() → custom hook
+  - useProposals() → custom hook
+  - useAttachmentService() → custom hook
+
+PLATFORM-SPECIFIC DEPENDENCIES (Needs abstraction):
+  - window.electronAPI → 16 components
+  - ipcRenderer → 5 components
+  - Node.js modules → 3 components
+
+KEY INSIGHTS
+================================================================================
+
+1. EXCELLENT IMPORT DISCIPLINE
+   ✓ 30 components already use @lama/ui
+   ✓ Most components use standard React + web APIs
+   ✓ Clean separation of concerns visible
+
+2. PLATFORM-AGNOSTIC DESIGN WORKING
+   ✓ usePlans() hook pattern is excellent
+   ✓ useModel() is well contained
+   ✓ Minimal direct IPC calls (good isolation)
+
+3. CONSOLIDATION IS SAFE
+   ✓ 54% of components need ZERO changes
+   ✓ 26% are already done (just need cleanup)
+   ✓ Only 18% need hook extraction (manageable)
+
+4. ATTACHMENT HANDLERS
+   ✓ Display logic is 100% platform-agnostic
+   ✓ Can be consolidated as-is
+   ✓ No browser/Electron-specific code
+
+5. DUPLICATES ARE RIPE FOR CLEANUP
+   ✓ 23 components exist in both places
+   ✓ lama.browser versions are OLDER
+   ✓ Should delete browser copies and import from lama.ui
+
+RECOMMENDED ACTION PLAN
+================================================================================
+
+PHASE 1 (This Week): Setup & Planning
+  ☐ Review this analysis with team
+  ☐ Identify blockers and dependencies
+  ☐ Plan hook extraction for Tier 2
+  ☐ Create PR templates
+
+PHASE 2 (Sprint 1-2): Tier 1 Consolidation
+  ☐ Start with dialogs (lowest risk)
+  ☐ Move utilities next
+  ☐ Then attachment handlers
+  ☐ Finally, remaining views/settings
+
+PHASE 3 (Sprint 3): Tier 2 Refactoring
+  ☐ Extract Electron IPC to hooks
+  ☐ Create useAuditTrail(), useExport(), etc.
+  ☐ Move audit components
+
+PHASE 4 (Sprint 4): Cleanup & Validation
+  ☐ Delete deprecated folders
+  ☐ Delete duplicate browser copies
+  ☐ Full build test
+  ☐ Cross-platform validation
+
+SUCCESS CRITERIA
+================================================================================
+
+Migration Complete When:
+  ✓ 87 components organized in lama.ui
+  ✓ ZERO duplicates in lama.browser
+  ✓ ZERO circular dependencies
+  ✓ All builds pass
+  ✓ Tests pass
+  ✓ Documentation updated
+  ✓ Team trained
+
+ESTIMATED EFFORT
+================================================================================
+
+Tier 1 (47 components):       2-3 sprints
+Tier 2 (4-8 components):      1-2 sprints
+Tier 3 (Cleanup):             1 sprint
+Documentation/Training:       0.5 sprints
+                              ──────────
+Total Time:                   5-7 sprints
+
+NEXT STEPS
+================================================================================
+
+1. Share this analysis with the team
+2. Review documentation:
+   - /docs/COMPONENT-CONSOLIDATION-ANALYSIS.md (detailed)
+   - /docs/COMPONENT-CONSOLIDATION-SUMMARY.md (quick reference)
+3. Start with Tier 1, lowest-risk components (dialogs)
+4. Create feature branch: feature/consolidate-dialogs
+5. Establish code review process
+6. Report progress weekly
+
+CONTACT FOR QUESTIONS
+================================================================================
+
+Detailed analysis files:
+  - COMPONENT-CONSOLIDATION-ANALYSIS.md (25KB, 400+ lines)
+  - COMPONENT-CONSOLIDATION-SUMMARY.md (7KB, migration checklist)
+
+All files located in: /Users/gecko/src/lama/docs/
+
+================================================================================

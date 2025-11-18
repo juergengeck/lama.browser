@@ -1,0 +1,30 @@
+{
+  "name": "@medical/core",
+  "version": "1.0.0",
+  "description": "Medical/questionnaire business logic (platform-agnostic)",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "find . -name '*.js' -not -path './node_modules/*' -not -path './packages/*' -delete"
+  },
+  "exports": {
+    "./plans/*": "./plans/*",
+    "./models/*": "./models/*",
+    "./types/*": "./types/*",
+    "./src/plans/*": "./src/plans/*",
+    "./src/models/*": "./src/models/*",
+    "./src/types/*": "./src/types/*"
+  },
+  "peerDependencies": {
+    "@refinio/one.core": "*",
+    "@refinio/one.models": "*"
+  },
+  "author": "REFINIO GmbH",
+  "license": "MIT",
+  "private": true,
+  "devDependencies": {
+    "@types/node": "^22.18.13",
+    "typescript": "^5.7.2"
+  }
+}

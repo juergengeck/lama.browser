@@ -1,0 +1,82 @@
+Component Name,Location,Status,Category,Dependencies,Electron/IPC,Notes
+ChatLayout.tsx,root,ready,chat,@lama/ui,no,Layout container
+ChatView.tsx,root,ready,chat,@lama/ui,no,Full chat view
+MessageView.tsx,root,ready,chat,useModel() usePlans(),no,Message display
+GroupChatDialog.tsx,root,ready,dialog,@lama/ui,no,Group creation
+UserSelectionDialog.tsx,root,ready,dialog,usePlans(),no,User selection
+ProfileDialog.tsx,root,ready,dialog,@lama/ui,no,Profile display
+PairingDialog.tsx,root,ready,dialog,@lama/ui,no,Device pairing
+InputDialog.tsx,root,ready,dialog,@lama/ui,no,Generic input
+ObjectHierarchyDialog.tsx,root,ready,dialog,@lama/ui,no,Object browser
+ContactsView.tsx,root,ready,view,usePlans(),no,Contacts list
+ConnectionsView.tsx,root,ready,view,@lama/ui,no,P2P connections
+JournalView.tsx,root,ready,view,@lama/ui,no,Conversation journal
+InstancesView.tsx,root,ready,view,@lama/ui,no,Instance management
+VerificationView.tsx,root,ready,view,@lama/ui,no,Verification process
+SubjectChatView.tsx,root,ready,view,@lama/ui,no,Subject-filtered chat
+ObjectHierarchyView.tsx,root,ready,view,@lama/ui,no,Object display
+DeviceManager.tsx,root,ready,device,@lama/ui,no,Device management
+DeviceSetup.tsx,root,ready,device,@lama/ui,no,Setup wizard
+DevicesView.tsx,root,ready,device,@lama/ui,no,Devices list
+ChainOfTrustView.tsx,root,ready,device,@lama/ui,no,Trust chain
+ContactTrustStatus.tsx,root,ready,device,@lama/ui,no,Trust indicator
+PendingContacts.tsx,root,ready,device,@lama/ui,no,Pending requests
+ParticipantAvatars.tsx,root,duplicated,utility,lucide-react,no,Already in lama.ui
+ProposalCard.tsx,root,duplicated,utility,@lama/ui,no,Already in lama.ui
+ProposalCarousel.tsx,root,duplicated,utility,react-swipeable,no,Already in lama.ui
+ConnectionStatus.tsx,root,ready,utility,@lama/ui,no,Status badge
+SyncProgress.tsx,root,ready,utility,@lama/ui,no,Progress indicator
+StorageWarning.tsx,root,ready,utility,@lama/ui,no,Storage quota
+InstanceManager.tsx,root,ready,utility,@lama/ui,no,Instance switching
+ErrorBoundary.tsx,root,ready,utility,react,no,Error boundary
+MobileTabBar.tsx,root,ready,utility,@lama/ui,no,Mobile navigation
+FaviconBadgeManager.tsx,root,ready,utility,no,no,Favicon API
+AppStateJournal.tsx,root,ready,utility,@lama/ui,no,State journal
+SubscriptionExport.tsx,root,ready,utility,@lama/ui,no,Subscription export
+SettingsView.tsx,root,ready,settings,@lama/ui,no,Settings container
+AISettingsView.tsx,root,refactor,settings,window.electronAPI,yes,Needs useAISettings()
+LoginScreen.tsx,root,duplicated,auth,@lama/ui,no,Already in lama.ui
+DataDashboard.tsx,root,ready,data,@lama/ui,no,Statistics dashboard
+InvitationAcceptance.tsx,root,ready,data,@lama/ui,no,Invitation UI
+PurchaseView.tsx,root,ready,data,@lama/ui,no,Subscription UI
+AuditTrailView.tsx,root,refactor,audit,window.electronAPI,yes,Needs useAuditTrail()
+ChatContext.tsx,chat/,duplicated,chat,react,no,Already in lama.ui
+ChatHeader.tsx,chat/,duplicated,chat,@lama/ui window.electronAPI,partial,Export needs hook
+EnhancedMessageBubble.tsx,chat/,duplicated,chat,@lama/ui,no,Already in lama.ui
+EnhancedMessageInput.tsx,chat/,duplicated,chat,@lama/ui,no,Already in lama.ui
+FormattedMessageContent.tsx,chat/,duplicated,chat,marked react-markdown,no,Already in lama.ui
+KeywordDisplay.tsx,chat/,duplicated,chat,@lama/ui,no,Already in lama.ui
+KeywordLine.tsx,chat/,duplicated,chat,@lama/ui,no,Already in lama.ui
+LLMErrorRecovery.tsx,chat/,duplicated,chat,@lama/ui,no,Already in lama.ui
+MessageContextMenu.tsx,chat/,duplicated,chat,@lama/ui,no,Already in lama.ui
+MessageHistory.tsx,chat/,duplicated,chat,@lama/ui,no,Already in lama.ui
+TopicSummary.tsx,TopicSummary/,duplicated,analysis,@lama/ui,no,Already in lama.ui
+SubjectList.tsx,TopicSummary/,duplicated,analysis,@lama/ui,no,Already in lama.ui
+KeywordCloud.tsx,TopicSummary/,duplicated,analysis,@lama/ui,no,Already in lama.ui
+SummaryHistory.tsx,TopicSummary/,duplicated,analysis,@lama/ui,no,Already in lama.ui
+WordCloudSettings.tsx,TopicSummary/,duplicated,analysis,@lama/ui,no,Already in lama.ui
+index.tsx,TopicSummary/,duplicated,analysis,@lama/ui,no,Already in lama.ui
+KeywordDetailPanel.tsx,KeywordDetail/,duplicated,keyword,usePlans(),no,Already in lama.ui
+SubjectList.tsx,KeywordDetail/,duplicated,keyword,@lama/ui,no,Already in lama.ui
+SubjectItem.tsx,KeywordDetail/,duplicated,keyword,@lama/ui,no,Already in lama.ui
+AccessControlList.tsx,KeywordDetail/,duplicated,keyword,@lama/ui,no,Already in lama.ui
+SortControls.tsx,KeywordDetail/,duplicated,keyword,@lama/ui,no,Already in lama.ui
+LLMSettings.tsx,Settings/,ready,settings,@lama/ui,no,Partially in lama.ui
+KeywordLineSettings.tsx,Settings/,ready,settings,@lama/ui,no,Ready to move
+KeywordSettingsPage.tsx,Settings/,ready,settings,usePlans(),no,Ready to move
+SubscriptionSettings.tsx,Settings/,ready,settings,@lama/ui,no,Ready to move
+ProposalSettings.tsx,Settings/,ready,settings,@lama/ui,no,Ready to move
+MCPSettings.tsx,Settings/,ready,settings,useModel(),no,Ready to move
+StorageQuota.tsx,Settings/,ready,settings,@lama/ui,no,Ready to move
+DataCleanup.tsx,Settings/,ready,settings,@lama/ui,no,Ready to move
+AttachmentViewFactory.tsx,attachments/,ready,attachment,@lama/ui,no,Factory pattern
+ImageAttachmentView.tsx,attachments/,ready,attachment,@lama/ui,no,Image viewer
+VideoAttachmentView.tsx,attachments/,ready,attachment,@lama/ui,no,Video player
+AudioAttachmentView.tsx,attachments/,ready,attachment,@lama/ui,no,Audio player
+DocumentAttachmentView.tsx,attachments/,ready,attachment,@lama/ui,no,Document viewer
+UnknownAttachmentView.tsx,attachments/,ready,attachment,@lama/ui,no,Fallback viewer
+AuditPanel.tsx,audit/,refactor,audit,window.electronAPI,yes,Needs useAudit()
+AttestationStatus.tsx,audit/,ready,audit,@lama/ui,no,Status display
+AuditorBadge.tsx,audit/,ready,audit,@lama/ui,no,Badge display
+QRCodeDisplay.tsx,audit/,ready,audit,@lama/ui,no,QR code render
+HorizontalTreeView.tsx,ui/,ready,ui,@lama/ui,no,Tree view primitive

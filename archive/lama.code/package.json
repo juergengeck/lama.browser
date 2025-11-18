@@ -1,0 +1,38 @@
+{
+  "name": "@lama/code",
+  "version": "0.1.0",
+  "description": "Standalone Node.js server providing AI coding assistant via P2P",
+  "type": "module",
+  "main": "src/server.js",
+  "bin": {
+    "lama-code": "./src/cli.js"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "clean": "find src test -type f \\( -name '*.js' -o -name '*.js.map' -o -name '*.d.ts' \\) ! -path '*/node_modules/*' -delete",
+    "test": "mocha test/**/*.test.js --timeout 60000"
+  },
+  "keywords": [
+    "lama",
+    "code-assistant",
+    "ai",
+    "p2p",
+    "mcp"
+  ],
+  "author": "lama.one Team",
+  "license": "MIT",
+  "dependencies": {
+    "@refinio/one.core": "file:../packages/one.core",
+    "@refinio/one.models": "file:../packages/one.models",
+    "@code/core": "file:../code.core",
+    "@lama/core": "file:../lama.core"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.3",
+    "mocha": "^11.0.1",
+    "chai": "^5.1.2"
+  }
+}

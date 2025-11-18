@@ -1,0 +1,289 @@
+================================================================================
+REFINIO.API - COMPLETE TYPE DEFINITIONS QUICK REFERENCE
+================================================================================
+
+PLAN TYPE DEFINITIONS
+====================
+
+1. Plan (Base Interface)
+   File: src/registry/PlanRegistry.ts:19-22
+   - Marker interface for plan classes
+   - Methods must be async and return promises
+
+2. OneInstancePlan
+   File: src/handlers/OneInstancePlan.ts:18
+   Methods: getInstanceId(), getOwner(), getInfo()
+
+3. OneStoragePlan
+   File: src/handlers/OneStoragePlan.ts:35
+   Methods: storeVersionedObject(), getObjectByIdHash(), getVersionedObjectByHash(),
+            storeUnversionedObject(), getUnversionedObject(), storeBlob(), readBlob()
+
+4. OneLeutePlan
+   File: src/handlers/OneLeutePlan.ts:16
+   Methods: getOwnIdentity(), getContacts(), getContact(), createContact(), updateContact(),
+            getGroups(), createGroup(), addGroupMember(), removeGroupMember()
+
+5. OneChannelsPlan
+   File: src/handlers/OneChannelsPlan.ts:17
+   Methods: createChannel(), postToChannel(), getChannel(), listChannels(),
+            getMatchingChannels(), deleteChannel()
+
+6. OneCryptoPlan
+   File: src/handlers/OneCryptoPlan.ts:22
+   Methods: sign(), verify(), encrypt(), decrypt(), hash()
+
+7. AssemblyPlan
+   File: src/stories/AssemblyPlan.ts:46
+   Methods: createStory(), createAssembly()
+   Implements: IAssemblyHandler
+
+8. CoordinationPlan (Base Class)
+   File: src/CoordinationPlan.ts:38
+   Key: Orchestrates multiple atomic plans
+   Methods: emitProgress(), invokeAtomicPlan(), rollback?()
+
+9. TransportPlan (Abstract Base Class)
+   File: src/TransportPlan.ts:44
+   Key: Protocol-specific transport handler
+   Abstract: start(), stop(), extractAuthContext(), isRunning()
+   Concrete: invokeOperation(), formatError(), generateRequestId()
+
+
+STORY TYPE DEFINITIONS
+=====================
+
+1. ExecutionContext
+   File: src/types/story-execution.ts:19-54
+   Fields:
+   - title: string
+   - description: string
+   - planId: SHA256IdHash<any>
+   - productId?: SHA256IdHash<any>
+   - instanceVersion: string
+   - owner: string
+   - domain: string
+   - supply?: Supply
+   - demand?: Demand
+   - matchScore?: number
+   - metadata?: Map<string, string>
+
+2. ExecutionResult<T>
+   File: src/types/story-execution.ts:121-142
+   Fields:
+   - success: boolean
+   - result?: T
+   - story?: { hash: string; idHash: string }
+   - assembly?: { hash: string; idHash: string }
+   - error?: string
+
+3. Story Object (created by AssemblyPlan)
+   $type$: 'Story'
+   Fields:
+   - id: string
+   - title: string
+   - description: string
+   - plan: SHA256IdHash<any>
+   - product: SHA256IdHash<any> | null
+   - instanceVersion: string
+   - success: boolean
+   - outcome?: string
+   - matchScore: number | null
+   - metadata: Map<string, string>
+   - duration: number
+   - owner: string
+   - domain: string
+   - created: number
+
+
+SUPPLY/DEMAND TYPE DEFINITIONS
+==============================
+
+1. Supply
+   File: src/types/story-execution.ts:59-74
+   Fields:
+   - domain: string (domain identifier)
+   - subjects: string[] (thematic keywords as SHA256 hashes)
+   - keywords: string[] (atomic concepts as SHA256 hashes)
+   - ownerId?: string (SHA256IdHash<Person>)
+   - verifiableCredentials?: VerifiableCredential[]
+
+2. Demand
+   File: src/types/story-execution.ts:79-91
+   Fields:
+   - domain: string (must match Supply.domain)
+   - keywords: string[] (SHA256 hashes for matching)
+   - trustLevel?: TrustLevel ('me' | 'trusted' | 'group' | 'public')
+   - groupHash?: string (SHA256IdHash<Group>)
+
+3. VerifiableCredential
+   File: src/types/story-execution.ts:101-116
+   Fields:
+   - type: string (e.g., 'GroupMembership', 'Identity', 'Capability')
+   - credentialHash: string
+   - issuer: string (SHA256IdHash<Person>)
+   - issued: number (timestamp)
+   - expires?: number (optional expiration timestamp)
+
+4. TrustLevel (Type Alias)
+   File: src/types/story-execution.ts:96
+   Values: 'me' | 'trusted' | 'group' | 'public'
+
+
+ASSEMBLY TYPE DEFINITIONS
+=========================
+
+1. Assembly Object (created by AssemblyPlan)
+   $type$: 'Assembly'
+   Fields:
+   - storyRef: string (Story idHash)
+   - supply: { domain, keywords, ownerId, subjects, verifiableCredentials }
+   - demand: { domain, keywords, trustLevel, credentialFilters, groupHash }
+   - instanceVersion: string
+   - matchScore: number (0.0-1.0)
+   - metadata: Map<string, string>
+   - status: string
+   - planRef: string
+   - owner: string
+   - domain: string
+   - created: number
+
+2. AssemblyQueryFilter
+   File: src/stories/AssemblyPlan.ts:30-35
+   Fields:
+   - domain?: string
+   - metadata?: Record<string, string>
+   - owner?: string
+   - keywords?: string[]
+
+
+SUPPORTING TYPE DEFINITIONS
+===========================
+
+1. AuthContext
+   File: src/types/context.ts:16-36
+   Fields:
+   - userId: SHA256IdHash<Person>
+   - sessionId: string
+   - capabilities: string[]
+
+2. PlanContext
+   File: src/types/context.ts:44-69
+   Fields:
+   - auth: AuthContext
+   - requestId: string
+   - timestamp: number
+   - metadata?: Record<string, any>
+
+3. PlanMetadata
+   File: src/registry/PlanRegistry.ts:24-29
+   Fields:
+   - name: string
+   - description?: string
+   - version?: string
+   - methods: MethodMetadata[]
+
+4. MethodMetadata
+   File: src/registry/PlanRegistry.ts:31-36
+   Fields:
+   - name: string
+   - description?: string
+   - params?: ParameterMetadata[]
+   - returns?: string
+
+5. ParameterMetadata
+   File: src/registry/PlanRegistry.ts:38-43
+   Fields:
+   - name: string
+   - type: string
+   - required?: boolean
+   - description?: string
+
+6. PlanTransaction
+   File: src/registry/PlanRegistry.ts:50-54
+   Fields:
+   - plan: string
+   - method: string
+   - params: any
+
+7. StoryResult<T>
+   File: src/registry/PlanRegistry.ts:61-72
+   Fields:
+   - success: boolean
+   - plan: PlanTransaction
+   - data?: T
+   - error?: { code, message, details? }
+   - timestamp: number
+   - executionTime?: number
+
+8. TransportConfig
+   File: src/TransportPlan.ts:26-36
+   Fields:
+   - devMode?: boolean
+   - timeout?: number
+
+9. ProgressEvent
+   File: src/CoordinationPlan.ts:27-31
+   Fields:
+   - step: string
+   - percent: number
+   - message?: string
+
+
+KEY PATTERNS & RELATIONSHIPS
+============================
+
+Plan → Story (AUTOMATIC)
+  Every Plan execution creates a Story
+
+Plan + Supply/Demand → Story + Assembly (TRIGGERED)
+  Assembly only created when business logic provides supply/demand
+
+Registry Pattern:
+  PlanRegistry.register(name, plan, metadata)
+  → Plans stored in Map<string, Plan>
+  → Metadata stored in Map<string, PlanMetadata>
+
+Invocation Pattern:
+  PlanRegistry.invoke(operation, request, context)
+  → Create PlanTransaction { plan, method, params }
+  → Execute method on Plan
+  → Return StoryResult { success, plan, data, error }
+
+Storage Pattern:
+  Story & Assembly stored as versioned ONE objects
+  Fields: $type$ = 'Story' or 'Assembly'
+  Immutable content-addressed storage via ONE.core
+
+
+FILE LOCATIONS (ABSOLUTE PATHS)
+===============================
+
+Core Plan Types:
+  /Users/gecko/src/lama/packages/refinio.api/src/registry/PlanRegistry.ts
+  /Users/gecko/src/lama/packages/refinio.api/src/CoordinationPlan.ts
+  /Users/gecko/src/lama/packages/refinio.api/src/TransportPlan.ts
+
+Concrete Plans:
+  /Users/gecko/src/lama/packages/refinio.api/src/handlers/OneInstancePlan.ts
+  /Users/gecko/src/lama/packages/refinio.api/src/handlers/OneStoragePlan.ts
+  /Users/gecko/src/lama/packages/refinio.api/src/handlers/OneLeutePlan.ts
+  /Users/gecko/src/lama/packages/refinio.api/src/handlers/OneChannelsPlan.ts
+  /Users/gecko/src/lama/packages/refinio.api/src/handlers/OneCryptoPlan.ts
+  /Users/gecko/src/lama/packages/refinio.api/src/stories/AssemblyPlan.ts
+
+Story/Assembly:
+  /Users/gecko/src/lama/packages/refinio.api/src/types/story-execution.ts
+  /Users/gecko/src/lama/packages/refinio.api/src/stories/StoryFactory.ts
+  /Users/gecko/src/lama/packages/refinio.api/src/stories/AssemblyPlan.ts
+
+Context & Metadata:
+  /Users/gecko/src/lama/packages/refinio.api/src/types/context.ts
+  /Users/gecko/src/lama/packages/refinio.api/src/types/metadata.ts
+
+Public Exports:
+  /Users/gecko/src/lama/packages/refinio.api/src/stories/index.ts
+  /Users/gecko/src/lama/packages/refinio.api/src/stories-index.ts
+  /Users/gecko/src/lama/packages/refinio.api/src/plan-system-index.ts
+
+================================================================================

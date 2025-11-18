@@ -1,0 +1,433 @@
+================================================================================
+LAMA.CUBE COMPONENT COMPLETE INVENTORY
+Base Location: /Users/gecko/src/lama/lama.cube/electron-ui/src/components/
+Generated: 2025-11-13
+================================================================================
+
+TOTAL: 88 React Components
+
+================================================================================
+CATEGORY 1: UI PRIMITIVES (16 files) - STATUS: MIGRATED TO lama.ui
+================================================================================
+Location: /components/ui/
+All shadcn/ui wrapper components - platform-agnostic
+
+1. alert-dialog.tsx        - Radix alert dialog wrapper
+2. alert.tsx               - Alert notification component
+3. avatar.tsx              - Avatar display component
+4. badge.tsx               - Badge/tag component
+5. button.tsx              - Button component
+6. card.tsx                - Card container component
+7. checkbox.tsx            - Checkbox input component
+8. dialog.tsx              - Modal dialog component
+9. dropdown-menu.tsx       - Dropdown menu component
+10. input.tsx               - Text input component
+11. label.tsx               - Form label component
+12. progress.tsx            - Progress bar component
+13. scroll-area.tsx         - Scrollable area component
+14. separator.tsx           - Visual separator
+15. switch.tsx              - Toggle switch component
+16. tabs.tsx                - Tabbed interface component
+
+================================================================================
+CATEGORY 2: CHAT COMPONENTS (9 files) - STATUS: MIGRATED TO lama.ui
+================================================================================
+Location: /components/chat/
+All platform-agnostic chat/messaging components
+
+1. ChatContext.tsx              - React context for chat state
+2. ChatHeader.tsx               - Chat header with metadata
+3. EnhancedMessageBubble.tsx    - Rich message display component
+4. EnhancedMessageInput.tsx     - Rich text input with attachments
+5. FormattedMessageContent.tsx  - Message text formatting/rendering
+6. KeywordDisplay.tsx           - Keyword tag display
+7. KeywordLine.tsx              - Keyword content presentation
+8. MessageContextMenu.tsx       - Right-click message actions menu
+9. MessageHistory.tsx           - Message list container
+
+================================================================================
+CATEGORY 3: TOP-LEVEL COMPONENTS (29 files) - MIXED STATUS
+================================================================================
+Location: /components/
+Various view and dialog components
+
+--- 3.1 Core Chat Views (5 files) ---
+
+1. ChatView.tsx                 [23 KB] Uses lamaBridge
+   - Main chat interface
+   - Message display and input
+   - Integration with analysis services
+   - Status: PARTIAL (also in lama.ui, needs sync)
+
+2. ChatLayout.tsx               [25 KB] Heavy electron use
+   - Layout container for chat UI
+   - Layout state management
+   - Status: NEEDS REFACTORING
+
+3. MessageView.tsx              [22 KB] Uses lamaBridge
+   - Message rendering and display
+   - Input handling
+   - Status: ALREADY IN lama.ui
+
+4. SubjectChatView.tsx          [14 KB] Uses lamaBridge
+   - Subject-specific chat interface
+   - Subject context tracking
+   - Status: NEEDS REFACTORING
+
+5. JournalView.tsx              [5 KB] IPC calls
+   - Memory/journal display
+   - Journal entries
+   - Status: NEEDS REFACTORING
+
+--- 3.2 Contact & Connection Management (5 files) ---
+
+6. ContactsView.tsx             [19 KB] Uses lamaBridge
+   - Contact list display
+   - Contact management
+   - Status: NEEDS REFACTORING
+
+7. ContactTrustStatus.tsx        [12 KB] Uses lamaBridge
+   - Trust level indicator
+   - Trust status display
+   - Status: NEEDS REFACTORING
+
+8. ConnectionsView.tsx           [21 KB] Uses lamaBridge
+   - P2P connection list
+   - Connection status
+   - Status: NEEDS REFACTORING
+
+9. PendingContacts.tsx           [13 KB] Uses lamaBridge
+   - Pending contact requests
+   - Request management
+   - Status: NEEDS REFACTORING
+
+10. UserSelectionDialog.tsx      [7 KB] UI only
+    - User picker modal
+    - Selection interface
+    - Status: READY FOR PHASE 2 CONSOLIDATION
+
+--- 3.3 Device & Instance Management (6 files) ---
+
+11. DevicesView.tsx             [7 KB] Uses lamaBridge
+    - Device list display
+    - Device status
+    - Status: NEEDS REFACTORING
+
+12. DeviceManager.tsx           [8 KB] NO electron deps detected
+    - Device control interface
+    - Device operations
+    - Status: READY FOR PHASE 2 CONSOLIDATION
+
+13. DeviceSetup.tsx             [11 KB] Uses lamaBridge
+    - Device onboarding
+    - Setup wizard
+    - Status: NEEDS REFACTORING
+
+14. UnifiedDevicesView.tsx       [33 KB] Heavy IPC use
+    - Multi-device management
+    - Unified device view
+    - Status: PARTIAL (in lama.ui)
+
+15. InstanceManager.tsx          [12 KB] Uses lamaBridge
+    - Instance lifecycle management
+    - Instance control
+    - Status: NEEDS REFACTORING
+
+16. InstancesView.tsx            [18 KB] Uses lamaBridge
+    - Instance list display
+    - Instance status
+    - Status: NEEDS REFACTORING
+
+--- 3.4 Settings & Configuration Views (3 files) ---
+
+17. SettingsView.tsx            [41 KB] Heavy IPC use
+    - Main settings container
+    - Settings management
+    - Status: NEEDS REFACTORING
+
+18. AISettingsView.tsx          [17 KB] Uses lamaBridge
+    - AI configuration view
+    - Model settings
+    - Status: NEEDS REFACTORING
+
+19. LoginScreen.tsx             [6 KB] Platform-specific auth
+    - Authentication UI
+    - Login/register forms
+    - Status: PLATFORM-SPECIFIC
+
+--- 3.5 Data & Analysis Views (3 files) ---
+
+20. DataDashboard.tsx           [24 KB] Uses lamaBridge
+    - Analytics/statistics display
+    - Data visualization
+    - Status: NEEDS REFACTORING
+
+21. ObjectHierarchyView.tsx      [19 KB] Mostly UI
+    - Hierarchy visualization
+    - Tree display
+    - Status: SHARED LOGIC
+
+22. ObjectHierarchyDialog.tsx    [14 KB] Mostly UI
+    - Modal hierarchy viewer
+    - Dialog wrapper
+    - Status: SHARED LOGIC
+
+--- 3.6 Profile & Dialog Components (4 files) ---
+
+23. ProfileDialog.tsx           [3 KB] Uses IPC
+    - User profile modal
+    - Profile display
+    - Status: NEEDS REFACTORING
+
+24. GroupChatDialog.tsx         [8 KB] Uses lamaBridge
+    - Group chat creation
+    - Group setup
+    - Status: NEEDS REFACTORING
+
+25. InputDialog.tsx             [2 KB] NO platform deps
+    - Generic input modal
+    - Text input dialog
+    - Status: READY FOR PHASE 2 CONSOLIDATION
+
+26. MCPConfigDialog.tsx         [8 KB] Uses IPC
+    - MCP server configuration
+    - Config modal
+    - Status: NEEDS REFACTORING
+
+--- 3.7 Participant & Proposal Components (3 files) ---
+
+27. ParticipantAvatars.tsx      [2 KB] MIGRATED
+    - Avatar group display
+    - Participant visualization
+    - Status: ALREADY IN lama.ui
+
+28. ProposalCard.tsx            [2 KB] MIGRATED
+    - Single proposal display
+    - Card component
+    - Status: ALREADY IN lama.ui
+
+29. ProposalCarousel.tsx        [1 KB] MIGRATED
+    - Proposal list carousel
+    - Carousel wrapper
+    - Status: ALREADY IN lama.ui
+
+--- 3.8 AI Settings View (1 file) ---
+
+AI Settings View (counted above in Settings & Configuration)
+
+================================================================================
+CATEGORY 4: ATTACHMENT COMPONENTS (6 files) - STATUS: NEEDS CONSOLIDATION
+================================================================================
+Location: /components/attachments/
+Media attachment display and handling
+
+1. AttachmentViewFactory.tsx         - Factory pattern for attachment rendering
+   Dependencies: React, custom types
+   Platform: Platform-agnostic
+   Status: READY FOR PHASE 2 CONSOLIDATION
+
+2. ImageAttachmentView.tsx           - Image display and preview
+   Dependencies: Canvas/Image APIs
+   Platform: Platform-agnostic
+   Status: READY FOR PHASE 2 CONSOLIDATION
+
+3. VideoAttachmentView.tsx           - HTML5 video player
+   Dependencies: HTML5 video element
+   Platform: Platform-agnostic
+   Status: READY FOR PHASE 2 CONSOLIDATION
+
+4. AudioAttachmentView.tsx           - HTML5 audio player
+   Dependencies: HTML5 audio element
+   Platform: Platform-agnostic
+   Status: READY FOR PHASE 2 CONSOLIDATION
+
+5. DocumentAttachmentView.tsx        - PDF/text document viewer
+   Dependencies: pdfjs or text rendering
+   Platform: Platform-agnostic
+   Status: READY FOR PHASE 2 CONSOLIDATION
+
+6. UnknownAttachmentView.tsx         - Fallback for unsupported types
+   Dependencies: UI components
+   Platform: Platform-agnostic
+   Status: READY FOR PHASE 2 CONSOLIDATION
+
+================================================================================
+CATEGORY 5: AUDIT & TRUST COMPONENTS (4 files) - STATUS: NEEDS CONSOLIDATION
+================================================================================
+Location: /components/audit/
+Trust verification and audit trail components
+
+1. AuditPanel.tsx                    - Audit trail display
+   Dependencies: UI components, data display
+   Platform: Platform-agnostic
+   Status: READY FOR PHASE 2 CONSOLIDATION
+
+2. AuditorBadge.tsx                  - Auditor identity badge
+   Dependencies: lucide-react, UI
+   Platform: Platform-agnostic
+   Status: READY FOR PHASE 2 CONSOLIDATION
+
+3. AttestationStatus.tsx             - Attestation state indicator
+   Dependencies: UI components
+   Platform: Platform-agnostic
+   Status: READY FOR PHASE 2 CONSOLIDATION
+
+4. QRCodeDisplay.tsx                 - QR code renderer
+   Dependencies: qrcode library
+   Platform: Platform-agnostic
+   Status: READY FOR PHASE 2 CONSOLIDATION
+
+================================================================================
+CATEGORY 6: KEYWORD DETAIL COMPONENTS (5 files) - STATUS: MIGRATED TO lama.ui
+================================================================================
+Location: /components/KeywordDetail/
+Keyword and subject detail/management components
+
+1. AccessControlList.tsx             - Access control display - MIGRATED
+2. KeywordDetailPanel.tsx            - Main keyword detail panel - MIGRATED
+3. SortControls.tsx                  - Sorting interface - MIGRATED
+4. SubjectItem.tsx                   - Individual subject component - MIGRATED
+5. SubjectList.tsx                   - Subject list container - MIGRATED
+
+================================================================================
+CATEGORY 7: TOPIC SUMMARY COMPONENTS (6 files) - STATUS: MIGRATED TO lama.ui
+================================================================================
+Location: /components/TopicSummary/
+Topic analysis and summary components
+
+1. index.tsx                         - Main export - MIGRATED
+2. TopicSummary.tsx                  - Topic summary display - MIGRATED
+3. KeywordCloud.tsx                  - Keyword cloud visualization - MIGRATED
+4. SubjectList.tsx                   - Subject list in summary - MIGRATED
+5. SummaryHistory.tsx                - History of summaries - MIGRATED
+6. WordCloudSettings.tsx             - Word cloud configuration - MIGRATED
+
+================================================================================
+CATEGORY 8: SETTINGS PANELS (12 files) - STATUS: NEEDS REFACTORING
+================================================================================
+Location: /components/Settings/
+Configuration panels for various settings categories
+All use: useSettings() hook with lamaBridge for IPC
+
+1. AccountSettingsPanel.tsx          - User account/profile settings
+   Dependencies: useSettings, lamaBridge, UI components
+   Status: NEEDS REFACTORING (abstraction layer for settings)
+
+2. AIConfigPanel.tsx                 - AI model configuration
+   Dependencies: useSettings, lamaBridge, UI components
+   Status: NEEDS REFACTORING (abstraction layer for settings)
+
+3. AISettingsPanel.tsx               - AI provider selection and settings
+   Dependencies: useSettings, lamaBridge, UI components
+   Status: NEEDS REFACTORING (abstraction layer for settings)
+
+4. KeywordLineSettings.tsx           - Keyword line display preferences
+   Dependencies: useSettings, lamaBridge, UI components
+   Status: NEEDS REFACTORING (abstraction layer for settings)
+
+5. KeywordSettingsPage.tsx           - Keyword configuration page
+   Dependencies: useSettings, lamaBridge, UI components
+   Status: NEEDS REFACTORING (abstraction layer for settings)
+
+6. MCPSettings.tsx                   - MCP server configuration
+   Dependencies: useSettings, lamaBridge, UI components
+   Status: NEEDS REFACTORING (abstraction layer for settings)
+
+7. NetworkSettingsPanel.tsx          - Network/connectivity settings
+   Dependencies: useSettings, lamaBridge, UI components
+   Status: NEEDS REFACTORING (abstraction layer for settings)
+
+8. PrivacySettingsPanel.tsx          - Privacy and data settings
+   Dependencies: useSettings, lamaBridge, UI components
+   Status: NEEDS REFACTORING (abstraction layer for settings)
+
+9. ProfileSettingsPanel.tsx          - User profile information
+   Dependencies: useSettings, lamaBridge, UI components
+   Status: NEEDS REFACTORING (abstraction layer for settings)
+
+10. ProposalSettingsPanel.tsx        - Proposal/suggestion settings
+    Dependencies: useSettings, lamaBridge, UI components
+    Status: NEEDS REFACTORING (abstraction layer for settings)
+
+11. UISettingsPanel.tsx              - UI theme and appearance settings
+    Dependencies: useSettings, lamaBridge, UI components
+    Status: NEEDS REFACTORING (abstraction layer for settings)
+
+12. SettingsErrorBoundary.tsx        - Error handling wrapper
+    Dependencies: React error boundaries
+    Status: READY FOR CONSOLIDATION (simple wrapper)
+
+================================================================================
+CATEGORY 9: MEDIA COMPONENT (1 file) - STATUS: NEEDS CONSOLIDATION
+================================================================================
+Location: /components/media/
+
+1. MediaViewer.tsx                   - Generic media content viewer
+   Dependencies: React, standard web APIs
+   Platform: Platform-agnostic
+   Status: READY FOR PHASE 2 CONSOLIDATION
+
+================================================================================
+CONSOLIDATION STATUS SUMMARY
+================================================================================
+
+ALREADY MIGRATED (39):
+- UI Primitives: 16
+- Chat: 9
+- KeywordDetail: 5
+- TopicSummary: 6
+- Misc (Participant/Proposal/Message): 3
+
+READY FOR PHASE 2 (14):
+- Attachments: 6
+- Audit: 4
+- Media: 1
+- Dialogs: 2
+- Device Manager: 1
+
+NEEDS REFACTORING (23):
+- Settings Panels: 12
+- Chat Views: 5
+- Contact/Connection: 5
+- Device/Instance: 6
+- Data Views: 3
+- Configuration Dialogs: 4
+- Other: 9
+
+NOTES:
+- SettingsErrorBoundary.tsx is simple and can move with Phase 2
+- Some files have multiple component issues noted above
+- Total component files in directory: 88
+- Estimated code: ~350KB across all components
+
+================================================================================
+KEY DEPENDENCIES BY COMPONENT TYPE
+================================================================================
+
+ELECTRON-SPECIFIC:
+- lamaBridge (IPC bridge to main process)
+- window.electronAPI (context bridge)
+- ipcStorage (persistent settings via electron)
+- Electron menu integration
+
+STANDARD WEB APIs:
+- Canvas/Image APIs (attachments)
+- HTML5 Media (audio/video)
+- DOM/CSS (all components)
+
+REACT LIBRARIES:
+- react
+- react-markdown
+- lucide-react
+- @radix-ui/* (various)
+- tailwindcss
+
+OTHER:
+- qrcode (QR code generation)
+- marked (markdown parsing)
+- dompurify (HTML sanitization)
+- pdfjs (PDF rendering, optional)
+
+================================================================================
+END OF INVENTORY
+================================================================================
