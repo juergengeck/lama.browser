@@ -8,14 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@lama/ui'
-
-interface Subject {
-  id: string
-  name: string
-  keywords: string[]
-  messageCount: number
-  timestamp: number
-}
+import type { Subject } from '@/types/topic-analysis'
 
 interface ChatHeaderProps {
   conversationName: string
@@ -106,11 +99,10 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         <div className="flex items-center gap-2">
           {/* Current subject - show the most recent/active subject */}
           {subjects && subjects.length > 0 && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mr-2">
+            <div className="flex flex-col items-end gap-0 text-xs text-muted-foreground mr-2">
               <span>{messageCount} messages</span>
-              <span>•</span>
               <span className="font-medium text-foreground/80">
-                {subjects[0]?.name || subjects[0]?.id || 'Subject'}
+                {subjects[0]?.description || subjects[0]?.keywords?.slice(0, 3).join(' ') || 'Subject'}
               </span>
             </div>
           )}
@@ -252,15 +244,15 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
       {/* Subjects Bar with Horizontal Scroll */}
       {subjects && subjects.length > 0 && (() => {
-        // Deduplicate subjects by name - keep the most recent version
+        // Deduplicate subjects by idHash - keep the most recent version
         const uniqueSubjects = subjects.reduce((acc, subject) => {
-          const name = subject.id || subject.name || 'Subject';
-          const existing = acc.find(s => (s.id || s.name) === name);
+          const id = subject.idHash || subject.description || 'Subject';
+          const existing = acc.find(s => (s.idHash || s.description) === id);
           if (!existing) {
             acc.push(subject);
           } else {
             // Keep the one with the most recent timestamp
-            if (subject.timestamp > existing.timestamp) {
+            if (subject.lastSeenAt > existing.lastSeenAt) {
               const index = acc.indexOf(existing);
               acc[index] = subject;
             }
@@ -306,7 +298,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                   {uniqueSubjects.map((subject, idx) => {
                     const keywordCount = subject.keywords?.length || 0;
                     const keywordPreview = subject.keywords?.slice(0, 3).join(', ') || '';
-                    const subjectName = subject.id || subject.name || 'Subject';
+                    const subjectName = subject.description || keywordPreview || 'Subject';
                     return (
                       <Badge
                         key={idx}

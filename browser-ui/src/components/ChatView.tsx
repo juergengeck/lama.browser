@@ -10,6 +10,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback, memo } from 'react'
+import { flushSync } from 'react-dom'
 import { Card, CardContent } from '@lama/ui'
 import { Button } from '@lama/ui'
 import { Badge } from '@lama/ui'
@@ -24,7 +25,6 @@ import { addAIEventListener, AIEventNames } from '../events/AIEventTypes'
 
 // TODO: Replace these with worker equivalents
 const useLamaPeers = () => ({ peers: [] })
-const topicAnalysisService = { analyzeMessages: async () => {} }
 
 export const ChatView = memo(function ChatView({
   conversationId = 'lama',
@@ -43,8 +43,7 @@ export const ChatView = memo(function ChatView({
 }) {
   const model = useModel()
   const { messages, isLoading: loading, sendMessage } = useMessages({ topicId: conversationId })
-  const { subjects, subjectsJustAppeared } = useChatSubjects(conversationId)
-  const chatHeaderRef = useRef<HTMLDivElement>(null)
+  const { subjects } = useChatSubjects(conversationId)
 
   // Track last message ID to avoid redundant updates
   const lastMessageIdRef = useRef<string | null>(null)
@@ -90,9 +89,13 @@ export const ChatView = memo(function ChatView({
 
   // Check if welcome message is still being generated on mount or when messages load
   useEffect(() => {
-    // If there are no messages and this is an AI conversation, show spinner immediately
+    // Only show spinner for default chats (hi/lama) with 0 messages
+    // User-created chats don't auto-generate welcome messages
+    const isDefaultChat = conversationId === 'hi' || conversationId === 'lama'
+
+    // If there are no messages and this is a default AI chat, show spinner
     // This covers the case where welcome message generation is in progress
-    if (messages.length === 0 && hasAIParticipant && !loading) {
+    if (messages.length === 0 && hasAIParticipant && !loading && isDefaultChat) {
       setIsAIProcessing(true)
       onProcessingChange?.(conversationId, true)
 
@@ -143,7 +146,10 @@ export const ChatView = memo(function ChatView({
         }
       }
     }
-  }, [messages, aiStreamingContent, streamingTimeout])
+    // ONLY run when messages change - not when aiStreamingContent or streamingTimeout change
+    // (avoids infinite loop: effect modifies aiStreamingContent → triggers effect again)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages])
 
   // Listen for AI streaming events via type-safe event system (Browser Direct)
   useEffect(() => {
@@ -279,11 +285,20 @@ export const ChatView = memo(function ChatView({
     setIsProcessing(true)
     onProcessingChange?.(conversationId, true)
 
+    console.log('[ChatView] handleSendMessage - hasAIParticipant:', hasAIParticipant, 'conversationId:', conversationId)
+
     // Use hasAIParticipant to determine if this is an AI conversation
     // This is consistent with the prop passed from ChatLayout
     if (hasAIParticipant) {
-      setIsAIProcessing(true)
-      setAiStreamingContent('')
+      console.log('[ChatView] Setting isAIProcessing = true')
+      // Use flushSync to force an immediate synchronous render
+      // This ensures the spinner appears BEFORE any async events can fire
+      flushSync(() => {
+        setIsAIProcessing(true)
+        setAiStreamingContent('')
+      })
+    } else {
+      console.warn('[ChatView] NOT setting spinner - hasAIParticipant is false!')
     }
 
     try {
@@ -340,23 +355,21 @@ export const ChatView = memo(function ChatView({
 
   return (
     <Card className="h-full w-full flex flex-col">
-      <div ref={chatHeaderRef}>
-        <ChatHeader
-          conversationName={conversationName}
-          conversationId={conversationId}
-          subjects={subjects}
-          messageCount={messages.length}
-          hasAI={hasAIParticipant}
-          showSummary={showSummary}
-          onToggleSummary={() => setShowSummary(!showSummary)}
-          onAddUsers={onAddUsers}
-          onSubjectClick={(subject) => {
-            console.log('[ChatView] Subject clicked:', subject)
-            setSelectedSubject(subject)
-            setShowSubjectDetail(true)
-          }}
-        />
-      </div>
+      <ChatHeader
+        conversationName={conversationName}
+        conversationId={conversationId}
+        subjects={subjects}
+        messageCount={messages.length}
+        hasAI={hasAIParticipant}
+        showSummary={showSummary}
+        onToggleSummary={() => setShowSummary(!showSummary)}
+        onAddUsers={onAddUsers}
+        onSubjectClick={(subject) => {
+          console.log('[ChatView] Subject clicked:', subject)
+          setSelectedSubject(subject)
+          setShowSubjectDetail(true)
+        }}
+      />
 
       <CardContent className="flex-1 p-0 min-h-0 flex flex-col">
         {/* AI Summary Panel - Shows at top when visible */}
@@ -446,8 +459,6 @@ export const ChatView = memo(function ChatView({
           aiModelName={aiModelName}
           aiError={aiError}
           topicId={conversationId}
-          subjectsJustAppeared={subjectsJustAppeared}
-          chatHeaderRef={chatHeaderRef}
         />
       </CardContent>
     </Card>

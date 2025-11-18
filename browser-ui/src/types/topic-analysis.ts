@@ -5,17 +5,32 @@
 
 /**
  * Subject represents a distinct discussion topic within a conversation
- * Identified by topic + keyword combination
+ * Matches ONE.core Subject type from @OneObjectInterfaces
  */
 export interface Subject {
   $type$: 'Subject';
-  id: string;           // Format: `${topicId}:${sortedKeywords.join('-')}`
-  name: string;         // Human-readable 1-2 word name (e.g., "Pizza Delivery")
-  topic: string;        // Hash reference to parent Topic
-  keywords: string[];   // Sorted array of keywords identifying this subject
-  messageCount: number; // Number of messages related to this subject
-  timestamp: number;    // Unix timestamp from latest source message
-  archived?: boolean;   // Whether subject is archived (optional)
+  idHash?: string;      // Auto-generated ID hash from keywords (added by retrieval)
+  hash?: string;        // Object hash (added by retrieval)
+  topic: string;        // Reference to parent topic (channel ID)
+  keywords: string[];   // Array of keyword terms (resolved from ID hashes by Plan)
+  timeRanges: Array<{
+    start: number;
+    end: number;
+  }>;
+  messageCount: number;
+  createdAt: number;
+  lastSeenAt: number;
+  description?: string; // LLM-generated description
+  archived?: boolean;
+  likes?: number;
+  dislikes?: number;
+  abstractionLevel?: number;
+  abstractionMetadata?: {
+    calculatedAt: number;
+    reasoning?: string;
+    parentLevels?: number[];
+    childLevels?: number[];
+  };
 }
 
 /**

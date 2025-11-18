@@ -207,8 +207,9 @@ function AppContent({ model }: AppContentProps) {
 
     const updateConfig = async () => {
       try {
-        // Invert: 0% slider = 1.0 threshold (strict), 100% slider = 0.0 threshold (loose)
-        const minJaccard = 1 - proposalSensitivity
+        // Direct threshold: slider % = minimum similarity threshold
+        // 90% = only show proposals with ≥90% Jaccard similarity
+        const minJaccard = proposalSensitivity
         await model.proposalsPlan.updateConfig({ config: { minJaccard } })
       } catch (error) {
         console.error('[App] Failed to update proposal config:', error)
@@ -278,7 +279,7 @@ function AppContent({ model }: AppContentProps) {
         }
         testOllamaConnection={async (baseUrl: string) => {
           try {
-            const result = await model.llmConfigPlan.testConnection({ baseUrl })
+            const result = await model.llmConfigPlan.testConnection({ server: baseUrl })
             return { success: result.success }
           } catch (error) {
             return { success: false }
@@ -486,7 +487,7 @@ function AppContent({ model }: AppContentProps) {
                           value={proposalSensitivity}
                           onChange={(e) => setProposalSensitivity(parseFloat(e.target.value))}
                           className="w-24 h-1 bg-muted rounded-lg appearance-none cursor-pointer"
-                          title="Adjust proposal sensitivity: 0% = no proposals, 100% = all proposals"
+                          title="Minimum similarity threshold: 90% = only show ≥90% matches"
                         />
                         <span className="font-mono min-w-[3ch]">{(proposalSensitivity * 100).toFixed(0)}%</span>
                       </div>

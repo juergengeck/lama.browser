@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
-import { MessageSquare, Plus, Users, ChevronLeft, ChevronRight, Menu } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { MessageSquare, Plus, Users, ChevronLeft, ChevronRight, Menu, ChevronDown } from 'lucide-react'
 import { ChatView } from './ChatView'
 import { Button } from '@lama/ui'
 import { Input } from '@lama/ui'
 import { useTopics } from '@/hooks/useTopics'
+import { usePastIdentities } from '@/hooks/usePastIdentities'
 import { useModel } from '@/model/index.js'
 import { usePlans } from '@lama/ui'
 import {
@@ -14,9 +15,11 @@ import {
   ConversationList,
   type Conversation
 } from '@lama/ui'
+import { AIConversationCard } from './AIConversationCard'
 import { InputDialog } from './InputDialog'
 import { UserSelectionDialog } from './UserSelectionDialog'
 import { GroupChatDialog } from './GroupChatDialog'
+import { ModelSelectionDialog, type LLMModel } from '@lama/ui'
 
 interface ChatLayoutProps {
   selectedConversationId?: string
@@ -27,7 +30,7 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
   const model = useModel()
 
   // Get Plans for platform-agnostic operations
-  const { contacts: contactsPlan } = usePlans()
+  const { contacts: contactsPlan, chat: chatPlan } = usePlans()
 
   // Use topics hook to manage conversations
   const { topics, isLoading: topicsLoading, createTopic, deleteTopic, renameTopic, refreshTopics, updateTopicLastMessage } = useTopics()
@@ -47,6 +50,9 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
   const [contactsMap, setContactsMap] = useState<Map<string, { name: string; isLLM: boolean; color?: string }>>(new Map())
   const [touchStartX, setTouchStartX] = useState<number | null>(null)
   const [touchStartWidth, setTouchStartWidth] = useState<number | null>(null)
+  const [llmSectionExpanded, setLlmSectionExpanded] = useState(false)
+  const [showModelSelectionDialog, setShowModelSelectionDialog] = useState(false)
+  const [conversationToConfigureLLM, setConversationToConfigureLLM] = useState<string | null>(null)
 
   // Load contacts when model is initialized
   useEffect(() => {
@@ -77,40 +83,51 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
   }, [model.initialized]) // contactsPlan is stable, no need to re-run
 
   // Convert topics to conversations format
-  const conversations: Conversation[] = topics.map(topic => {
-    // Check if topic is still generating welcome message
-    const isGeneratingWelcome = model.initialized &&
-      model.aiAssistantModel?.topicManager?.isTopicLoading?.(topic.id) || false;
+  // Use useMemo to ensure conversations are only computed when both topics and contactsMap are ready
+  // This prevents race condition where conversations are computed before contacts finish loading
+  const conversations: Conversation[] = useMemo(() => {
+    return topics.map(topic => {
+      // Check if topic is still generating welcome message
+      const isGeneratingWelcome = model.initialized &&
+        model.aiAssistantModel?.topicManager?.isTopicLoading?.(topic.id) || false;
 
-    // Enrich participants with contact information
-    const enrichedParticipants = (topic.participants || []).map(participant => {
-      // Participant might be a string (hash) or an object with properties
-      // Ensure we extract the ID as a string
-      const participantId = typeof participant === 'string'
-        ? participant
-        : (participant?.id || participant?.personId || String(participant))
+      // Enrich participants with contact information
+      const enrichedParticipants = (topic.participants || []).map(participant => {
+        // Participant might be a string (hash) or an object with properties
+        // Ensure we extract the ID as a string
+        const participantId = typeof participant === 'string'
+          ? participant
+          : (participant?.id || participant?.personId || String(participant))
 
-      const contactInfo = contactsMap.get(participantId)
-      return {
-        id: participantId,
-        name: contactInfo?.name || `Contact ${participantId.substring(0, 8)}`,
-        isLLM: contactInfo?.isLLM || false,
-        color: contactInfo?.color
+        const contactInfo = contactsMap.get(participantId)
+        return {
+          id: participantId,
+          name: contactInfo?.name || `Contact ${participantId.substring(0, 8)}`,
+          isLLM: contactInfo?.isLLM || false,
+          color: contactInfo?.color
+        }
+      })
+
+      const hasAI = topic.isAITopic || false;
+
+      // DEBUG: Log AI topic detection
+      if (topic.id === 'hi') {
+        console.log('[ChatLayout] 🔍 Topic "hi" - isAITopic:', topic.isAITopic, 'hasAI:', hasAI);
       }
-    })
 
-    return {
-      id: topic.id,
-      name: topic.name,
-      participants: enrichedParticipants,
-      participantCount: enrichedParticipants.length,
-      lastMessage: isGeneratingWelcome ? 'Generating welcome message...' : (topic.lastMessage || ''),
-      lastMessageTime: new Date(topic.lastActivity),
-      modelName: topic.modelName || topic.aiModelId,
-      hasAIParticipant: topic.isAITopic || false,
-      isAITopic: topic.isAITopic || false
-    };
-  })
+      return {
+        id: topic.id,
+        name: topic.name,
+        participants: enrichedParticipants,
+        participantCount: enrichedParticipants.length,
+        lastMessage: isGeneratingWelcome ? 'Generating welcome message...' : (topic.lastMessage || ''),
+        lastMessageTime: new Date(topic.lastActivity),
+        modelName: topic.modelName || topic.aiModelId,
+        hasAIParticipant: hasAI,
+        isAITopic: hasAI
+      };
+    })
+  }, [topics, contactsMap, model.initialized, model.aiAssistantModel?.topicManager])
 
   // Sync processingConversations with topic loading states
   useEffect(() => {
@@ -160,27 +177,26 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
       // Auto-collapse sidebar on mobile screens
       if (newWidth < 768) {
         setIsCollapsed(true)
-      } else if (isCollapsed && newWidth >= 768) {
-        // Auto-expand when transitioning to desktop
-        setIsCollapsed(false)
       }
 
       // Adjust sidebar width based on window size
-      if (!isCollapsed) {
+      // Use callback form to avoid dependency on isCollapsed
+      setSidebarWidth(prevWidth => {
+        // Only adjust if not collapsed (check via ref or use prevWidth as proxy)
         if (newWidth < 1024) {
-          setSidebarWidth(Math.max(250, Math.min(300, newWidth * 0.3)))
+          return Math.max(250, Math.min(300, newWidth * 0.3))
         } else if (newWidth < 1440) {
-          setSidebarWidth(300)
+          return 300
         } else {
-          setSidebarWidth(Math.min(350, newWidth * 0.2))
+          return Math.min(350, newWidth * 0.2)
         }
-      }
+      })
     }
 
     handleResize() // Initial call
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
-  }, [isCollapsed])
+  }, [])
 
   // Update selected conversation when prop changes
   useEffect(() => {
@@ -264,20 +280,94 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
     setShowAddUsersDialog(true)
   }
 
+  // Open model selection dialog
+  const openModelSelectionDialog = (id: string) => {
+    setConversationToConfigureLLM(id)
+    setShowModelSelectionDialog(true)
+  }
+
+  // Handle AI mode change
+  const handleSetAIMode = async (id: string, mode: 'off' | 'listen' | 'speak') => {
+    console.log(`[ChatLayout] Setting AI mode for ${id} to ${mode}`)
+    // TODO: Implement AI mode setting via AIAssistantModel
+    // For now, just log
+    alert(`AI mode for conversation "${id}" set to: ${mode}`)
+  }
+
+  // Get available LLM models
+  const getAvailableModels = async (): Promise<LLMModel[]> => {
+    if (!model.initialized || !model.llmManager) {
+      return []
+    }
+
+    try {
+      const models = await model.llmManager.getAvailableModels()
+      return models.map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        displayName: m.displayName || m.name,
+        provider: m.provider || 'unknown',
+        description: m.description
+      }))
+    } catch (error) {
+      console.error('[ChatLayout] Failed to get available models:', error)
+      return []
+    }
+  }
+
+  // Switch topic model
+  const handleSwitchTopicModel = async (topicId: string, modelId: string) => {
+    try {
+      await model.switchTopicModel(topicId, modelId)
+      // Refresh topics to update the UI
+      await refreshTopics()
+    } catch (error: any) {
+      console.error('[ChatLayout] Failed to switch topic model:', error)
+      throw error
+    }
+  }
+
   // Handle adding users to conversation
   const handleAddUsers = async (selectedUserIds: string[]) => {
     if (!conversationToAddUsers) return
 
     try {
-      // TODO: Add worker message for adding participants
-      console.log('[ChatLayout] Add users not yet implemented in browser:', conversationToAddUsers, selectedUserIds)
-      throw new Error('Adding users to conversations not available in browser yet')
+      console.log('[ChatLayout] Adding users to conversation:', conversationToAddUsers, selectedUserIds)
+
+      const response = await chatPlan.addParticipants({
+        conversationId: conversationToAddUsers,
+        participantIds: selectedUserIds
+      })
+
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to add participants')
+      }
+
+      // Close dialog
+      setShowAddUsersDialog(false)
+      setConversationToAddUsers(null)
+
+      // Handle continuity: Switch to new conversation if one was created
+      if (response.data?.newConversationId) {
+        console.log('[ChatLayout] New conversation created:', response.data.newConversationId)
+        console.log('[ChatLayout] Original conversation:', conversationToAddUsers)
+
+        // Refresh topics to show the new conversation
+        await refreshTopics()
+
+        // Switch to the new conversation
+        setSelectedConversation(response.data.newConversationId)
+
+        console.log('[ChatLayout] Switched to new conversation with updated participants')
+      } else {
+        // Fallback: Just refresh (shouldn't happen with current implementation)
+        await refreshTopics()
+        console.log('[ChatLayout] Successfully added users to conversation')
+      }
     } catch (error: any) {
       console.error('[ChatLayout] Error adding users:', error)
       const errorMessage = error?.message || 'Failed to add users to conversation'
       alert(`Error: ${errorMessage}`)
-    } finally {
-      setConversationToAddUsers(null)
     }
   }
 
@@ -300,8 +390,20 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
     }
   }
 
+  // Separate AI chats (with agency) from LLM chats (pure model conversations)
+  const aiChats = conversations.filter(conv => conv.isAITopic)
+  const llmChats = conversations.filter(conv => !conv.isAITopic && conv.hasAIParticipant)
+
+  // Fetch past identities for all AI chats
+  const aiChatIds = aiChats.map(chat => chat.id)
+  const { pastIdentitiesMap, refreshPastIdentities } = usePastIdentities(aiChatIds)
+
   // Filter conversations by search
-  const filteredConversations = conversations.filter(conv =>
+  const filteredAIChats = aiChats.filter(conv =>
+    conv.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    conv.lastMessage?.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+  const filteredLLMChats = llmChats.filter(conv =>
     conv.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
     conv.lastMessage?.toLowerCase().includes(searchQuery.toLowerCase())
   )
@@ -474,18 +576,68 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
 
         <>
           {/* Conversation list */}
-          <ConversationList
-            conversations={filteredConversations}
-            selectedConversationId={selectedConversation}
-            processingConversations={processingConversations}
-            isCollapsed={isCollapsed}
-            onSelectConversation={setSelectedConversation}
-            onRenameConversation={openRenameDialog}
-            onAddUsers={openAddUsersDialog}
-            onDeleteConversation={deleteConversation}
-            formatTime={formatTime}
-            stripMarkdown={stripMarkdown}
-          />
+          <div className="flex-1 overflow-y-auto">
+            {/* AI Chats (main list) - with expandable past identities */}
+            <div className={isCollapsed ? "py-2 space-y-1" : "p-2 space-y-1"}>
+              {filteredAIChats.length === 0 && filteredLLMChats.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                  <p className="text-sm">No conversations yet</p>
+                  <p className="text-xs">Start a new chat</p>
+                </div>
+              ) : (
+                filteredAIChats.map((conv) => (
+                  <AIConversationCard
+                    key={conv.id}
+                    conversation={conv}
+                    isSelected={selectedConversation === conv.id}
+                    isProcessing={processingConversations.has(conv.id)}
+                    isCollapsed={isCollapsed}
+                    pastIdentities={pastIdentitiesMap.get(conv.id) || []}
+                    onSelect={setSelectedConversation}
+                    onRename={openRenameDialog}
+                    onAddUsers={openAddUsersDialog}
+                    onConfigureLLM={openModelSelectionDialog}
+                    onSetAIMode={handleSetAIMode}
+                    onDelete={deleteConversation}
+                    formatTime={formatTime}
+                    stripMarkdown={stripMarkdown}
+                  />
+                ))
+              )}
+            </div>
+
+            {/* LLM Section (expandable, collapsed by default) */}
+            {filteredLLMChats.length > 0 && !isCollapsed && (
+              <div className="border-t border-border">
+                <button
+                  onClick={() => setLlmSectionExpanded(!llmSectionExpanded)}
+                  className="w-full px-3 py-2 flex items-center justify-between text-xs font-medium text-muted-foreground hover:bg-accent/50 transition-colors"
+                >
+                  <span>LLM</span>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${llmSectionExpanded ? 'rotate-180' : ''}`}
+                  />
+                </button>
+                {llmSectionExpanded && (
+                  <ConversationList
+                    conversations={filteredLLMChats}
+                    selectedConversationId={selectedConversation}
+                    processingConversations={processingConversations}
+                    isCollapsed={isCollapsed}
+                    onSelectConversation={setSelectedConversation}
+                    onRenameConversation={openRenameDialog}
+                    onAddUsers={openAddUsersDialog}
+                    onConfigureLLM={openModelSelectionDialog}
+                    onSetAIMode={handleSetAIMode}
+                    onDeleteConversation={deleteConversation}
+                    formatTime={formatTime}
+                    stripMarkdown={stripMarkdown}
+                  />
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Resize handle - Desktop only */}
           {!isCollapsed && windowWidth >= 768 && (
@@ -615,6 +767,20 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
       open={showNewGroupDialog}
       onOpenChange={setShowNewGroupDialog}
       onSubmit={handleCreateGroupConversation}
+    />
+
+    {/* Model Selection Dialog */}
+    <ModelSelectionDialog
+      open={showModelSelectionDialog}
+      onOpenChange={setShowModelSelectionDialog}
+      topicId={conversationToConfigureLLM}
+      currentModelId={
+        conversationToConfigureLLM
+          ? conversations.find(c => c.id === conversationToConfigureLLM)?.modelName
+          : undefined
+      }
+      getAvailableModels={getAvailableModels}
+      switchTopicModel={handleSwitchTopicModel}
     />
   </>
   )

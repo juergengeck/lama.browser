@@ -32,7 +32,7 @@
 
 .enhanced-message-bubble.own {
   margin-left: auto;
-  margin-right: 16px;
+  margin-right: 0;
 }
 
 .enhanced-message-bubble.other {
@@ -667,7 +667,7 @@
   }
   
   .enhanced-message-bubble.own {
-    margin-right: 8px;
+    margin-right: 0;
   }
   
   .enhanced-message-bubble.other {

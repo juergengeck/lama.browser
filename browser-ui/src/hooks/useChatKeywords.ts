@@ -34,19 +34,18 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
   // Track previous keyword count for change detection
   const prevKeywordCountRef = useRef(0);
 
-  // Listen for keyword update events from Model (browser events)
+  // Listen for analysis update events from Model (type-safe AI events)
   useEffect(() => {
     if (!topicId) return;
 
-    const handleKeywordsUpdated = (event: Event) => {
-      const data = (event as CustomEvent).detail;
-      console.log(`[useChatKeywords-${topicId}] 🔔 Received keywords:updated event for: "${data.topicId}"`);
-      console.log(`[useChatKeywords-${topicId}] 🔍 My topicId: "${topicId}"`);
-      console.log(`[useChatKeywords-${topicId}] 🔍 Match: ${data.topicId === topicId}`);
-      if (data.topicId === topicId) {
+    const { addAIEventListener, AIEventNames } = require('../events/AIEventTypes');
+
+    const cleanup = addAIEventListener(AIEventNames.ANALYSIS_UPDATE, (event) => {
+      const data = event.detail;
+      console.log(`[useChatKeywords-${topicId}] 🔔 Received ANALYSIS_UPDATE event for: "${data.topicId}", type: ${data.type}`);
+
+      if (data.topicId === topicId && (data.type === 'keywords' || data.type === 'both')) {
         console.log(`[useChatKeywords-${topicId}] ✅ Fetching updated keywords`);
-        // Trigger a refresh by incrementing request counter
-        requestCounter.current++;
         // Re-fetch keywords immediately (platform-agnostic)
         const fetchKeywords = async () => {
           try {
@@ -55,7 +54,6 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
               limit: 15
             });
             if (response.success && response.data?.keywords) {
-              // Keep full keyword objects with subjects array
               const keywords = response.data.keywords;
               const keywordTerms = keywords.map((k: any) => k.term || k);
               console.log(`[useChatKeywords-${topicId}] Refreshed keywords after update:`, keywordTerms.length);
@@ -66,15 +64,10 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
           }
         };
         fetchKeywords();
-      } else {
-        console.log(`[useChatKeywords-${topicId}] ❌ Ignoring event for different topic`);
       }
-    };
+    });
 
-    window.addEventListener('keywords:updated', handleKeywordsUpdated);
-    return () => {
-      window.removeEventListener('keywords:updated', handleKeywordsUpdated);
-    };
+    return cleanup;
   }, [topicId, topicAnalysis]);
 
   // Detect when keywords appear (0 -> N) and return flag

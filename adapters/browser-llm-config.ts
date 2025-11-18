@@ -36,12 +36,12 @@ function isCorsError(error: any): boolean {
  */
 export const browserOllamaValidator = {
   async testOllamaConnection(
-    baseUrl: string,
+    server: string,
     authToken?: string,
     serviceName: string = 'Ollama'
   ): Promise<TestConnectionResponse> {
     try {
-      console.log(`[Browser] Testing ${serviceName} connection to:`, baseUrl);
+      console.log(`[Browser] Testing ${serviceName} connection to:`, server);
 
       const headers: Record<string, string> = {};
 
@@ -50,7 +50,7 @@ export const browserOllamaValidator = {
       }
 
       // Test connection by fetching version info
-      const response = await fetch(`${baseUrl}/api/version`, {
+      const response = await fetch(`${server}/api/version`, {
         method: 'GET',
         headers: Object.keys(headers).length > 0 ? headers : undefined,
         signal: AbortSignal.timeout(5000) // 5 second timeout
@@ -67,7 +67,7 @@ export const browserOllamaValidator = {
       const data = await response.json();
 
       // Also fetch available models
-      const models = await this.fetchOllamaModels(baseUrl, authToken);
+      const models = await this.fetchOllamaModels(server, authToken);
 
       return {
         success: true,
@@ -103,9 +103,9 @@ export const browserOllamaValidator = {
     }
   },
 
-  async fetchOllamaModels(baseUrl: string, authToken?: string): Promise<any[]> {
+  async fetchOllamaModels(server: string, authToken?: string): Promise<any[]> {
     try {
-      console.log('[Browser] Fetching Ollama models from:', baseUrl);
+      console.log('[Browser] Fetching Ollama models from:', server);
 
       const headers: Record<string, string> = {};
 
@@ -113,7 +113,7 @@ export const browserOllamaValidator = {
         headers['Authorization'] = `Bearer ${authToken}`;
       }
 
-      const response = await fetch(`${baseUrl}/api/tags`, {
+      const response = await fetch(`${server}/api/tags`, {
         method: 'GET',
         headers: Object.keys(headers).length > 0 ? headers : undefined,
         signal: AbortSignal.timeout(5000)

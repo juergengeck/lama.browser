@@ -29,7 +29,8 @@ declare module '@OneObjectInterfaces' {
         Summary: Summary;
         WordCloudSettings: WordCloudSettings;
 
-        // LLM Management (lama.core)
+        // AI & LLM Management (lama.core)
+        AI: AI;
         LLM: LLM;
         GlobalLLMSettings: GlobalLLMSettings;
         SystemPromptTemplate: SystemPromptTemplate;
@@ -64,7 +65,8 @@ declare module '@OneObjectInterfaces' {
     // ============================================================================
 
     export interface OneIdObjectInterfaces {
-        LLM: Pick<LLM, '$type$' | 'name'>;
+        AI: Pick<AI, '$type$' | 'aiId'>;
+        LLM: Pick<LLM, '$type$' | 'name' | 'server'>;
         GlobalLLMSettings: Pick<GlobalLLMSettings, '$type$' | 'name'>;
         SystemPromptTemplate: Pick<SystemPromptTemplate, '$type$' | 'modelId'>;
         MCPServer: Pick<MCPServer, '$type$' | 'name'>;
@@ -86,13 +88,13 @@ declare module '@OneObjectInterfaces' {
 
     /**
      * Subject - A distinct discussion topic within a conversation
-     * Identified by keyword combinations (e.g., "pizza+baker+career")
+     * Identified by keyword combinations (keywords are the ID property in the recipe)
+     * ONE.core automatically generates SHA256IdHash<Subject> from sorted keywords
      */
     export interface Subject {
         $type$: 'Subject';
-        id: string; // keyword combination - ID property
         topic: string; // reference to parent topic (channel ID)
-        keywords: string[];
+        keywords?: SHA256IdHash<Keyword>[]; // Array of Keyword ID hashes - THIS IS THE ID PROPERTY (isId: true in recipe)
         timeRanges: Array<{
             start: number;
             end: number;
@@ -100,9 +102,17 @@ declare module '@OneObjectInterfaces' {
         messageCount: number;
         createdAt: number;
         lastSeenAt: number;
+        description?: string; // LLM-generated description
         archived?: boolean;
         likes?: number;
         dislikes?: number;
+        abstractionLevel?: number; // 1-42 scale
+        abstractionMetadata?: {
+            calculatedAt: number;
+            reasoning?: string;
+            parentLevels?: number[];
+            childLevels?: number[];
+        };
     }
 
     /**
@@ -157,11 +167,31 @@ declare module '@OneObjectInterfaces' {
     // --- LLM Management ---
 
     /**
+     * AI - AI assistant identity object
+     * References a Person object for the AI's identity
+     * Delegates to an LLM Profile for model execution
+     */
+    export interface AI {
+        $type$: 'AI';
+        aiId: string; // ID property
+        displayName: string;
+        personId: SHA256IdHash<Person>; // AI's Person identity
+        llmProfileId: SHA256IdHash<Profile>; // Delegates to this LLM Profile (not Person)
+        modelId: string;
+        owner: SHA256IdHash<Person> | SHA256IdHash<Instance>;
+        created: number;
+        modified: number;
+        active: boolean;
+        deleted: boolean;
+    }
+
+    /**
      * LLM - Language Learning Model configuration
      */
     export interface LLM {
         $type$: 'LLM';
         name: string; // ID property
+        server: string; // ID property - makes LLMs server-specific
         filename: string;
         modelType: 'local' | 'remote';
         active: boolean;

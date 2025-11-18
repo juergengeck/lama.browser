@@ -99,6 +99,16 @@ import {autoCreateP2PTopicAfterPairing} from '@chat/core/services/P2PTopicServic
 // LAMA core models
 import TopicAnalysisModel from '@lama/core/one-ai/models/TopicAnalysisModel';
 
+// Cube.core for dimensional indexing
+import {
+    CubeStorage,
+    CustomDimensionManager,
+    CubeObjectRecipe,
+    DimensionRecipe,
+    DimensionValueRecipe,
+    QueryResultRecipe
+} from '@cube/cube.core';
+
 // Chat core models
 import TopicGroupManager from '@chat/core/models/TopicGroupManager.js';
 
@@ -108,6 +118,7 @@ import {KeywordRecipe} from '@lama/core/one-ai/recipes/KeywordRecipe';
 import {SummaryRecipe} from '@lama/core/one-ai/recipes/SummaryRecipe';
 import {KeywordAccessStateRecipe} from '@lama/core/one-ai/recipes/KeywordAccessState';
 import {WordCloudSettingsRecipe} from '@lama/core/one-ai/recipes/WordCloudSettingsRecipe';
+import {AIRecipe} from '@lama/core/recipes/AIRecipe';
 import {LLMRecipe} from '@lama/core/recipes/LLMRecipe';
 import {ProposalConfigRecipe} from '@lama/core/recipes/ProposalConfigRecipe';
 import {SubscriptionBalanceRecipe} from '../recipes/SubscriptionBalanceRecipe';
@@ -117,8 +128,9 @@ import {StoryRecipe} from '../recipes/StoryRecipe';
 // Assembly.core recipes
 import {AssemblyRecipe} from '@assembly/core/recipes/index.js';
 
-// LAMA core models (LLM object management)
+// LAMA core models (LLM and AI object management)
 import {LLMObjectManager} from '@lama/core/models/LLMObjectManager';
+import {AIObjectManager} from '@lama/core/models/AIObjectManager';
 
 // Trust core recipes (identity subscription system)
 import {AllRecipes as TrustCoreRecipes, AllReverseMaps as TrustCoreReverseMaps} from '@trust/core/recipes/index.js';
@@ -173,6 +185,7 @@ export default class Model {
                 SummaryRecipe,
                 KeywordAccessStateRecipe,
                 WordCloudSettingsRecipe,
+                AIRecipe,
                 LLMRecipe,
                 ProposalConfigRecipe,
                 SubscriptionBalanceRecipe,
@@ -180,7 +193,12 @@ export default class Model {
                 StoryRecipe,  // Assembly tracking
                 AssemblyRecipe,  // Assembly (Product) tracking
                 // Trust.core recipes (identity subscription system)
-                ...TrustCoreRecipes
+                ...TrustCoreRecipes,
+                // Cube.core recipes (dimensional storage)
+                CubeObjectRecipe,
+                DimensionRecipe,
+                DimensionValueRecipe,
+                QueryResultRecipe
             ],
             reverseMaps: new Map([
                 ...ReverseMapsStable,
@@ -279,6 +297,33 @@ export default class Model {
             // No federation group for browser (optional parameter)
         );
 
+        // AIObjectManager - platform-agnostic AI object management
+        this.aiObjectManager = new AIObjectManager(
+            {
+                storeVersionedObject,
+                createAccess,
+                queryAllAIObjects: async function* () {
+                    // Query all AI objects from storage using reverse map
+                    console.log('[Model/queryAllAIObjects] 🔍 Querying AI objects...');
+                    const myId = await that.leuteModel.myMainIdentity();
+                    const aiEntries = await getAllEntries(myId, 'AI');
+                    console.log(`[Model/queryAllAIObjects] Found ${aiEntries.length} AI entries`);
+
+                    for (const entry of aiEntries) {
+                        const objectHash = entry.obj || entry.hash || entry;
+                        const aiObject = await getObject(objectHash);
+                        if (aiObject && aiObject.$type$ === 'AI') {
+                            console.log(`[Model/queryAllAIObjects] Yielding AI object: ${aiObject.displayName}`);
+                            yield aiObject;
+                        }
+                    }
+                },
+                getOwnerId: async () => {
+                    return await that.leuteModel.myMainIdentity();
+                }
+            }
+        );
+
         // LAMA Plans (AI-related)
         this.aiPlan = new AIPlan(this);
 
@@ -301,10 +346,15 @@ export default class Model {
                 storeVersionedObject,
                 storeUnversionedObject,
                 getIdObject,
+                getObjectByIdHash,
+                getObject,
                 createDefaultKeys,
                 hasDefaultKeys,
-                trustPlan: this.trustPlan,      // For assigning 'high' trust to AI contacts
-                journalPlan: this.journalPlan   // For recording AI contact creation as assemblies
+                channelManager: this.channelManager,    // Required: for querying LLM objects
+                trustPlan: this.trustPlan,              // For assigning 'high' trust to AI contacts
+                journalPlan: this.journalPlan,          // For recording AI contact creation as assemblies
+                aiObjectManager: this.aiObjectManager,  // For creating AI storage objects
+                llmObjectManager: this.llmObjectManager // For creating/updating LLM storage objects
             }
         });
 
@@ -488,7 +538,11 @@ export default class Model {
 
         // Setup event handler that initialize the models when somebody logged in
         // and shuts down the model when somebody logs out.
-        this.one.onLogin(this.init.bind(this));
+        console.log('[Model] 🔍 Registering onLogin callback for Model.init...');
+        this.one.onLogin((...args: any[]) => {
+            console.log('[Model] 🔍 onLogin callback fired! Args:', args);
+            return this.init(...args);
+        });
         this.one.onLogout(this.shutdown.bind(this));
 
         console.log('[Model] Model construction complete');
@@ -497,10 +551,14 @@ export default class Model {
     /**
      * Initialize all models after login
      */
-    public async init(_instanceName: string, _secret: string): Promise<void> {
+    public async init(_instanceName?: string, _secret?: string): Promise<void> {
+        console.log('[Model] 🔍 INIT CALLED! Args:', {instanceName: _instanceName, secret: _secret ? '***' : undefined});
+
         // Fail fast: Don't allow double-init
         if (this.initialized) {
-            throw new Error('Model already initialized - call shutdown() first before re-initializing');
+            const error = new Error('Model already initialized - call shutdown() first before re-initializing');
+            console.error('[Model] ❌ INIT FAILED - already initialized!', error);
+            throw error;
         }
 
         try {
@@ -605,11 +663,17 @@ export default class Model {
                             const storeResult = await storeVersionedObject(obj);
                             console.log('[Model] ✅ Stored Person object (vheads created):', storeResult.idHash?.toString()?.substring(0, 8));
 
-                            // Ensure a contact exists for this Person
-                            await ensureContactExists(result.idHash as any, this.leuteModel, {
-                                displayName: obj.email?.split('@')[0]
-                            });
-                            console.log('[Model] ✅ Ensured contact exists for Person');
+                            // Skip ContactCreation for AI/LLM Persons - AIManager already created them properly
+                            const isAIOrLLM = obj.email?.endsWith('@ai.local') || obj.email?.endsWith('@llm.local');
+                            if (isAIOrLLM) {
+                                console.log('[Model] ⏭️  Skipping ContactCreation for AI/LLM Person - AIManager already created it');
+                            } else {
+                                // Ensure a contact exists for this Person (regular contacts only)
+                                await ensureContactExists(result.idHash as any, this.leuteModel, {
+                                    displayName: obj.email?.split('@')[0]
+                                });
+                                console.log('[Model] ✅ Ensured contact exists for Person');
+                            }
                         } catch (error) {
                             console.error('[Model] Failed to handle received Person:', error);
                         }
@@ -619,6 +683,10 @@ export default class Model {
                 }
             });
             console.log('[Model] ✅ CHUM listeners registered');
+
+            // CRITICAL: Set channelManager reference so LLMManager can read from storage
+            // Must be set BEFORE CoreInitializer calls llmManager.init()
+            this.llmManager.channelManager = this.channelManager;
 
             // Use centralized initialization from lama.core
             // This enforces correct order: LeuteModel → LLM → Channels → Topics
@@ -632,18 +700,13 @@ export default class Model {
                 connections: this.connections,
                 llmManager: this.llmManager,
                 llmObjectManager: this.llmObjectManager,
-                aiAssistantPlan: this.aiAssistantPlan,
-                chatHandler: this.chatPlan,
+                aiAssistantModel: this.aiAssistantPlan,
+                chatPlan: this.chatPlan,
                 topicAnalysisModel: this.topicAnalysisModel,
                 topicGroupManager: this.topicGroupManager
             }, (progress) => {
                 console.log(`[Model] Init progress: ${progress.stage} (${progress.percent}%) - ${progress.message}`);
             });
-
-            // Initialize LLMManager to discover available models (Ollama, cloud APIs, etc.)
-            console.log('[Model] Initializing LLMManager to discover models...');
-            await this.llmManager.init();
-            console.log('[Model] ✅ LLMManager initialized - models discovered');
 
             // Now that LeuteModel is initialized, set up profile and groups
             const me = await this.leuteModel.me();
@@ -737,6 +800,24 @@ export default class Model {
             await this.aiAssistantPlan.init();
             console.log('[Model] ✅ AIAssistantPlan initialized');
 
+            // Initialize LLMObjectManager to load LLM objects from storage
+            // CRITICAL: This populates the LLM cache used by ChatPlan to identify AI topics
+            console.log('[Model] Initializing LLMObjectManager...');
+            await this.llmObjectManager.initialize();
+            console.log('[Model] ✅ LLMObjectManager initialized');
+
+            // Scan existing conversations for AI topics and register them
+            // CRITICAL: Must run after LLMObjectManager.initialize() (AI contacts loaded)
+            // and after ChannelManager is ready (channels loaded during login)
+            console.log('[Model] Scanning existing conversations for AI topics...');
+            try {
+                const scannedCount = await this.aiAssistantPlan.scanExistingConversations();
+                console.log(`[Model] ✅ Scanned and registered ${scannedCount} AI topics`);
+            } catch (error) {
+                console.error('[Model] ❌ Failed to scan AI topics:', error);
+                // Don't throw - this is not a fatal error for initialization
+            }
+
             // Initialize connection.core integration - DISABLED: Browser adapters not implemented yet
             // console.log('[Model] Initializing connection.core integration...');
             // const oneCoreAdapter = new BrowserOneCoreAdapter(
@@ -777,16 +858,45 @@ export default class Model {
             this.topicAnalysisModel = new TopicAnalysisModel(this.channelManager, this.topicModel);
             await this.topicAnalysisModel.init();
 
-            // CRITICAL: Inject topicAnalysisModel into AIMessageProcessor so it can create subjects
-            // The aiAssistantModel was created with topicAnalysisModel: undefined (line 214)
+            // Initialize CubeStorage for dimensional indexing of subjects/keywords
+            console.log('[Model] Initializing CubeStorage for subject/keyword indexing...');
+
+            // Create custom dimensions for subject/keyword indexing
+            const dimensions = CustomDimensionManager.createDimensions([
+                { name: 'topic', type: 'string', description: 'Topic ID' },
+                { name: 'keyword', type: 'string', description: 'Keyword term' },
+                { name: 'subjectType', type: 'string', description: 'Subject classification' }
+            ]);
+
+            this.cubeStorage = new CubeStorage({ dimensions });
+            await this.cubeStorage.init();
+            console.log('[Model] ✅ CubeStorage initialized with 3 custom dimensions');
+
+            // CRITICAL: Inject topicAnalysisModel into AIAssistantPlan deps so it can create subjects
+            // The AIAssistantPlan was created with topicAnalysisModel: undefined (line 296)
             // Now that topicAnalysisModel exists, we need to inject it
+            console.log('[Model] 💉 Injecting topicAnalysisModel into AIAssistantPlan.deps');
+            (this.aiAssistantPlan as any).deps.topicAnalysisModel = this.topicAnalysisModel;
+
+            // Also inject into messageProcessor for backwards compatibility
             if (this.aiAssistantPlan.messageProcessor) {
-                console.log('[Model] 💉 Injecting topicAnalysisModel into AIMessageProcessor');
                 (this.aiAssistantPlan.messageProcessor as any).topicAnalysisModel = this.topicAnalysisModel;
             }
 
-            // Create TopicAnalysisPlan now that topicAnalysisModel is ready
-            this.topicAnalysisPlan = new TopicAnalysisPlan(this.topicAnalysisModel);
+            // CRITICAL: Inject topicAnalysisModel into taskManager so analysis can be processed
+            if (this.aiAssistantPlan.taskManager) {
+                console.log('[Model] 💉 Injecting topicAnalysisModel into AITaskManager');
+                (this.aiAssistantPlan.taskManager as any).topicAnalysisModel = this.topicAnalysisModel;
+            }
+
+            // Create TopicAnalysisPlan now that topicAnalysisModel and cubeStorage are ready
+            this.topicAnalysisPlan = new TopicAnalysisPlan(
+                this.topicAnalysisModel,
+                this.topicModel,
+                this.llmManager,
+                this, // nodeOneCore
+                this.cubeStorage
+            );
 
             // Create ProposalsPlan with all dependencies
             const proposalEngine = new ProposalEngine(this.topicAnalysisModel);
@@ -808,7 +918,7 @@ export default class Model {
                 console.log('[Model] Found saved default model:', savedDefaultModel);
 
                 // Validate that the saved model still exists and is available
-                const availableModels = this.llmManager.getAvailableModels();
+                const availableModels = await this.llmManager.getAvailableModels();
                 const modelExists = availableModels.some((m: any) => m.id === savedDefaultModel);
 
                 if (modelExists) {
@@ -999,6 +1109,7 @@ export default class Model {
 
     // LAMA models
     public topicAnalysisModel: TopicAnalysisModel;
+    public cubeStorage: CubeStorage;
 
     // LAMA Plans (AI-related from lama.core)
     public aiPlan: AIPlan;
@@ -1035,6 +1146,7 @@ export default class Model {
     // LLM services
     public llmManager: LLMManager;
     public llmObjectManager: LLMObjectManager;
+    public aiObjectManager: AIObjectManager;
 
     /**
      * Send message - AIMessageListener will automatically trigger AI response
@@ -1058,6 +1170,17 @@ export default class Model {
         }
 
         throw new Error(response.error || 'Failed to send message');
+    }
+
+    /**
+     * Switch a topic to use a different AI model
+     */
+    async switchTopicModel(topicId: string, modelId: string): Promise<void> {
+        if (!this.initialized) {
+            throw new Error('Model not initialized');
+        }
+
+        await this.aiAssistantPlan.switchTopicModel(topicId, modelId);
     }
 
     /**

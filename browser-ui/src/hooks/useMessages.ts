@@ -102,6 +102,12 @@ export function useMessages({
           const merged = Array.from(messageMap.values())
           merged.sort((a, b) => a.timestamp - b.timestamp)
 
+          // Only update state if messages actually changed
+          if (merged.length === prev.length && merged.every((msg, i) => msg.id === prev[i]?.id)) {
+            console.log(`[useMessages] ✅ No changes detected, keeping existing state`);
+            return prev // Return existing reference to prevent re-render
+          }
+
           console.log(`[useMessages] ✅ Merged ${merged.length} messages (${newMessages.length} new)`);
           return merged
         })
@@ -192,6 +198,19 @@ export function useMessages({
       if (channelId === topicId) {
         // Refresh messages to get the latest (will merge with existing)
         await refreshMessages()
+
+        // Trigger topic analysis after messages are updated
+        // Analysis extracts subjects/keywords and indexes them in cube.core
+        if (model.topicAnalysisPlan) {
+          try {
+            console.log(`[useMessages] 🔍 Triggering topic analysis for ${topicId}`)
+            await model.topicAnalysisPlan.analyzeMessages({ topicId })
+            console.log(`[useMessages] ✅ Topic analysis complete`)
+          } catch (error) {
+            console.error(`[useMessages] ❌ Topic analysis failed:`, error)
+            // Don't throw - analysis failure shouldn't break message display
+          }
+        }
       }
     })
 

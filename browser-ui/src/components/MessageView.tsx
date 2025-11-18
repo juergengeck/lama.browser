@@ -7,7 +7,7 @@
  * - Attachments managed by AttachmentService
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Avatar, AvatarFallback } from '@lama/ui'
 import { Loader2, ChevronDown } from 'lucide-react'
 import './MessageView.css'
@@ -54,8 +54,6 @@ interface MessageViewProps {
   aiModelName?: string // Model name for streaming responses
   aiError?: string | null // Error message from AI processing
   topicId?: string // Topic ID for context panel
-  subjectsJustAppeared?: boolean // Flag indicating subjects just appeared
-  chatHeaderRef?: React.RefObject<HTMLDivElement> // Ref to ChatHeader to measure height change
 }
 
 export function MessageView({
@@ -70,9 +68,7 @@ export function MessageView({
   aiStreamingContent = '',
   aiModelName,
   aiError = null,
-  topicId,
-  subjectsJustAppeared = false,
-  chatHeaderRef
+  topicId
 }: MessageViewProps) {
   // Keep Model for platform-specific features (initialized, currentUserId)
   const model = useModel()
@@ -84,7 +80,6 @@ export function MessageView({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false)
-  const [viewportHeight, setViewportHeight] = useState(window.visualViewport?.height || window.innerHeight)
 
   // Store attachment descriptors for display
   const [attachmentDescriptors, setAttachmentDescriptors] = useState<Map<string, BlobDescriptor>>(new Map())
@@ -150,27 +145,6 @@ export function MessageView({
     autoRefresh: true
   })
 
-  // Handle viewport changes for mobile keyboard
-  useEffect(() => {
-    const handleViewportChange = () => {
-      const newHeight = window.visualViewport?.height || window.innerHeight
-      setViewportHeight(newHeight)
-
-      // Auto-scroll to bottom when keyboard opens (viewport shrinks)
-      if (newHeight < (window.visualViewport?.height || window.innerHeight) && !isUserScrolledUp) {
-        requestAnimationFrame(() => {
-          if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
-          }
-        })
-      }
-    }
-
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleViewportChange)
-      return () => window.visualViewport?.removeEventListener('resize', handleViewportChange)
-    }
-  }, [isUserScrolledUp])
 
   // Load contact names
   useEffect(() => {
@@ -202,92 +176,63 @@ export function MessageView({
     loadContactNames()
   }, [currentUserId, contacts])
   
-  // Track user scroll position
-  const handleScroll = () => {
+  // Track user scroll position - only update if not auto-scrolling
+  const isAutoScrollingRef = useRef(false)
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleScroll = useCallback(() => {
     if (!scrollAreaRef.current) return
 
-    const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current
-    const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+    // Don't update scroll state if we're auto-scrolling
+    if (isAutoScrollingRef.current) return
 
-    // Consider user at bottom if within 50px
-    // Track this even during streaming so user can scroll up
-    setIsUserScrolledUp(distanceFromBottom > 50)
-  }
+    // Throttle scroll updates to prevent infinite loops during streaming
+    if (scrollTimeoutRef.current) return
 
-  // Adjust scroll position when subjects appear to compensate for header height change
-  useEffect(() => {
-    if (subjectsJustAppeared && chatHeaderRef?.current && scrollAreaRef.current) {
-      // Measure the height of the subject line that just appeared
-      // We use requestAnimationFrame to wait for the DOM to update
-      requestAnimationFrame(() => {
-        if (!chatHeaderRef.current || !scrollAreaRef.current) return
+    scrollTimeoutRef.current = setTimeout(() => {
+      scrollTimeoutRef.current = null
 
-        // Adjust scroll to compensate for the header growth
-        // This keeps the visible content in the same position
-        const currentScroll = scrollAreaRef.current.scrollTop
-        // Approximate subject line height is ~48px
-        const subjectLineHeight = 48
-        scrollAreaRef.current.scrollTop = currentScroll + subjectLineHeight
-      })
-    }
-  }, [subjectsJustAppeared, chatHeaderRef])
+      if (!scrollAreaRef.current) return
 
-  // Track previous streaming state to detect when streaming just ended
-  const prevStreamingRef = useRef(false)
-  const hasScrolledInitiallyRef = useRef(false)
+      const { scrollTop, scrollHeight, clientHeight } = scrollAreaRef.current
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight
+
+      // Consider user at bottom if within 50px
+      const isScrolledUp = distanceFromBottom > 50
+
+      // Only update state if it actually changed
+      setIsUserScrolledUp(prev => prev === isScrolledUp ? prev : isScrolledUp)
+    }, 100) // 100ms throttle
+  }, [])
 
   // Reset scroll tracking when topic changes
   useEffect(() => {
-    hasScrolledInitiallyRef.current = false
     setIsUserScrolledUp(false)
   }, [topicId])
 
-  // Don't reset scroll tracking when streaming starts - respect user position
-  // (Previous version would force scroll to bottom, preventing user from scrolling up)
-
-  // Auto-scroll to bottom when new messages arrive or during streaming
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
-    const isStreaming = isAIProcessing || aiStreamingContent
-    const wasStreaming = prevStreamingRef.current
-
-    // Update ref for next render
-    prevStreamingRef.current = isStreaming
-
-    // If streaming just ended (was streaming but now not), don't scroll
-    // The final message is already visible from the streaming view
-    if (wasStreaming && !isStreaming) {
-      return
-    }
-
-    // On first render with messages, scroll immediately to bottom
-    if (messages.length > 0 && !hasScrolledInitiallyRef.current) {
-      hasScrolledInitiallyRef.current = true
-      requestAnimationFrame(() => {
-        if (messagesEndRef.current) {
-          messagesEndRef.current.scrollIntoView({
-            behavior: 'instant',
-            block: 'end'
-          })
-        }
-      })
-      return
-    }
-
-    // If user has scrolled up, don't auto-scroll (respect user intent even during streaming)
+    // If user has scrolled up, don't auto-scroll
     if (isUserScrolledUp) return
 
-    // Use requestAnimationFrame to ensure DOM has finished rendering before scrolling
+    // Skip if no messages
+    if (messages.length === 0) return
+
+    // Scroll to bottom - always use instant to avoid visible animations
+    isAutoScrollingRef.current = true
     requestAnimationFrame(() => {
       if (messagesEndRef.current) {
-        // Use instant scroll during streaming for better responsiveness
-        // Use smooth scroll for normal message updates
         messagesEndRef.current.scrollIntoView({
-          behavior: isStreaming ? 'instant' : 'smooth',
-          block: 'end'
+          behavior: 'instant',
+          block: 'start' // Put marker at top of viewport = shows latest messages
         })
+        // Clear flag after scroll completes
+        setTimeout(() => {
+          isAutoScrollingRef.current = false
+        }, 100)
       }
     })
-  }, [messages, aiStreamingContent, isUserScrolledUp, isAIProcessing])
+  }, [messages.length, isUserScrolledUp])
 
 
 
@@ -354,16 +299,8 @@ export function MessageView({
       // Send the message with attachments
       await onSendMessage(messageContent, messageAttachments.length > 0 ? messageAttachments : undefined)
 
-      // Reset scroll position tracking and force instant scroll to bottom after sending
+      // Reset scroll tracking - the auto-scroll effect will handle scrolling
       setIsUserScrolledUp(false)
-      // Use double requestAnimationFrame to ensure DOM has fully updated
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'instant', block: 'end' })
-          }
-        })
-      })
 
     } catch (error) {
       console.error('Failed to send enhanced message:', error)
@@ -391,8 +328,12 @@ export function MessageView({
   // Scroll to bottom handler
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
+      isAutoScrollingRef.current = true
+      messagesEndRef.current.scrollIntoView({ behavior: 'instant', block: 'start' })
       setIsUserScrolledUp(false)
+      setTimeout(() => {
+        isAutoScrollingRef.current = false
+      }, 100)
     }
   }
 
@@ -442,7 +383,7 @@ export function MessageView({
           overflowScrolling: 'touch'
         }}
       >
-        <div className="space-y-4" style={{ paddingBottom: proposals.length > 0 ? '120px' : '0' }}>
+        <div className="space-y-4" style={{ paddingBottom: '8px' }}>
           {messages.length === 0 && !loading && !isAIProcessing && !aiStreamingContent && (
             <div className="text-center py-8 text-muted-foreground">
               No messages yet. Start a conversation!
@@ -503,30 +444,20 @@ export function MessageView({
                     attachmentDescriptors={attachmentDescriptors}
                   />
                 </div>
-                {isCurrentUser && (
-                  <Avatar className="h-8 w-8 shrink-0">
-                    <AvatarFallback className="text-xs bg-secondary text-secondary-foreground">
-                      {senderInitials}
-                    </AvatarFallback>
-                  </Avatar>
-                )}
               </div>
             )
           })}
 
-          {/* AI Typing Indicator - only show when processing and NO streaming content */}
+          {/* AI Processing Spinner - show when processing and NO streaming content */}
           {isAIProcessing && !aiStreamingContent && (
             <div className="flex gap-2 mb-2 justify-start">
               <Avatar className="h-8 w-8 shrink-0">
                 <AvatarFallback className="text-xs bg-primary/20 text-primary">AI</AvatarFallback>
               </Avatar>
               <div className="flex flex-col">
-                <div className="message-bubble message-bubble-ai">
-                  <div className="typing-indicator">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
+                <div className="message-bubble message-bubble-ai flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm text-muted-foreground">Thinking...</span>
                 </div>
               </div>
             </div>

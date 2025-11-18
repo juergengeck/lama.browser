@@ -29,7 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@lama/ui'
-import { Users, UserPlus, Search, Circle, Bot, MessageSquare, Download, CheckCircle, User, Edit, MoreVertical, Shield, UserCheck, Ban, Trash2, Link as LinkIcon } from 'lucide-react'
+import { Users, UserPlus, Search, Circle, Bot, MessageSquare, Download, CheckCircle, User, Edit, MoreVertical, Shield, UserCheck, Ban, Trash2, Link as LinkIcon, Brain } from 'lucide-react'
 import { useModel } from '@/model/ModelContext'
 import { usePlans } from '@lama/ui'
 import { ProfileEditor } from './ProfileEditor'
@@ -489,6 +489,18 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
                                     <Shield className="h-4 w-4 mr-2" />
                                     View Chain of Trust
                                   </DropdownMenuItem>
+
+                                  {contact.isAI && (
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        console.log('[ContactsView] TODO: Open model settings for:', contact.name)
+                                        // TODO: Implement model settings dialog
+                                      }}
+                                    >
+                                      <Brain className="h-4 w-4 mr-2" />
+                                      Model Settings
+                                    </DropdownMenuItem>
+                                  )}
 
                                   <DropdownMenuSeparator />
 

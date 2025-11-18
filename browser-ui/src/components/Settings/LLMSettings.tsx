@@ -322,8 +322,9 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
     setOllamaModels([])
 
     try {
-      const result = await llmConfig.testConnection({
-        baseUrl: ollamaBaseUrl
+      const result = await llmConfig.testConnectionAndDiscoverModels({
+        baseUrl: ollamaBaseUrl,
+        serviceName: 'Ollama'
       })
 
       if (result.success) {
@@ -359,8 +360,9 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
 
     try {
       // LM Studio uses OpenAI-compatible API
-      const result = await llmConfig.testConnection({
-        baseUrl: lmstudioBaseUrl
+      const result = await llmConfig.testConnectionAndDiscoverModels({
+        server: lmstudioBaseUrl,
+        serviceName: 'LM Studio'
       })
 
       if (result.success) {
@@ -518,7 +520,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
   const cloudModels = llmConfigs.filter(llm => isCloudProvider(llm.provider))
 
   const renderLLMCard = (llm: LLMConfig) => (
-    <Card key={llm.id} className="border">
+    <Card className="border">
       <CardContent className="p-4">
         {/* Header with expand/collapse */}
         <div
@@ -753,7 +755,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
               <Badge variant="outline" className="text-xs">{localModels.length}</Badge>
             </div>
             <div className="space-y-2">
-              {localModels.map(llm => renderLLMCard(llm))}
+              {localModels.map(llm => <React.Fragment key={llm.id}>{renderLLMCard(llm)}</React.Fragment>)}
             </div>
           </div>
         )}
@@ -1037,7 +1039,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
           {/* Existing Cloud Models */}
           {cloudModels.length > 0 && (
             <div className="space-y-2">
-              {cloudModels.map(llm => renderLLMCard(llm))}
+              {cloudModels.map(llm => <React.Fragment key={llm.id}>{renderLLMCard(llm)}</React.Fragment>)}
             </div>
           )}
 

@@ -135,16 +135,26 @@ export function useTopics(): UseTopicsReturn {
     setTopics(prev => prev.map(t => t.id === topicId ? { ...t, name: newName } : t))
 
     try {
-      // TODO: ChatHandler doesn't have renameTopic yet
-      console.log('[useTopics] Rename topic (not implemented):', topicId, 'to', newName)
-      // When implemented: await model.chatPlan.renameTopic({ topicId, newName })
+      // Check if this is an AI topic - if so, use AI-specific rename
+      const topic = topics.find(t => t.id === topicId);
+      if (topic?.isAITopic && model.aiAssistantPlan) {
+        console.log('[useTopics] Renaming AI chat:', topicId, 'to', newName);
+        await model.aiAssistantPlan.renameAIChat(topicId, newName);
+        console.log('[useTopics] ✅ AI chat renamed');
+        // Refresh to get updated name and past identities
+        await refreshTopics();
+      } else {
+        // Regular topic rename (not yet implemented for non-AI topics)
+        console.log('[useTopics] Rename regular topic (not implemented):', topicId, 'to', newName);
+        // When implemented: await model.chatPlan.renameTopic({ topicId, newName })
+      }
     } catch (err) {
-      console.error('[useTopics] Failed to rename topic:', err)
+      console.error('[useTopics] Failed to rename topic:', err);
       // Reload to restore if rename failed
-      await refreshTopics()
-      throw err
+      await refreshTopics();
+      throw err;
     }
-  }, [refreshTopics])
+  }, [refreshTopics, topics, model])
 
   const updateTopicLastMessage = useCallback((topicId: string, lastMessage: string) => {
     // Optimistically update the lastMessage for the topic

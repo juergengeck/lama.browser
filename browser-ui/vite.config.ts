@@ -109,7 +109,8 @@ export default defineConfig({
     fs: {
       allow: [
         path.resolve(__dirname, '..'),  // Allow parent directory (for worker/, shared/, packages/)
-        path.resolve(__dirname, '../..') // Allow grandparent (for lama.core)
+        path.resolve(__dirname, '../..'), // Allow grandparent (for lama.core, chat.core, etc.)
+        path.resolve(__dirname, '../../packages') // Allow packages directory (symlink target)
       ]
     },
     headers: {
