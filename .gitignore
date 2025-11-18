@@ -67,3 +67,9 @@ one.models/
 packages/
 refinio.api/
 refinio.cli/reference/
+
+# Archive directories with embedded git repos
+archive/code.core/
+archive/flexibel.electron.old/
+archive/lama.app.old/
+archive/lama.worker/
