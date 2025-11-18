@@ -29,14 +29,5 @@
     "typescript": "^5.7.2",
     "vite": "^7.1.10",
     "vitest": "^3.2.4"
-  },
-  "dependencies": {
-    "@chat/core": "workspace:*",
-    "@lama/connection.core": "workspace:*",
-    "@lama/core": "workspace:*",
-    "@refinio/one.core": "workspace:*",
-    "@refinio/one.models": "workspace:*",
-    "@refinio/refinio-api": "file:vendor/refinio-refinio-api-0.1.0.tgz",
-    "ws": "^8.18.3"
   }
 }
