@@ -81,8 +81,9 @@ import {ContactsPlan} from '@chat/core/plans/ContactsPlan.js';
 import {ExportPlan} from '@chat/core/plans/ExportPlan.js';
 import {FeedForwardPlan} from '@chat/core/plans/FeedForwardPlan.js';
 
-// Plan system for assembly tracking (browser-compatible stories-only export)
-import {StoryFactory, AssemblyPlan} from '@refinio/refinio-api/stories';
+// Plan system for assembly tracking
+import {StoryFactory} from '@refinio/refinio-api/plan-system';
+import {AssemblyPlan} from '@assembly/core';
 
 // Connection core plans (platform-agnostic business logic - P2P connections and group chat)
 import {ConnectionPlan, type TrustPlanDependencies, type PairingEventCallbacks} from '@connection/core/plans/ConnectionPlan.js';
@@ -100,9 +101,10 @@ import {autoCreateP2PTopicAfterPairing} from '@chat/core/services/P2PTopicServic
 import TopicAnalysisModel from '@lama/core/one-ai/models/TopicAnalysisModel';
 
 // Cube.core for dimensional indexing
+// TODO: Re-enable when cube.core storage layer is implemented
 import {
-    CubeStorage,
-    CustomDimensionManager,
+    // CubeStorage,
+    // CustomDimensionManager,
     CubeObjectRecipe,
     DimensionRecipe,
     DimensionValueRecipe,
@@ -123,6 +125,7 @@ import {LLMRecipe} from '@lama/core/recipes/LLMRecipe';
 import {ProposalConfigRecipe} from '@lama/core/recipes/ProposalConfigRecipe';
 import {SubscriptionBalanceRecipe} from '../recipes/SubscriptionBalanceRecipe';
 import {MessageReadStatusRecipe} from '../recipes/MessageReadStatusRecipe';
+import {AvatarPreferenceRecipe} from '../recipes/AvatarPreferenceRecipe';
 import {StoryRecipe} from '../recipes/StoryRecipe';
 
 // Assembly.core recipes
@@ -190,6 +193,7 @@ export default class Model {
                 ProposalConfigRecipe,
                 SubscriptionBalanceRecipe,
                 MessageReadStatusRecipe,
+                AvatarPreferenceRecipe,
                 StoryRecipe,  // Assembly tracking
                 AssemblyRecipe,  // Assembly (Product) tracking
                 // Trust.core recipes (identity subscription system)
@@ -858,19 +862,20 @@ export default class Model {
             this.topicAnalysisModel = new TopicAnalysisModel(this.channelManager, this.topicModel);
             await this.topicAnalysisModel.init();
 
+            // TODO: Re-enable when cube.core storage layer is implemented
             // Initialize CubeStorage for dimensional indexing of subjects/keywords
-            console.log('[Model] Initializing CubeStorage for subject/keyword indexing...');
+            // console.log('[Model] Initializing CubeStorage for subject/keyword indexing...');
 
             // Create custom dimensions for subject/keyword indexing
-            const dimensions = CustomDimensionManager.createDimensions([
-                { name: 'topic', type: 'string', description: 'Topic ID' },
-                { name: 'keyword', type: 'string', description: 'Keyword term' },
-                { name: 'subjectType', type: 'string', description: 'Subject classification' }
-            ]);
+            // const dimensions = CustomDimensionManager.createDimensions([
+            //     { name: 'topic', type: 'string', description: 'Topic ID' },
+            //     { name: 'keyword', type: 'string', description: 'Keyword term' },
+            //     { name: 'subjectType', type: 'string', description: 'Subject classification' }
+            // ]);
 
-            this.cubeStorage = new CubeStorage({ dimensions });
-            await this.cubeStorage.init();
-            console.log('[Model] ✅ CubeStorage initialized with 3 custom dimensions');
+            // this.cubeStorage = new CubeStorage({ dimensions });
+            // await this.cubeStorage.init();
+            // console.log('[Model] ✅ CubeStorage initialized with 3 custom dimensions');
 
             // CRITICAL: Inject topicAnalysisModel into AIAssistantPlan deps so it can create subjects
             // The AIAssistantPlan was created with topicAnalysisModel: undefined (line 296)

@@ -13,11 +13,12 @@ import { DataDashboard } from '@/components/DataDashboard'
 import { DevicesView } from '@/components/DevicesView'
 import { PurchaseView } from '@/components/PurchaseView'
 import { VerificationView } from '@/components/VerificationView'
+import { ProfileView } from '@/components/ProfileView'
 import { LoginDeploy, ModelOnboarding, PlansProvider } from '@lama/ui'
 import type { LAMAPlans } from '@lama/ui'
 import { InvitationAcceptance } from '@/components/InvitationAcceptance'
 import { MODEL_OPTIONS } from '@/constants/model-options'
-import { MessageSquare, BookOpen, Users, Settings, Loader2, Smartphone, BarChart3, CreditCard } from 'lucide-react'
+import { MessageSquare, BookOpen, Users, Settings, Loader2, Smartphone, BarChart3, CreditCard, User } from 'lucide-react'
 import { MobileTabBar } from '@/components/MobileTabBar'
 import { sessionStorage } from '@/services/session-storage'
 import { isValidInvitationUrl } from '@/utils/invitation-url-parser'
@@ -353,6 +354,8 @@ function AppContent({ model }: AppContentProps) {
         return <ContactsView onNavigateToChat={(topicId, contactName) => {
           navigate(`/chat/${topicId}`)
         }} />
+      case '/profile':
+        return <ProfileView onClose={() => navigate('/chats')} />
       case '/devices':
         return <DevicesView />
       case '/purchase':
@@ -362,6 +365,10 @@ function AppContent({ model }: AppContentProps) {
       default:
         if (location.pathname.startsWith('/settings/')) {
           return <SettingsView onLogout={logout} onNavigate={handleNavigate} />
+        }
+        if (location.pathname.startsWith('/contact/')) {
+          // View another user's profile
+          return <ProfileView personId={params.personId} onClose={() => navigate('/contacts')} />
         }
         return <ChatLayout />
     }
@@ -420,6 +427,15 @@ function AppContent({ model }: AppContentProps) {
                   </div>
 
                   <div className="flex items-center space-x-2">
+                    <Button
+                      variant={location.pathname === '/profile' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => navigate('/profile')}
+                      className="flex items-center space-x-2"
+                      title="Profile"
+                    >
+                      <User className="h-4 w-4" />
+                    </Button>
                     {tabs.filter(tab => tab.id === 'settings').map((tab) => {
                       const Icon = tab.icon
                       return (

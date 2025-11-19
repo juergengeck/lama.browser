@@ -72,7 +72,7 @@ declare module '@OneObjectInterfaces' {
         MCPServer: Pick<MCPServer, '$type$' | 'name'>;
         MCPServerConfig: Pick<MCPServerConfig, '$type$' | 'userEmail'>;
         ProposalConfig: Pick<ProposalConfig, '$type$' | 'userEmail'>;
-        AvatarPreference: Pick<AvatarPreference, '$type$' | 'personId'>;
+        AvatarPreference: Pick<AvatarPreference, '$type$' | 'personId' | 'name'>;
         MessageReadStatus: Pick<MessageReadStatus, '$type$' | 'conversationId'>;
         Keyword: Pick<Keyword, '$type$' | 'term'>;
         SubscriptionBalance: Pick<SubscriptionBalance, '$type$' | 'userId'>;
@@ -354,14 +354,46 @@ declare module '@OneObjectInterfaces' {
     // --- UI Preferences ---
 
     /**
-     * AvatarPreference - Avatar color preference for a person
+     * AvatarPreference - Named avatar configuration for a person
+     * ID properties: personId + name (name is the avatar ID)
+     * Generation tracks versions: each save increments generation
      */
     export interface AvatarPreference {
         $type$: 'AvatarPreference';
-        personId: string; // ID property - Person ID hash
-        color: string; // Hex color code
+        personId: string;   // Person ID (ID property)
+        name: string;       // Avatar name - this is the ID (default: "LAMA")
+
+        generation: number; // Version number, starts at 1, increments on save
+
+        // Lama avatar configuration
+        lamaConfig?: {
+            fell: boolean;      // Fur layer
+            hufen: boolean;     // Hooves
+            schwanz: boolean;   // Tail
+            ohren: boolean;     // Ears
+            augen: boolean;     // Eyes
+            krawatte: boolean;  // Tie accessory
+            hut: boolean;       // Hat accessory
+            punk: boolean;      // Mohawk accessory
+            // Color overlays per layer
+            fellColor?: string;
+            hufenColor?: string;
+            schwanzColor?: string;
+            ohrenColor?: string;
+            augenColor?: string;
+            krawatteColor?: string;
+            hutColor?: string;
+            punkColor?: string;
+        };
+
+        // Simple color preference (fallback if no lama config)
+        color?: string; // Hex color code
+
+        // Optional mood indicator
         mood?: 'happy' | 'sad' | 'angry' | 'calm' | 'excited' | 'tired' | 'focused' | 'neutral';
-        updatedAt: number; // Unix timestamp
+
+        createdAt: number;  // Creation timestamp
+        updatedAt: number;  // Last update timestamp
     }
 
     /**

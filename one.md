@@ -14,13 +14,17 @@ ONE objects are structured data entities with:
 - Automatic conversion between JavaScript objects and HTML microdata format
 - SHA-256 hashing for content-addressable storage
 
+**CRITICAL**: Microdata format is STRICTLY ordered and formatted:
+- Properties MUST appear in recipe-defined order
+- NO extra spaces or newlines (except in property values)
+- One wrong character = different hash = invalid object
+
 Example microdata representation:
 ```html
-<div itemscope itemtype="//refin.io/Person">
-  <span itemprop="email">user@example.com</span>
-  <span itemprop="name">John Doe</span>
-</div>
+<div itemscope itemtype="//refin.io/Person"><span itemprop="email">user@example.com</span><span itemprop="name">John Doe</span></div>
 ```
+
+(Human-readable version with indentation added for documentation only - actual storage has no whitespace)
 
 ### Object Types
 
@@ -29,7 +33,7 @@ Example microdata representation:
 - Examples: `Keys`, `VersionNode*` types
 - Direct hash-based storage and retrieval
 
-#### Versioned Objects  
+#### Versioned Objects
 - Objects with ID properties (`isId: true` in recipe)
 - Support multiple versions with same identity
 - Examples: `Person`, `Instance`, `Group`, `Recipe`
@@ -125,14 +129,62 @@ Track object version history:
 - Separate storage for objects, ID objects, BLOBs, CLOBs
 
 ### ID Hashes
-- Special hash for versioned objects
-- Based only on ID properties
-- Virtual `data-id-object="true"` attribute differentiates from regular hashes
+
+**Critical Distinction**: ID hashes vs object hashes serve different purposes:
+
+**Object Hash** (`SHA256Hash<T>`):
+- Hash of the COMPLETE object with ALL properties
+- Uniquely identifies ONE SPECIFIC version
+- Returned by `calculateHashOfObj(obj)`
+
+**ID Hash** (`SHA256IdHash<T>`):
+- Hash of ONLY the `isId: true` properties
+- Identifies ALL VERSIONS of the same logical object
+- Includes virtual `data-id-object="true"` attribute in microdata
+- Returned by `calculateIdHashOfObj(obj)`
+
+Example Person object:
+```typescript
+const person = {
+  $type$: 'Person',
+  email: 'foo@bar.com',  // isId: true
+  name: 'John Doe'        // not an ID property
+};
+
+// Object hash: e2912ff8... (includes name)
+// ID hash: 400d6354... (only email + data-id-object attribute)
+```
+
+**Why the difference matters**:
+- Changing `name` creates NEW object hash but SAME ID hash
+- Version maps stored under ID hash track all versions
+- `getObjectByIdHash()` returns LATEST version
+- `getObject()` returns SPECIFIC version by object hash
 
 ### Reverse Mapping
-- Optional indexes from referenced objects back to referencing objects
-- Configurable per type and property
-- Enables efficient graph traversal
+
+**Critical for Queries**: Reverse maps enable finding references UP the tree (from referenced to referencing objects).
+
+**Storage Format**: `reverse-maps/[hash].[H|I].to.[type]`
+- `H` = object hash, `I` = ID hash
+- Content: `targetHash,referencingIdHash,referencingHash` (one per line)
+
+**Configuration**: Set during instance init via `initiallyEnabledReverseMapTypes`:
+```typescript
+await initInstance({
+  // ... other options
+  initiallyEnabledReverseMapTypes: new Map([
+    ['ChatMessage', new Set(['topic', 'author'])],
+    ['ChatAttachment', new Set(['message'])]
+  ])
+});
+```
+
+**Why This Matters**:
+- WITHOUT reverse maps: Cannot query "find all messages in topic X"
+- WITH reverse maps: Can efficiently traverse from Topic → Messages
+- Reverse maps are OPTIONAL and configurable per type/property
+- **Discovery/Package visibility issues**: Often caused by missing reverse map configuration
 
 ## Instance Initialization
 
@@ -186,7 +238,7 @@ const obj = {
 // Regular object hash
 const hash = await calculateHashOfObj(obj);
 
-// ID hash for versioned objects  
+// ID hash for versioned objects
 const idHash = await calculateIdHashOfObj(obj);
 ```
 
@@ -235,6 +287,102 @@ declare module '@OneObjectInterfaces' {
 - Browser (IndexedDB storage)
 - React Native (mobile storage)
 
+## Reading Objects vs Reading Blobs
+
+**CRITICAL CONCEPT**: References in ONE.core are layers of indirection. Reading an object that contains a reference does NOT automatically read the referenced data.
+
+### Example: ChatMessage with Attachments
+
+```typescript
+interface ChatMessage {
+  $type$: 'ChatMessage';
+  content: string;
+  attachments?: SHA256Hash<ChatAttachment>[];  // Array of REFERENCES
+}
+
+interface ChatAttachment {
+  $type$: 'ChatAttachment';
+  type: 'BlobDescriptor';  // Type indicator
+  blobDescriptor: SHA256Hash<BlobDescriptor>;  // Reference to descriptor
+}
+
+interface BlobDescriptor {
+  $type$: 'BlobDescriptor';
+  blob: SHA256Hash<BLOB>;  // Reference to actual file
+  fileName: string;
+  mimeType: string;
+  size: number;
+}
+```
+
+### The Indirection Chain
+
+To get from message → actual file requires **3 separate fetches**:
+
+```typescript
+// 1. Read message (gives you attachment HASHES)
+const message = await getObject(messageHash);
+const attachmentHash = message.attachments[0];
+
+// 2. Read attachment object (gives you BlobDescriptor HASH)
+const attachment = await getObject(attachmentHash);
+const blobDescHash = attachment.blobDescriptor;
+
+// 3. Read blob descriptor (gives you BLOB HASH + metadata)
+const blobDesc = await getObject(blobDescHash);
+const blobHash = blobDesc.blob;
+
+// 4. FINALLY read the actual file data
+const fileData = await readBlobAsArrayBuffer(blobHash);
+```
+
+### Key Principle
+
+**Reading a reference gives you the REFERENCED OBJECT, not the data it points to.**
+
+This is intentional:
+- Objects are metadata/structure
+- BLOBs are raw data
+- Separation allows efficient querying without loading all file data
+- Each layer has different caching/access patterns
+
+### Recipe Pattern
+
+When defining attachment arrays in recipes:
+
+```typescript
+{
+  itemprop: 'attachments',
+  itemtype: {
+    type: 'array',
+    item: {
+      type: 'referenceToObj',
+      allowedTypes: new Set(['ChatAttachment'])
+    }
+  }
+}
+```
+
+**NOT**:
+```typescript
+// ❌ WRONG - Don't try to embed metadata structure
+{
+  itemprop: 'attachments',
+  itemtype: {
+    type: 'array',
+    item: {
+      type: 'object',
+      rules: [
+        { itemprop: 'hash', itemtype: { type: 'string' } },
+        { itemprop: 'type', itemtype: { type: 'string' } }
+      ]
+    }
+  }
+}
+```
+
+The metadata IS the ChatAttachment object. Fetch it by hash.
+
 ## Best Practices
 
 1. **Recipe Design**
@@ -281,7 +429,7 @@ declare module '@OneObjectInterfaces' {
 
 ONE.core uses coded errors with specific prefixes:
 - `IN-*`: Instance errors
-- `OR-*`: Object/Recipe errors  
+- `OR-*`: Object/Recipe errors
 - `UO-*`: Utility/Object errors
 
 Always handle storage and network operations with appropriate error catching.

@@ -23,12 +23,20 @@ import { Input } from '@lama/ui'
 import { Label } from '@lama/ui'
 import { Textarea } from '@lama/ui'
 import { Avatar, AvatarFallback, AvatarImage } from '@lama/ui'
-import { User, Camera, Upload, X } from 'lucide-react'
+import { User, Camera, Upload, X, Sparkles } from 'lucide-react'
 import { useModel } from '@/model/ModelContext'
 import { storeArrayBufferAsBlob } from '@refinio/one.core/lib/storage-blob.js'
 import { readBlobAsArrayBuffer } from '@refinio/one.core/lib/storage-blob.js'
 import { clearAvatarCache } from '@/hooks/useContactAvatar'
 import type { SHA256Hash, BLOB } from '@refinio/one.core/lib/recipes.js'
+import { AvatarSelectionDialog } from './AvatarSelectionDialog'
+import {
+  saveAvatarPreference,
+  loadDefaultAvatar,
+  renderLamaAvatar,
+  dataUrlToFile
+} from '@/utils/avatar-helpers'
+import type { AvatarConfig } from './LamaAvatarComposer'
 
 interface ProfileEditorProps {
   open: boolean
@@ -58,6 +66,8 @@ export function ProfileEditor({
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showAvatarSelection, setShowAvatarSelection] = useState(false)
+  const [currentAvatarConfig, setCurrentAvatarConfig] = useState<AvatarConfig | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Load existing profile data when dialog opens
@@ -103,20 +113,36 @@ export function ProfileEditor({
         setStatus(statusDesc.value)
       }
 
-      // Load ProfileImage
-      const imageDesc = profile.personDescriptions.find((d: any) => d.$type$ === 'ProfileImage')
-      if (imageDesc && 'image' in imageDesc) {
-        try {
-          const blobHash = imageDesc.image as SHA256Hash<BLOB>
-          setAvatarBlobHash(blobHash)
+      // Load AvatarPreference (custom lama config)
+      try {
+        const avatarPref = await loadDefaultAvatar(ownerPersonId)
+        if (avatarPref?.lamaConfig) {
+          setCurrentAvatarConfig(avatarPref.lamaConfig)
+          // Render lama avatar as preview
+          const dataUrl = await renderLamaAvatar(avatarPref.lamaConfig, 200)
+          setAvatarPreviewUrl(dataUrl)
+          console.log('[ProfileEditor] Loaded avatar:', avatarPref.name, 'generation:', avatarPref.generation)
+        }
+      } catch (err) {
+        console.warn('[ProfileEditor] No avatar found:', err)
+      }
 
-          // Read BLOB and create preview URL
-          const arrayBuffer = await readBlobAsArrayBuffer(blobHash)
-          const blob = new Blob([arrayBuffer])
-          const url = URL.createObjectURL(blob)
-          setAvatarPreviewUrl(url)
-        } catch (err) {
-          console.error('[ProfileEditor] Failed to load profile image:', err)
+      // Load ProfileImage (uploaded photo - fallback if no lama config)
+      if (!currentAvatarConfig) {
+        const imageDesc = profile.personDescriptions.find((d: any) => d.$type$ === 'ProfileImage')
+        if (imageDesc && 'image' in imageDesc) {
+          try {
+            const blobHash = imageDesc.image as SHA256Hash<BLOB>
+            setAvatarBlobHash(blobHash)
+
+            // Read BLOB and create preview URL
+            const arrayBuffer = await readBlobAsArrayBuffer(blobHash)
+            const blob = new Blob([arrayBuffer])
+            const url = URL.createObjectURL(blob)
+            setAvatarPreviewUrl(url)
+          } catch (err) {
+            console.error('[ProfileEditor] Failed to load profile image:', err)
+          }
         }
       }
     } catch (err) {
@@ -127,7 +153,50 @@ export function ProfileEditor({
   }
 
   const handleAvatarClick = () => {
-    fileInputRef.current?.click()
+    setShowAvatarSelection(true)
+  }
+
+  const handleAvatarSelection = async (type: 'custom' | 'upload', data: string | File, config?: AvatarConfig) => {
+    if (type === 'custom') {
+      // Custom lama avatar (data URL + config)
+      if (!config) {
+        setError('Invalid avatar configuration')
+        return
+      }
+
+      setCurrentAvatarConfig(config)
+      setAvatarPreviewUrl(data as string)
+
+      // Convert data URL to file for storage
+      const file = dataUrlToFile(data as string, 'avatar.png')
+      setAvatarFile(file)
+      setError(null)
+
+      console.log('[ProfileEditor] Custom lama avatar selected')
+    } else {
+      // Uploaded file
+      const file = data as File
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setError('Please select an image file')
+        return
+      }
+
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError('Image must be smaller than 5MB')
+        return
+      }
+
+      setCurrentAvatarConfig(null) // Clear lama config when uploading photo
+      setAvatarFile(file)
+      const previewUrl = URL.createObjectURL(file)
+      setAvatarPreviewUrl(previewUrl)
+      setError(null)
+
+      console.log('[ProfileEditor] Photo uploaded')
+    }
   }
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -263,6 +332,20 @@ export function ProfileEditor({
 
       console.log('[ProfileEditor] Profile saved successfully')
 
+      // Save avatar preference if custom lama config exists
+      if (currentAvatarConfig) {
+        try {
+          await saveAvatarPreference(
+            ownerPersonId,
+            'LAMA',  // Avatar name (default)
+            currentAvatarConfig
+          )
+          console.log('[ProfileEditor] Saved LAMA avatar')
+        } catch (err) {
+          console.error('[ProfileEditor] Failed to save avatar:', err)
+        }
+      }
+
       // Clear avatar cache so ContactsView will reload the new avatar
       clearAvatarCache(ownerPersonId)
 
@@ -310,8 +393,17 @@ export function ProfileEditor({
   }
 
   return (
-    <Dialog open={open} onOpenChange={required ? undefined : onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+    <>
+      <AvatarSelectionDialog
+        open={showAvatarSelection}
+        onOpenChange={setShowAvatarSelection}
+        onSelect={handleAvatarSelection}
+        currentAvatarUrl={avatarPreviewUrl || undefined}
+        initialConfig={currentAvatarConfig || undefined}
+      />
+
+      <Dialog open={open} onOpenChange={required ? undefined : onOpenChange}>
+        <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <div className="flex items-center space-x-2">
             <User className="h-5 w-5 text-primary" />
@@ -376,19 +468,33 @@ export function ProfileEditor({
               disabled={saving}
             />
 
-            {/* Upload Button */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleAvatarClick}
-              disabled={saving}
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              {avatarPreviewUrl ? 'Change Avatar' : 'Upload Avatar'}
-            </Button>
+            {/* Avatar Buttons */}
+            <div className="flex items-center space-x-2 w-full">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleAvatarClick}
+                disabled={saving}
+                className="flex-1 flex items-center justify-center space-x-2"
+              >
+                <Sparkles className="h-4 w-4" />
+                <span>Custom Avatar</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={saving}
+                className="flex-1 flex items-center justify-center space-x-2"
+              >
+                <Upload className="h-4 w-4" />
+                <span>Upload Photo</span>
+              </Button>
+            </div>
 
             <p className="text-xs text-muted-foreground text-center">
-              Supported: JPG, PNG, GIF (max 5MB)
+              Create a custom lama or upload your own image (max 5MB)
             </p>
           </div>
 
@@ -452,5 +558,6 @@ export function ProfileEditor({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    </>
   )
 }

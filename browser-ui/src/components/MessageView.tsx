@@ -210,13 +210,13 @@ export function MessageView({
     setIsUserScrolledUp(false)
   }, [topicId])
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive OR when streaming content updates
   useEffect(() => {
     // If user has scrolled up, don't auto-scroll
     if (isUserScrolledUp) return
 
-    // Skip if no messages
-    if (messages.length === 0) return
+    // Skip if no content at all
+    if (messages.length === 0 && !isAIProcessing && !throttledStreamingContent) return
 
     // Scroll to bottom - always use instant to avoid visible animations
     isAutoScrollingRef.current = true
@@ -224,7 +224,7 @@ export function MessageView({
       if (messagesEndRef.current) {
         messagesEndRef.current.scrollIntoView({
           behavior: 'instant',
-          block: 'start' // Put marker at top of viewport = shows latest messages
+          block: 'end' // Put marker at bottom of viewport = always shows latest content
         })
         // Clear flag after scroll completes
         setTimeout(() => {
@@ -232,7 +232,7 @@ export function MessageView({
         }, 100)
       }
     })
-  }, [messages.length, isUserScrolledUp])
+  }, [messages.length, isUserScrolledUp, isAIProcessing, throttledStreamingContent])
 
 
 
@@ -329,7 +329,7 @@ export function MessageView({
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
       isAutoScrollingRef.current = true
-      messagesEndRef.current.scrollIntoView({ behavior: 'instant', block: 'start' })
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
       setIsUserScrolledUp(false)
       setTimeout(() => {
         isAutoScrollingRef.current = false

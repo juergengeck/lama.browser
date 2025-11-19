@@ -14,6 +14,7 @@ import { flushSync } from 'react-dom'
 import { Card, CardContent } from '@lama/ui'
 import { Button } from '@lama/ui'
 import { Badge } from '@lama/ui'
+import { usePlans } from '@lama/ui'
 import { MessageView } from './MessageView'
 import { useMessages } from '@/hooks/useMessages'
 import { useModel } from '@/model/index.js'
@@ -42,6 +43,7 @@ export const ChatView = memo(function ChatView({
   onAddUsers?: () => void
 }) {
   const model = useModel()
+  const { topicAnalysis } = usePlans()
   const { messages, isLoading: loading, sendMessage } = useMessages({ topicId: conversationId })
   const { subjects } = useChatSubjects(conversationId)
 
@@ -68,13 +70,12 @@ export const ChatView = memo(function ChatView({
   const [aiError, setAiError] = useState<string | null>(null)
   const [streamingTimeout, setStreamingTimeout] = useState<NodeJS.Timeout | null>(null)
   const [lastAnalysisMessageCount, setLastAnalysisMessageCount] = useState(0)
-  const [showSummary, setShowSummary] = useState(false)
   const [showSubjectDetail, setShowSubjectDetail] = useState(false)
   const [selectedSubject, setSelectedSubject] = useState<any | null>(null)
 
   // Check if this is an AI conversation
-  // Use the authoritative value from backend conversation metadata
-  const hasAIParticipant = hasAIParticipantProp || false
+  // Source of truth: AIAssistantModel.topicManager.isAITopic() → ChatPlan → useTopics → ChatLayout → here
+  const hasAIParticipant = hasAIParticipantProp ?? false
 
 
   // Analysis is handled automatically by chatWithAnalysis() in ai-assistant-model.ts
@@ -353,6 +354,33 @@ export const ChatView = memo(function ChatView({
     }
   }
 
+  const handleGenerateSummary = async () => {
+    console.log('[ChatView] Generate Summary clicked')
+    try {
+      const response = await topicAnalysis.analyzeMessages({
+        topicId: conversationId,
+        messages: messages.map(m => ({
+          id: m.id,
+          content: m.content || m.text,
+          sender: m.sender || m.author,
+          timestamp: m.timestamp || Date.now()
+        })),
+        forceReanalysis: true
+      })
+
+      if (response.success) {
+        console.log('[ChatView] Summary generated successfully')
+        // Optionally show a toast notification
+      } else {
+        console.error('[ChatView] Failed to generate summary:', response.error)
+        alert('Failed to generate summary: ' + response.error)
+      }
+    } catch (error) {
+      console.error('[ChatView] Error generating summary:', error)
+      alert('Error generating summary')
+    }
+  }
+
   return (
     <Card className="h-full w-full flex flex-col">
       <ChatHeader
@@ -361,8 +389,7 @@ export const ChatView = memo(function ChatView({
         subjects={subjects}
         messageCount={messages.length}
         hasAI={hasAIParticipant}
-        showSummary={showSummary}
-        onToggleSummary={() => setShowSummary(!showSummary)}
+        onGenerateSummary={handleGenerateSummary}
         onAddUsers={onAddUsers}
         onSubjectClick={(subject) => {
           console.log('[ChatView] Subject clicked:', subject)
@@ -372,18 +399,6 @@ export const ChatView = memo(function ChatView({
       />
 
       <CardContent className="flex-1 p-0 min-h-0 flex flex-col">
-        {/* AI Summary Panel - Shows at top when visible */}
-        {showSummary && hasAIParticipant && (
-          <div className="border-b bg-muted/30">
-            <ChatContext
-              topicId={conversationId}
-              messages={messages}
-              messageCount={messages.length}
-              className="border-0"
-            />
-          </div>
-        )}
-
         {/* Subject Detail Panel - Shows ALL subjects with the same name */}
         {showSubjectDetail && selectedSubject && (() => {
           // Find all subjects with the same name as the selected one

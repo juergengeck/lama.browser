@@ -16,8 +16,7 @@ interface ChatHeaderProps {
   messageCount: number
   onSubjectClick?: (subject: Subject) => void
   hasAI?: boolean
-  onToggleSummary?: () => void
-  showSummary?: boolean
+  onGenerateSummary?: () => void
   onAddUsers?: () => void
   conversationId?: string
   className?: string
@@ -29,14 +28,14 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   messageCount,
   onSubjectClick,
   hasAI = false,
-  onToggleSummary,
-  showSummary = false,
+  onGenerateSummary,
   onAddUsers,
   conversationId,
   className = ''
 }) => {
   const [showLeftChevron, setShowLeftChevron] = useState(false)
   const [showRightChevron, setShowRightChevron] = useState(false)
+  const [showKeywords, setShowKeywords] = useState(false)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Check if scrolling is needed and update chevron visibility
@@ -107,16 +106,20 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
             </div>
           )}
 
-          {/* AI Summary Button - only show for AI conversations */}
-          {hasAI && (
+          {/* Keyword Toggle Button - only show for AI conversations */}
+          {hasAI && subjects && subjects.length > 0 && (
             <Button
-              variant={showSummary ? "default" : "ghost"}
+              variant="ghost"
               size="icon"
               className="h-8 w-8"
-              onClick={onToggleSummary}
-              title="AI Summary"
+              onClick={() => setShowKeywords(!showKeywords)}
+              title={showKeywords ? "Hide Keywords" : "Show Keywords"}
             >
-              <Brain className="h-4 w-4" />
+              <Brain
+                className="h-4 w-4"
+                fill={showKeywords ? "currentColor" : "none"}
+                strokeWidth={showKeywords ? 0 : 2}
+              />
             </Button>
           )}
 
@@ -131,6 +134,12 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
                 <DropdownMenuItem onClick={onAddUsers}>
                   <UserPlus className="mr-2 h-4 w-4" />
                   Add Users
+                </DropdownMenuItem>
+              )}
+              {hasAI && onGenerateSummary && (
+                <DropdownMenuItem onClick={onGenerateSummary}>
+                  <Brain className="mr-2 h-4 w-4" />
+                  Generate Summary
                 </DropdownMenuItem>
               )}
               <DropdownMenuItem onClick={async () => {
@@ -242,8 +251,8 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         </div>
       </div>
 
-      {/* Subjects Bar with Horizontal Scroll */}
-      {subjects && subjects.length > 0 && (() => {
+      {/* Subjects Bar with Horizontal Scroll - only show if showKeywords is true */}
+      {showKeywords && subjects && subjects.length > 0 && (() => {
         // Deduplicate subjects by idHash - keep the most recent version
         const uniqueSubjects = subjects.reduce((acc, subject) => {
           const id = subject.idHash || subject.description || 'Subject';

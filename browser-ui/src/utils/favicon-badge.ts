@@ -87,15 +87,10 @@ export function updateFaviconBadge(count: number): void {
 
   ctx.font = `bold ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`
   ctx.textAlign = 'center'
-  ctx.textBaseline = 'alphabetic'
+  ctx.textBaseline = 'middle'
 
-  // Measure text for true vertical centering
-  const metrics = ctx.measureText(text)
-  const fontHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
-  const textY = centerY + metrics.actualBoundingBoxAscent - fontHeight / 2
-
-  // Draw text at true center
-  ctx.fillText(text, centerX, textY)
+  // Draw text at true center. With 'middle' baseline, centerY is the correct vertical alignment.
+  ctx.fillText(text, centerX, centerY)
 
   // Update favicon with the new canvas image
   faviconLink.type = 'image/png'

@@ -1,5 +1,5 @@
 {
-  "name": "lama",
+  "name": "@lama/browser",
   "version": "1.0.0",
   "description": "lama.one - Local AI Messaging Assistant (Browser)",
   "author": "lama.one Team",

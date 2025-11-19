@@ -13,6 +13,8 @@ import './EnhancedMessageBubble.css';
 import './FormattedMessageContent.css';
 import { MessageContextMenu } from './MessageContextMenu';
 import './MessageContextMenu.css';
+import { createAttachmentView } from '@/components/attachments/AttachmentViewFactory';
+import type { MessageAttachment, BlobDescriptor } from '@/types/attachments';
 
 // Enhanced message data
 export interface EnhancedMessageData {
@@ -42,17 +44,8 @@ export interface EnhancedMessageData {
   subjects: string[];
   keywords?: string[];
 
-  // Attachments with Subject info
-  attachments?: Array<{
-    id: string;
-    name: string;
-    type: 'image' | 'video' | 'audio' | 'document';
-    url: string;
-    thumbnail?: string;
-    size: number;
-    subjects: string[];
-    trustLevel: number;
-  }>;
+  // Attachments - using MessageAttachment type from attachment system
+  attachments?: MessageAttachment[];
 
   // Trust information
   trustLevel: number;
@@ -68,7 +61,7 @@ export interface EnhancedMessageBubbleProps {
   onAttachmentClick?: (attachmentId: string) => void;
   onDownloadAttachment?: (attachmentId: string) => void;
   theme?: 'light' | 'dark';
-  attachmentDescriptors?: Map<string, any>; // Added to pass attachment blob data
+  attachmentDescriptors?: Map<string, BlobDescriptor>;
 }
 
 // Subject hashtag chip component
@@ -128,215 +121,6 @@ const TrustLevelIndicator: React.FC<{
   );
 };
 
-// Attachment view component
-const AttachmentView: React.FC<{
-  attachment: EnhancedMessageData['attachments'][0];
-  onAttachmentClick?: (attachmentId: string) => void;
-  onDownloadAttachment?: (attachmentId: string) => void;
-  onHashtagClick?: (hashtag: string) => void;
-  theme?: 'light' | 'dark';
-  attachmentDescriptors?: Map<string, any>;
-}> = ({ attachment, onAttachmentClick, onDownloadAttachment, onHashtagClick, theme = 'dark', attachmentDescriptors }) => {
-  
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  
-  // Create object URL from attachment descriptor
-  React.useEffect(() => {
-    if (attachment.type === 'image' && attachmentDescriptors) {
-      const descriptor = attachmentDescriptors.get(attachment.id);
-      if (descriptor && descriptor.data) {
-        const blob = new Blob([descriptor.data], { type: descriptor.type });
-        const url = URL.createObjectURL(blob);
-        setImageUrl(url);
-        
-        // Cleanup on unmount
-        return () => {
-          URL.revokeObjectURL(url);
-        };
-      }
-    }
-  }, [attachment, attachmentDescriptors]);
-  
-  const getFileIcon = (type: string) => {
-    switch (type) {
-      case 'image': return '🖼️';
-      case 'video': return '🎥';
-      case 'audio': return '🎵';
-      case 'document': return '📄';
-      default: return '📎';
-    }
-  };
-  
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-  
-  const handleAttachmentClick = () => {
-    if (attachment.type === 'image' || attachment.type === 'video') {
-      onAttachmentClick?.(attachment.id);
-    } else {
-      onDownloadAttachment?.(attachment.id);
-    }
-  };
-  
-  return (
-    <div className={`attachment-view image-bubble ${theme} ${isExpanded ? 'expanded' : 'collapsed'}`}>
-      {/* Image as bubble background */}
-      {(attachment.thumbnail || imageUrl) && (
-        <div 
-          className="attachment-image-bubble" 
-          onClick={handleAttachmentClick}
-          style={{
-            backgroundImage: `url(${imageUrl || attachment.thumbnail})`
-          }}
-        >
-          {(attachment.type === 'video' || attachment.type === 'audio') && (
-            <div className="play-overlay">
-              <div className="play-button">▶</div>
-            </div>
-          )}
-          
-          {/* WhatsApp-style chevron in upper right corner */}
-          <button 
-            className="expand-chevron"
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsExpanded(!isExpanded);
-            }}
-            title={isExpanded ? "Show less" : "Show more"}
-          >
-            <span style={{
-              display: 'inline-block',
-              transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-              transition: 'transform 0.2s ease',
-              fontSize: '16px',
-              fontWeight: 'bold',
-              color: 'rgba(255,255,255,0.9)'
-            }}>
-              ⌃
-            </span>
-          </button>
-          
-          {/* Tags overlay at bottom left */}
-          {attachment.subjects.length > 0 && (
-            <div className="tags-overlay">
-              {attachment.subjects.slice(0, 3).map((subject, index) => (
-                <span 
-                  key={index}
-                  className="overlay-tag"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onHashtagClick?.(subject);
-                  }}
-                >
-                  {subject}
-                </span>
-              ))}
-            </div>
-          )}
-          
-          {/* Time and checkmarks in bottom right */}
-          <div className="message-status-overlay">
-            <span className="message-time">15m</span>
-            <span className="message-checkmarks">✓✓</span>
-          </div>
-          
-        </div>
-      )}
-      
-      {/* Non-image attachments */}
-      {!attachment.thumbnail && (
-        <div className="attachment-icon-container">
-          <div className="attachment-icon">
-            {getFileIcon(attachment.type)}
-          </div>
-        </div>
-      )}
-      
-      {/* Expandable details */}
-      {isExpanded && (
-        <div className="attachment-details">
-          <div className="detail-row">
-            <span className="detail-label">Name:</span>
-            <span className="detail-value">{attachment.name}</span>
-          </div>
-          
-          <div className="detail-row">
-            <span className="detail-label">Size:</span>
-            <span className="detail-value">{formatFileSize(attachment.size)}</span>
-          </div>
-          
-          <div className="detail-row">
-            <span className="detail-label">Type:</span>
-            <span className="detail-value">{attachment.type}</span>
-          </div>
-          
-          {/* Show attachment subjects as small tags */}
-          {attachment.subjects.length > 0 && (
-            <div className="detail-row">
-              <span className="detail-label">Tags:</span>
-              <div className="attachment-subjects">
-                {attachment.subjects.map((subject, index) => (
-                  <SubjectHashtagChip
-                    key={index}
-                    hashtag={subject}
-                    onClick={() => onHashtagClick?.(subject)}
-                    size="small"
-                    theme={theme}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-          
-          <div className="detail-row">
-            <span className="detail-label">Trust:</span>
-            <TrustLevelIndicator 
-              trustLevel={attachment.trustLevel} 
-              compact={false}
-              theme={theme}
-            />
-          </div>
-          
-          {/* Action buttons in details */}
-          <div className="detail-row">
-            <span className="detail-label">Actions:</span>
-            <div className="detail-actions">
-              {(attachment.type === 'image' || attachment.type === 'video') && (
-                <button 
-                  className="detail-action-button"
-                  onClick={() => onAttachmentClick?.(attachment.id)}
-                  title="View"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
-                  </svg>
-                  View
-                </button>
-              )}
-              
-              <button 
-                className="detail-action-button"
-                onClick={() => onDownloadAttachment?.(attachment.id)}
-                title="Download"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
-                </svg>
-                Download
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
 
 // Message text parser that highlights hashtags
 const MessageTextWithHashtags: React.FC<{
@@ -593,17 +377,19 @@ export const EnhancedMessageBubble: React.FC<EnhancedMessageBubbleProps> = ({
             
             {!message.isRetracted && message.attachments && message.attachments.length > 0 && (
               <div className="message-attachments">
-                {message.attachments.map((attachment) => (
-                  <AttachmentView
-                    key={attachment.id}
-                    attachment={attachment}
-                    onAttachmentClick={onAttachmentClick}
-                    onDownloadAttachment={onDownloadAttachment}
-                    onHashtagClick={onHashtagClick}
-                    theme={theme}
-                    attachmentDescriptors={attachmentDescriptors}
-                  />
-                ))}
+                {message.attachments.map((attachment) => {
+                  const descriptor = attachmentDescriptors?.get(attachment.hash as string);
+                  return (
+                    <div key={attachment.hash as string} className="mb-2">
+                      {createAttachmentView(attachment, descriptor, {
+                        mode: 'inline',
+                        showMetadata: true,
+                        maxWidth: 400,
+                        maxHeight: 300
+                      })}
+                    </div>
+                  );
+                })}
               </div>
             )}
             

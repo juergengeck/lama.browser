@@ -51,7 +51,7 @@ class AttachmentService {
       // Return MessageAttachment with hash
       return {
         hash: result.hash as string,
-        type: 'blob',
+        type: 'BLOB',  // ONE.core type convention (uppercase)
         mimeType: metadata.mimeType,
         name: metadata.name,
         size: metadata.size || buffer.byteLength

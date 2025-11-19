@@ -108,13 +108,6 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
         }
       })
 
-      const hasAI = topic.isAITopic || false;
-
-      // DEBUG: Log AI topic detection
-      if (topic.id === 'hi') {
-        console.log('[ChatLayout] 🔍 Topic "hi" - isAITopic:', topic.isAITopic, 'hasAI:', hasAI);
-      }
-
       return {
         id: topic.id,
         name: topic.name,
@@ -123,8 +116,8 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
         lastMessage: isGeneratingWelcome ? 'Generating welcome message...' : (topic.lastMessage || ''),
         lastMessageTime: new Date(topic.lastActivity),
         modelName: topic.modelName || topic.aiModelId,
-        hasAIParticipant: hasAI,
-        isAITopic: hasAI
+        hasAIParticipant: topic.isAITopic ?? false,
+        isAITopic: topic.isAITopic ?? false
       };
     })
   }, [topics, contactsMap, model.initialized, model.aiAssistantModel?.topicManager])
@@ -707,7 +700,7 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
             conversationId={selectedConversation}
             isInitiallyProcessing={processingConversations.has(selectedConversation)}
             onProcessingChange={handleProcessingChange}
-            hasAIParticipant={conversations.find(c => c.id === selectedConversation)?.hasAIParticipant}
+            hasAIParticipant={topics.find(t => t.id === selectedConversation)?.isAITopic}
             onAddUsers={() => openAddUsersDialog(selectedConversation)}
             onMessageUpdate={(lastMessage) => {
               // Optimistically update the preview text immediately

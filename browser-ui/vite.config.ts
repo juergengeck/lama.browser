@@ -29,7 +29,7 @@ export default defineConfig({
       // Shared directories
       { find: '@shared', replacement: path.resolve(__dirname, '../shared') },
       { find: '@worker', replacement: path.resolve(__dirname, '../worker') },
-      { find: '@lama/core', replacement: path.resolve(__dirname, '../../lama.core') },
+      { find: /^@lama\/core\/(.*)$/, replacement: path.resolve(__dirname, '../../lama.core/dist/lama.core/$1') },
       { find: '@lama/ui', replacement: path.resolve(__dirname, '../../lama.ui/src') },
       { find: '@chat/core', replacement: path.resolve(__dirname, '../../chat.core') },
       { find: '@connection/core', replacement: path.resolve(__dirname, '../../connection.core/src') },
@@ -37,8 +37,8 @@ export default defineConfig({
       { find: '@assembly/core', replacement: path.resolve(__dirname, '../../assembly.core') },
 
       // CRITICAL: Use the ONE.core packages directly - NO duplication
-      { find: '@refinio/one.core', replacement: path.resolve(__dirname, '../packages/one.core') },
-      { find: '@refinio/one.models', replacement: path.resolve(__dirname, '../packages/one.models') },
+      { find: '@refinio/one.core', replacement: path.resolve(__dirname, '../../one.core') },
+      { find: '@refinio/one.models', replacement: path.resolve(__dirname, '../../one.models') },
 
       // Stub out Claude for browser builds (CORS restrictions)
       { find: '@anthropic-ai/sdk', replacement: path.resolve(__dirname, './src/stubs/claude-stub.ts') }
