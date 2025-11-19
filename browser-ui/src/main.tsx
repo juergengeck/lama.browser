@@ -53,9 +53,13 @@ async function startLama(): Promise<void> {
   const COMM_SERVER_URL = import.meta.env.VITE_COMM_SERVER_URL || 'wss://comm10.dev.refinio.one';
   console.log('[LAMA] Using CommServer:', COMM_SERVER_URL);
 
+  // Read web URL for invite links (NOT the commServer URL)
+  const WEB_URL = import.meta.env.VITE_WEB_URL || 'https://lama.one';
+  console.log('[LAMA] Using Web URL for invites:', WEB_URL);
+
   // Create model instance
   console.log('[LAMA] Creating Model...');
-  const model = new Model(COMM_SERVER_URL);
+  const model = new Model(COMM_SERVER_URL, WEB_URL);
   setGlobalModel(model);
 
   // Expose model on window for debugging (dev mode only)

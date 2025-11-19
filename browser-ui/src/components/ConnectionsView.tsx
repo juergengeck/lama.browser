@@ -410,7 +410,7 @@ export function ConnectionsView({ onNavigateToChat }: ConnectionsViewProps = {})
           {currentInvitation && (
             <div className="space-y-4">
               {/* QR Code */}
-              <div className="flex justify-center p-4 bg-white rounded-lg border">
+              <div className="flex justify-center p-4 bg-white dark:bg-gray-800 rounded-lg border">
                 <QRCodeSVG value={currentInvitation.url} size={200} />
               </div>
               

@@ -160,10 +160,14 @@ export default class Model {
     public initialized: boolean = false;
     public ownerId: string | null = null;
     private commServerUrl: string;
+    private webUrl: string;
 
-    constructor(commServerUrl: string) {
+    constructor(commServerUrl: string, webUrl: string = 'https://lama.one') {
         this.commServerUrl = commServerUrl;
+        this.webUrl = webUrl;
         console.log('[Model] Constructing LAMA Browser Model...');
+        console.log('[Model] CommServer URL:', commServerUrl);
+        console.log('[Model] Web URL for invites:', webUrl);
 
         // Setup basic ONE.core models (following one.leute pattern)
         // Pass false for autoInit - let CoreInitializer handle initialization
@@ -476,7 +480,7 @@ export default class Model {
         this.connectionPlan = new ConnectionPlan(
             this as any,
             undefined,     // No storage provider for browser
-            commServerUrl,
+            this.webUrl,   // Web URL for invite links (from env or default)
             undefined,     // No discovery config for browser
             trustDeps,     // Trust dependencies - enables automatic trust after pairing
             pairingCallbacks,  // Platform-specific UI updates
