@@ -520,7 +520,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
   const cloudModels = llmConfigs.filter(llm => isCloudProvider(llm.provider))
 
   const renderLLMCard = (llm: LLMConfig) => (
-    <Card className="border">
+    <Card key={llm.id} className="border">
       <CardContent className="p-4">
         {/* Header with expand/collapse */}
         <div
@@ -755,7 +755,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
               <Badge variant="outline" className="text-xs">{localModels.length}</Badge>
             </div>
             <div className="space-y-2">
-              {localModels.map(llm => <React.Fragment key={llm.id}>{renderLLMCard(llm)}</React.Fragment>)}
+              {localModels.map(llm => renderLLMCard(llm))}
             </div>
           </div>
         )}
@@ -1039,7 +1039,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
           {/* Existing Cloud Models */}
           {cloudModels.length > 0 && (
             <div className="space-y-2">
-              {cloudModels.map(llm => <React.Fragment key={llm.id}>{renderLLMCard(llm)}</React.Fragment>)}
+              {cloudModels.map(llm => renderLLMCard(llm))}
             </div>
           )}
 

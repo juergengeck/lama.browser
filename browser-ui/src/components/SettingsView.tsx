@@ -34,7 +34,7 @@ import {
 } from '@lama/ui'
 import {
   Settings, User, Shield, Globe, Cpu, HardDrive,
-  Moon, Sun, Save, RefreshCw, LogOut, Brain, Download, CheckCircle, Circle, Zap, MessageSquare, Code, Key, AlertTriangle, Users, Trash2, Database, Hash, Clock, Package, Eye, ChevronDown, ChevronRight, Copy, FileText, Monitor, Smile, Frown, Angry, Wind, Sparkles, Coffee, Target, Minus
+  Moon, Sun, Save, RefreshCw, LogOut, Brain, Download, CheckCircle, Circle, Zap, MessageSquare, Code, Key, AlertTriangle, Users, Trash2, Database, Hash, Clock, Package, Eye, ChevronDown, ChevronRight, Copy, FileText, Monitor, Smile, Frown, Angry, Wind, Sparkles, Coffee, Target, Minus, Smartphone, CreditCard
 } from 'lucide-react'
 import { sessionStorage } from '@/services/session-storage'
 import InstancesView from './InstancesView'
@@ -1358,8 +1358,40 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
             </CardContent>
           </Card>
 
+          {/* Devices Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2">
+                <Smartphone className="h-4 w-4" />
+                <CardTitle className="text-lg">Devices</CardTitle>
+              </div>
+              <CardDescription>Manage your connected devices and pairing</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => onNavigate?.('devices')}
+              >
+                <Smartphone className="h-4 w-4 mr-2" />
+                Manage Devices
+              </Button>
+            </CardContent>
+          </Card>
+
           {/* Subscription Settings */}
-          <SubscriptionSettings onNavigateToPurchase={() => onNavigate?.('purchase')} />
+          <Card>
+            <CardHeader>
+              <div className="flex items-center space-x-2">
+                <CreditCard className="h-4 w-4" />
+                <CardTitle className="text-lg">Subscription</CardTitle>
+              </div>
+              <CardDescription>Manage your subscription and identity service</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <SubscriptionSettings onNavigateToPurchase={() => onNavigate?.('purchase')} />
+            </CardContent>
+          </Card>
 
           {/* Storage Quota */}
           <StorageQuota />

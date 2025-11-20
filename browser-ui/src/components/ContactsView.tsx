@@ -353,7 +353,15 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
                 </div>
               ) : (
                 filteredContacts.map((contact) => (
-                  <Card key={contact.id} className="hover:bg-accent transition-colors">
+                  <Card
+                    key={contact.id}
+                    className="hover:bg-accent transition-colors cursor-pointer"
+                    onClick={() => {
+                      // Pass personId (not contact.id) to ProfileEditor
+                      setEditingContactId(contact.personId || contact.id)
+                      setProfileDialogOpen(true)
+                    }}
+                  >
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-3 flex-1 min-w-0">
@@ -442,7 +450,10 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleMessageClick(contact)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleMessageClick(contact)
+                            }}
                             disabled={creatingTopic === contact.id}
                           >
                             {creatingTopic === contact.id ? (
@@ -458,16 +469,15 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
                           {/* Context Menu */}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => e.stopPropagation()}
+                              >
                                 <MoreVertical className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>
-                                {contact.trustLevel === 'self' ? 'My Profile' : 'Contact Actions'}
-                              </DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-
                               {contact.trustLevel === 'self' ? (
                                 <DropdownMenuItem
                                   onClick={() => {
@@ -546,7 +556,8 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
       <ProfileEditor
         open={profileDialogOpen}
         onOpenChange={setProfileDialogOpen}
-        currentName={contacts.find(c => c.trustLevel === 'self')?.name || ''}
+        contactId={editingContactId || undefined}
+        currentName={contacts.find(c => c.id === editingContactId)?.name || ''}
         required={false}
         onSave={handleProfileSaved}
       />

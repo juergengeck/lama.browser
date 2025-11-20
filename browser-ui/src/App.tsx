@@ -14,11 +14,12 @@ import { DevicesView } from '@/components/DevicesView'
 import { PurchaseView } from '@/components/PurchaseView'
 import { VerificationView } from '@/components/VerificationView'
 import { ProfileView } from '@/components/ProfileView'
+import { MemoryView } from '@/components/MemoryView'
 import { LoginDeploy, ModelOnboarding, PlansProvider } from '@lama/ui'
 import type { LAMAPlans } from '@lama/ui'
 import { InvitationAcceptance } from '@/components/InvitationAcceptance'
 import { MODEL_OPTIONS } from '@/constants/model-options'
-import { MessageSquare, BookOpen, Users, Settings, Loader2, Smartphone, BarChart3, CreditCard, User } from 'lucide-react'
+import { MessageSquare, BookOpen, Users, Settings, Loader2, Smartphone, BarChart3, CreditCard, User, Brain } from 'lucide-react'
 import { MobileTabBar } from '@/components/MobileTabBar'
 import { sessionStorage } from '@/services/session-storage'
 import { isValidInvitationUrl } from '@/utils/invitation-url-parser'
@@ -321,8 +322,7 @@ function AppContent({ model }: AppContentProps) {
     { id: 'chats', label: 'Chats', icon: MessageSquare, path: '/chats' },
     { id: 'journal', label: 'Journal', icon: BookOpen, path: '/journal' },
     { id: 'contacts', label: 'Contacts', icon: Users, path: '/contacts' },
-    { id: 'devices', label: 'Devices', icon: Smartphone, path: '/devices' },
-    { id: 'purchase', label: 'Subscribe', icon: CreditCard, path: '/purchase' },
+    { id: 'memory', label: 'Memory', icon: Brain, path: '/memory' },
     { id: 'settings', label: null, icon: Settings, path: '/settings' },
   ]
 
@@ -356,6 +356,8 @@ function AppContent({ model }: AppContentProps) {
         }} />
       case '/profile':
         return <ProfileView onClose={() => navigate('/chats')} />
+      case '/memory':
+        return <MemoryView />
       case '/devices':
         return <DevicesView />
       case '/purchase':

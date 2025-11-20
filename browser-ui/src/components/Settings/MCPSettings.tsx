@@ -44,16 +44,84 @@ export function MCPSettings() {
 
   // LAMA's own MCP server state
   const [lamaServerExpanded, setLamaServerExpanded] = useState(true)
-  const lamaServerCapabilities = [
-    { category: 'Chat', tools: ['send_message', 'get_messages', 'list_topics'] },
-    { category: 'Contacts', tools: ['get_contacts', 'search_contacts'] },
-    { category: 'Connections', tools: ['get_connections', 'create_invitation'] },
-    { category: 'AI Assistant', tools: ['get_ai_contacts', 'send_ai_message'] }
-  ]
+  const [lamaTools, setLamaTools] = useState<Array<{name: string, description: string, server: string}>>([])
 
   useEffect(() => {
     loadServers()
+    loadLamaTools()
   }, [])
+
+  // Reload tools when model is initialized
+  useEffect(() => {
+    if (model.initialized && model.llmManager) {
+      loadLamaTools()
+    }
+  }, [model.initialized])
+
+  const loadLamaTools = () => {
+    if (!model.initialized || !model.llmManager) {
+      console.log('[MCPSettings] Model not initialized yet')
+      return
+    }
+
+    try {
+      const tools = model.llmManager.getAllMCPTools()
+      console.log('[MCPSettings] Loaded MCP tools:', tools.length)
+
+      // Browser platform: MCP tools are not registered (MCP server runs in Node.js only)
+      // Show the tool definitions that WOULD be available from the MCP server
+      if (tools.length === 0) {
+        console.log('[MCPSettings] No MCP tools registered (browser platform)')
+        // Set hardcoded tool list as fallback to show what's available in the MCP server
+        setLamaTools([
+          { name: 'send_message', description: 'Send a message in a chat topic', server: 'lama' },
+          { name: 'get_messages', description: 'Get messages from a chat topic', server: 'lama' },
+          { name: 'list_topics', description: 'List all chat topics', server: 'lama' },
+          { name: 'get_contacts', description: 'Get all contacts', server: 'lama' },
+          { name: 'search_contacts', description: 'Search contacts by name', server: 'lama' },
+          { name: 'list_connections', description: 'List all connections', server: 'lama' },
+          { name: 'create_invitation', description: 'Create an invitation link', server: 'lama' },
+          { name: 'list_models', description: 'List available AI models', server: 'lama' },
+          { name: 'load_model', description: 'Load an AI model', server: 'lama' },
+          { name: 'create_ai_topic', description: 'Create a new AI conversation topic', server: 'lama' },
+          { name: 'generate_ai_response', description: 'Generate AI response', server: 'lama' },
+          { name: 'enable_chat_memories', description: 'Enable memory extraction for a chat', server: 'lama' },
+          { name: 'disable_chat_memories', description: 'Disable memory extraction for a chat', server: 'lama' },
+          { name: 'toggle_chat_memories', description: 'Toggle memory extraction for a chat', server: 'lama' },
+          { name: 'extract_chat_subjects', description: 'Extract subjects from chat messages', server: 'lama' },
+          { name: 'find_chat_memories', description: 'Search chat memories by keywords', server: 'lama' },
+          { name: 'get_chat_memory_status', description: 'Get memory extraction status', server: 'lama' }
+        ])
+      } else {
+        setLamaTools(tools)
+      }
+    } catch (error) {
+      console.error('[MCPSettings] Failed to load MCP tools:', error)
+    }
+  }
+
+  // Categorize tools dynamically based on their names
+  const categorizeTool = (toolName: string): string => {
+    if (toolName.includes('message') || toolName.includes('topic')) return 'Chat'
+    if (toolName.includes('contact')) return 'Contacts'
+    if (toolName.includes('connection') || toolName.includes('invitation')) return 'Connections'
+    if (toolName.includes('model')) return 'Models'
+    if (toolName.includes('ai_topic') || toolName.includes('ai_response')) return 'AI Topics'
+    if (toolName.includes('memor') || toolName.includes('subject')) return 'Memory'
+    return 'Other'
+  }
+
+  // Group tools by category
+  const lamaServerCapabilities = lamaTools.reduce((acc, tool) => {
+    const category = categorizeTool(tool.name)
+    const existing = acc.find(c => c.category === category)
+    if (existing) {
+      existing.tools.push(tool.name)
+    } else {
+      acc.push({ category, tools: [tool.name] })
+    }
+    return acc
+  }, [] as Array<{category: string, tools: string[]}>)
 
   const loadServers = async () => {
     if (!model.initialized) {
@@ -63,6 +131,9 @@ export function MCPSettings() {
 
     setLoading(true)
     try {
+      // Also reload LAMA tools when refreshing
+      loadLamaTools()
+
       // TODO: Implement MCP-via-chat transport
       // For now, return empty list
       console.warn('[MCPSettings] MCP-via-chat not implemented yet')

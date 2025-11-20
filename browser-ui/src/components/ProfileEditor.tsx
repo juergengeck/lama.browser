@@ -18,12 +18,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@lama/ui'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@lama/ui'
 import { Button } from '@lama/ui'
 import { Input } from '@lama/ui'
 import { Label } from '@lama/ui'
 import { Textarea } from '@lama/ui'
 import { Avatar, AvatarFallback, AvatarImage } from '@lama/ui'
-import { User, Camera, Upload, X, Sparkles } from 'lucide-react'
+import { User, Camera, Upload, X, Sparkles, Shield, Check, ChevronRight } from 'lucide-react'
 import { useModel } from '@/model/ModelContext'
 import { storeArrayBufferAsBlob } from '@refinio/one.core/lib/storage-blob.js'
 import { readBlobAsArrayBuffer } from '@refinio/one.core/lib/storage-blob.js'
@@ -41,6 +49,7 @@ import type { AvatarConfig } from './LamaAvatarComposer'
 interface ProfileEditorProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  contactId?: string
   currentName?: string
   currentStatus?: string
   currentAvatarUrl?: string
@@ -48,9 +57,17 @@ interface ProfileEditorProps {
   onSave?: () => void
 }
 
+interface CertifiedVersion {
+  versionHash: string
+  timestamp: number
+  certifiedBy?: string
+  isCurrent: boolean
+}
+
 export function ProfileEditor({
   open,
   onOpenChange,
+  contactId,
   currentName = '',
   currentStatus = '',
   currentAvatarUrl,
@@ -70,12 +87,40 @@ export function ProfileEditor({
   const [currentAvatarConfig, setCurrentAvatarConfig] = useState<AvatarConfig | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Certificate/version management
+  const [certifiedVersions, setCertifiedVersions] = useState<CertifiedVersion[]>([])
+  const [selectedVersion, setSelectedVersion] = useState<string | null>(null)
+
+  // Edit mode and collapsible sections
+  const [isEditing, setIsEditing] = useState(false)
+  const [isOwnerProfile, setIsOwnerProfile] = useState(false)
+  const [contactSectionOpen, setContactSectionOpen] = useState(false)
+  const [addressSectionOpen, setAddressSectionOpen] = useState(false)
+  const [professionalSectionOpen, setProfessionalSectionOpen] = useState(false)
+  const [personalSectionOpen, setPersonalSectionOpen] = useState(false)
+
+  // Address book fields
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [street, setStreet] = useState('')
+  const [city, setCity] = useState('')
+  const [state, setState] = useState('')
+  const [postalCode, setPostalCode] = useState('')
+  const [country, setCountry] = useState('')
+  const [website, setWebsite] = useState('')
+  const [birthday, setBirthday] = useState('')
+  const [jobTitle, setJobTitle] = useState('')
+  const [company, setCompany] = useState('')
+  const [notes, setNotes] = useState('')
+
   // Load existing profile data when dialog opens
   useEffect(() => {
     if (open && model.initialized) {
       loadProfileData()
+      // Default to view mode when opening (unless required)
+      setIsEditing(required)
     }
-  }, [open, model.initialized])
+  }, [open, model.initialized, required, contactId])
 
   useEffect(() => {
     setName(currentName)
@@ -88,10 +133,15 @@ export function ProfileEditor({
 
     setLoading(true)
     try {
+      // Determine if viewing owner's profile or another contact
       const ownerPersonId = await model.leuteModel.myMainIdentity()
-      const someone = await model.leuteModel.getSomeone(ownerPersonId)
+      const personId = contactId || ownerPersonId
+      const isOwner = personId === ownerPersonId
+      setIsOwnerProfile(isOwner)
+
+      const someone = await model.leuteModel.getSomeone(personId)
       if (!someone) {
-        console.warn('[ProfileEditor] Could not find owner profile')
+        console.warn('[ProfileEditor] Could not find profile for:', personId)
         return
       }
 
@@ -113,9 +163,61 @@ export function ProfileEditor({
         setStatus(statusDesc.value)
       }
 
+      // Load Email from communicationEndpoints
+      const emailEndpoint = profile.communicationEndpoints?.find((e: any) => e.$type$ === 'Email')
+      if (emailEndpoint && 'email' in emailEndpoint) {
+        setEmail(emailEndpoint.email)
+      }
+
+      // Load PhoneNumber
+      const phoneEndpoint = profile.communicationEndpoints?.find((e: any) => e.$type$ === 'PhoneNumber')
+      if (phoneEndpoint && 'number' in phoneEndpoint) {
+        setPhone(phoneEndpoint.number)
+      }
+
+      // Load Address
+      const addressEndpoint = profile.communicationEndpoints?.find((e: any) => e.$type$ === 'Address')
+      if (addressEndpoint) {
+        setStreet(addressEndpoint.street || '')
+        setCity(addressEndpoint.city || '')
+        setState(addressEndpoint.state || '')
+        setPostalCode(addressEndpoint.postalCode || '')
+        setCountry(addressEndpoint.country || '')
+      }
+
+      // Load Website
+      const websiteEndpoint = profile.communicationEndpoints?.find((e: any) => e.$type$ === 'Website')
+      if (websiteEndpoint && 'url' in websiteEndpoint) {
+        setWebsite(websiteEndpoint.url)
+      }
+
+      // Load Birthday
+      const birthdayDesc = profile.personDescriptions.find((d: any) => d.$type$ === 'Birthday')
+      if (birthdayDesc && 'date' in birthdayDesc) {
+        setBirthday(birthdayDesc.date)
+      }
+
+      // Load JobTitle
+      const jobTitleDesc = profile.personDescriptions.find((d: any) => d.$type$ === 'JobTitle')
+      if (jobTitleDesc && 'title' in jobTitleDesc) {
+        setJobTitle(jobTitleDesc.title)
+      }
+
+      // Load Company
+      const companyDesc = profile.personDescriptions.find((d: any) => d.$type$ === 'Company')
+      if (companyDesc && 'name' in companyDesc) {
+        setCompany(companyDesc.name)
+      }
+
+      // Load Notes
+      const notesDesc = profile.personDescriptions.find((d: any) => d.$type$ === 'Notes')
+      if (notesDesc && 'content' in notesDesc) {
+        setNotes(notesDesc.content)
+      }
+
       // Load AvatarPreference (custom lama config)
       try {
-        const avatarPref = await loadDefaultAvatar(ownerPersonId)
+        const avatarPref = await loadDefaultAvatar(personId)
         if (avatarPref?.lamaConfig) {
           setCurrentAvatarConfig(avatarPref.lamaConfig)
           // Render lama avatar as preview
@@ -327,6 +429,138 @@ export function ProfileEditor({
         )
       }
 
+      // Update Birthday
+      if (birthday.trim()) {
+        const birthdayDesc = {
+          $type$: 'Birthday' as const,
+          date: birthday.trim()
+        }
+        profile.personDescriptions = profile.personDescriptions.filter(
+          (desc: any) => desc.$type$ !== 'Birthday'
+        )
+        profile.personDescriptions.push(birthdayDesc)
+      } else {
+        profile.personDescriptions = profile.personDescriptions.filter(
+          (desc: any) => desc.$type$ !== 'Birthday'
+        )
+      }
+
+      // Update JobTitle
+      if (jobTitle.trim()) {
+        const jobTitleDesc = {
+          $type$: 'JobTitle' as const,
+          title: jobTitle.trim()
+        }
+        profile.personDescriptions = profile.personDescriptions.filter(
+          (desc: any) => desc.$type$ !== 'JobTitle'
+        )
+        profile.personDescriptions.push(jobTitleDesc)
+      } else {
+        profile.personDescriptions = profile.personDescriptions.filter(
+          (desc: any) => desc.$type$ !== 'JobTitle'
+        )
+      }
+
+      // Update Company
+      if (company.trim()) {
+        const companyDesc = {
+          $type$: 'Company' as const,
+          name: company.trim()
+        }
+        profile.personDescriptions = profile.personDescriptions.filter(
+          (desc: any) => desc.$type$ !== 'Company'
+        )
+        profile.personDescriptions.push(companyDesc)
+      } else {
+        profile.personDescriptions = profile.personDescriptions.filter(
+          (desc: any) => desc.$type$ !== 'Company'
+        )
+      }
+
+      // Update Notes
+      if (notes.trim()) {
+        const notesDesc = {
+          $type$: 'Notes' as const,
+          content: notes.trim()
+        }
+        profile.personDescriptions = profile.personDescriptions.filter(
+          (desc: any) => desc.$type$ !== 'Notes'
+        )
+        profile.personDescriptions.push(notesDesc)
+      } else {
+        profile.personDescriptions = profile.personDescriptions.filter(
+          (desc: any) => desc.$type$ !== 'Notes'
+        )
+      }
+
+      // Update Email
+      if (email.trim()) {
+        const emailEndpoint = {
+          $type$: 'Email' as const,
+          email: email.trim()
+        }
+        profile.communicationEndpoints = profile.communicationEndpoints?.filter(
+          (ep: any) => ep.$type$ !== 'Email'
+        ) || []
+        profile.communicationEndpoints.push(emailEndpoint)
+      } else {
+        profile.communicationEndpoints = profile.communicationEndpoints?.filter(
+          (ep: any) => ep.$type$ !== 'Email'
+        ) || []
+      }
+
+      // Update PhoneNumber
+      if (phone.trim()) {
+        const phoneEndpoint = {
+          $type$: 'PhoneNumber' as const,
+          number: phone.trim()
+        }
+        profile.communicationEndpoints = profile.communicationEndpoints?.filter(
+          (ep: any) => ep.$type$ !== 'PhoneNumber'
+        ) || []
+        profile.communicationEndpoints.push(phoneEndpoint)
+      } else {
+        profile.communicationEndpoints = profile.communicationEndpoints?.filter(
+          (ep: any) => ep.$type$ !== 'PhoneNumber'
+        ) || []
+      }
+
+      // Update Address
+      if (street.trim() || city.trim() || state.trim() || postalCode.trim() || country.trim()) {
+        const addressEndpoint = {
+          $type$: 'Address' as const,
+          street: street.trim() || undefined,
+          city: city.trim() || undefined,
+          state: state.trim() || undefined,
+          postalCode: postalCode.trim() || undefined,
+          country: country.trim() || undefined
+        }
+        profile.communicationEndpoints = profile.communicationEndpoints?.filter(
+          (ep: any) => ep.$type$ !== 'Address'
+        ) || []
+        profile.communicationEndpoints.push(addressEndpoint)
+      } else {
+        profile.communicationEndpoints = profile.communicationEndpoints?.filter(
+          (ep: any) => ep.$type$ !== 'Address'
+        ) || []
+      }
+
+      // Update Website
+      if (website.trim()) {
+        const websiteEndpoint = {
+          $type$: 'Website' as const,
+          url: website.trim()
+        }
+        profile.communicationEndpoints = profile.communicationEndpoints?.filter(
+          (ep: any) => ep.$type$ !== 'Website'
+        ) || []
+        profile.communicationEndpoints.push(websiteEndpoint)
+      } else {
+        profile.communicationEndpoints = profile.communicationEndpoints?.filter(
+          (ep: any) => ep.$type$ !== 'Website'
+        ) || []
+      }
+
       // Save profile
       await profile.saveAndLoad()
 
@@ -403,26 +637,29 @@ export function ProfileEditor({
       />
 
       <Dialog open={open} onOpenChange={required ? undefined : onOpenChange}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center space-x-2">
             <User className="h-5 w-5 text-primary" />
             <DialogTitle>
-              {currentName ? 'Edit Profile' : 'Set Your Profile'}
+              {required ? 'Set Your Profile' : isOwnerProfile ? (isEditing ? 'Edit Profile' : 'Your Profile') : 'Contact Profile'}
             </DialogTitle>
           </div>
           <DialogDescription>
             {required
               ? 'Please set your profile before creating connections. This information will be shared with your contacts.'
-              : 'Update your profile information. This will be shared with your contacts.'}
+              : isOwnerProfile
+              ? (isEditing ? 'Edit profile information. Click sections to expand.' : 'View your profile information. Click Edit to make changes.')
+              : 'View contact information. This profile is read-only.'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-6 py-4">
           {/* Avatar Section */}
           <div className="flex flex-col items-center space-y-4">
-            <div className="relative group">
-              <Avatar className="h-24 w-24 cursor-pointer transition-opacity group-hover:opacity-80">
+            <div className="flex items-start space-x-2">
+              <div className="relative group">
+                <Avatar className="h-24 w-24 cursor-pointer transition-opacity group-hover:opacity-80">
                 {avatarPreviewUrl ? (
                   <AvatarImage src={avatarPreviewUrl} alt={name || 'Profile'} />
                 ) : (
@@ -456,6 +693,55 @@ export function ProfileEditor({
                   <X className="h-4 w-4" />
                 </button>
               )}
+              </div>
+
+              {/* Certificate Version Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-8 w-8">
+                    <Shield className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  <DropdownMenuLabel>Profile Versions</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {certifiedVersions.length === 0 ? (
+                    <DropdownMenuItem disabled>
+                      <span className="text-xs text-muted-foreground">No certified versions yet</span>
+                    </DropdownMenuItem>
+                  ) : (
+                    certifiedVersions.map((version) => (
+                      <DropdownMenuItem
+                        key={version.versionHash}
+                        onClick={() => setSelectedVersion(version.versionHash)}
+                        className={selectedVersion === version.versionHash ? 'bg-accent' : ''}
+                      >
+                        <div className="flex flex-col w-full">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">
+                              {version.isCurrent && (
+                                <Check className="h-3 w-3 inline mr-1 text-green-500" />
+                              )}
+                              {new Date(version.timestamp).toLocaleDateString()}
+                            </span>
+                            {version.certifiedBy && (
+                              <Shield className="h-3 w-3 text-blue-500" />
+                            )}
+                          </div>
+                          {version.certifiedBy && (
+                            <span className="text-xs text-muted-foreground">
+                              Certified by: {version.certifiedBy}
+                            </span>
+                          )}
+                          <span className="text-xs text-muted-foreground font-mono">
+                            {version.versionHash.substring(0, 12)}...
+                          </span>
+                        </div>
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             {/* File Input (Hidden) */}
@@ -501,37 +787,348 @@ export function ProfileEditor({
           {/* Name Field */}
           <div className="grid gap-2">
             <Label htmlFor="name">Display Name *</Label>
-            <Input
-              id="name"
-              placeholder="Enter your name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={saving}
-              autoFocus
-            />
+            {isEditing || required ? (
+              <Input
+                id="name"
+                placeholder="Enter your name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={saving}
+                autoFocus={required}
+              />
+            ) : (
+              <p className="text-sm font-medium">{name || 'Not set'}</p>
+            )}
           </div>
 
           {/* Status Field (Optional) */}
-          <div className="grid gap-2">
-            <Label htmlFor="status">
-              Status Message
-              <span className="text-xs text-muted-foreground ml-2">(optional)</span>
-            </Label>
-            <Textarea
-              id="status"
-              placeholder="What's on your mind?"
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              disabled={saving || loading}
-              rows={3}
-              className="resize-none"
-              maxLength={280}
-            />
-            <p className="text-xs text-muted-foreground">
-              {status.length}/280 characters
-            </p>
-          </div>
+          {(isEditing || required || status) && (
+            <div className="grid gap-2">
+              <Label htmlFor="status">
+                Status Message
+                <span className="text-xs text-muted-foreground ml-2">(optional)</span>
+              </Label>
+              {isEditing || required ? (
+                <>
+                  <Textarea
+                    id="status"
+                    placeholder="What's on your mind?"
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value)}
+                    disabled={saving || loading}
+                    rows={3}
+                    className="resize-none"
+                    maxLength={280}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {status.length}/280 characters
+                  </p>
+                </>
+              ) : (
+                <p className="text-sm">{status}</p>
+              )}
+            </div>
+          )}
+
+          {/* Contact Information Section */}
+          {(isEditing || email || phone || website) && (
+            <div className="border-t pt-4">
+              <button
+                onClick={() => setContactSectionOpen(!contactSectionOpen)}
+                className="flex items-center justify-between w-full group hover:opacity-80 transition-opacity"
+              >
+                <h3 className="font-semibold text-sm">Contact Information</h3>
+                <ChevronRight className={`h-4 w-4 transition-transform ${contactSectionOpen ? 'rotate-90' : ''}`} />
+              </button>
+              {contactSectionOpen && (
+                <div className="mt-3">
+                <div className="grid gap-4">
+                  {/* Email */}
+                  {(isEditing || email) && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="email">Email</Label>
+                      {isEditing ? (
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="your.email@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          disabled={saving || loading}
+                        />
+                      ) : (
+                        <p className="text-sm">{email}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Phone */}
+                  {(isEditing || phone) && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="phone">Phone Number</Label>
+                      {isEditing ? (
+                        <Input
+                          id="phone"
+                          type="tel"
+                          placeholder="+1 (555) 123-4567"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          disabled={saving || loading}
+                        />
+                      ) : (
+                        <p className="text-sm">{phone}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Website */}
+                  {(isEditing || website) && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="website">Website</Label>
+                      {isEditing ? (
+                        <Input
+                          id="website"
+                          type="url"
+                          placeholder="https://example.com"
+                          value={website}
+                          onChange={(e) => setWebsite(e.target.value)}
+                          disabled={saving || loading}
+                        />
+                      ) : (
+                        <a href={website} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">
+                          {website}
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Address Section */}
+          {(isEditing || street || city || state || postalCode || country) && (
+            <div className="border-t pt-4">
+              <button
+                onClick={() => setAddressSectionOpen(!addressSectionOpen)}
+                className="flex items-center justify-between w-full group hover:opacity-80 transition-opacity"
+              >
+                <h3 className="font-semibold text-sm">Address</h3>
+                <ChevronRight className={`h-4 w-4 transition-transform ${addressSectionOpen ? 'rotate-90' : ''}`} />
+              </button>
+              {addressSectionOpen && (
+                <div className="mt-3">
+                <div className="grid gap-4">
+                  {/* Street */}
+                  {(isEditing || street) && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="street">Street</Label>
+                      {isEditing ? (
+                        <Input
+                          id="street"
+                          placeholder="123 Main Street"
+                          value={street}
+                          onChange={(e) => setStreet(e.target.value)}
+                          disabled={saving || loading}
+                        />
+                      ) : (
+                        <p className="text-sm">{street}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* City, State */}
+                  {(isEditing || city || state) && (
+                    <div className="grid grid-cols-2 gap-4">
+                      {(isEditing || city) && (
+                        <div className="grid gap-2">
+                          <Label htmlFor="city">City</Label>
+                          {isEditing ? (
+                            <Input
+                              id="city"
+                              placeholder="San Francisco"
+                              value={city}
+                              onChange={(e) => setCity(e.target.value)}
+                              disabled={saving || loading}
+                            />
+                          ) : (
+                            <p className="text-sm">{city}</p>
+                          )}
+                        </div>
+                      )}
+                      {(isEditing || state) && (
+                        <div className="grid gap-2">
+                          <Label htmlFor="state">State</Label>
+                          {isEditing ? (
+                            <Input
+                              id="state"
+                              placeholder="CA"
+                              value={state}
+                              onChange={(e) => setState(e.target.value)}
+                              disabled={saving || loading}
+                            />
+                          ) : (
+                            <p className="text-sm">{state}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Postal Code, Country */}
+                  {(isEditing || postalCode || country) && (
+                    <div className="grid grid-cols-2 gap-4">
+                      {(isEditing || postalCode) && (
+                        <div className="grid gap-2">
+                          <Label htmlFor="postalCode">Postal Code</Label>
+                          {isEditing ? (
+                            <Input
+                              id="postalCode"
+                              placeholder="94102"
+                              value={postalCode}
+                              onChange={(e) => setPostalCode(e.target.value)}
+                              disabled={saving || loading}
+                            />
+                          ) : (
+                            <p className="text-sm">{postalCode}</p>
+                          )}
+                        </div>
+                      )}
+                      {(isEditing || country) && (
+                        <div className="grid gap-2">
+                          <Label htmlFor="country">Country</Label>
+                          {isEditing ? (
+                            <Input
+                              id="country"
+                              placeholder="USA"
+                              value={country}
+                              onChange={(e) => setCountry(e.target.value)}
+                              disabled={saving || loading}
+                            />
+                          ) : (
+                            <p className="text-sm">{country}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Professional Information Section */}
+          {(isEditing || jobTitle || company) && (
+            <div className="border-t pt-4">
+              <button
+                onClick={() => setProfessionalSectionOpen(!professionalSectionOpen)}
+                className="flex items-center justify-between w-full group hover:opacity-80 transition-opacity"
+              >
+                <h3 className="font-semibold text-sm">Professional Information</h3>
+                <ChevronRight className={`h-4 w-4 transition-transform ${professionalSectionOpen ? 'rotate-90' : ''}`} />
+              </button>
+              {professionalSectionOpen && (
+                <div className="mt-3">
+                <div className="grid gap-4">
+                  {/* Job Title */}
+                  {(isEditing || jobTitle) && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="jobTitle">Job Title</Label>
+                      {isEditing ? (
+                        <Input
+                          id="jobTitle"
+                          placeholder="Software Engineer"
+                          value={jobTitle}
+                          onChange={(e) => setJobTitle(e.target.value)}
+                          disabled={saving || loading}
+                        />
+                      ) : (
+                        <p className="text-sm">{jobTitle}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Company */}
+                  {(isEditing || company) && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="company">Company</Label>
+                      {isEditing ? (
+                        <Input
+                          id="company"
+                          placeholder="Acme Inc."
+                          value={company}
+                          onChange={(e) => setCompany(e.target.value)}
+                          disabled={saving || loading}
+                        />
+                      ) : (
+                        <p className="text-sm">{company}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Personal Information Section */}
+          {(isEditing || birthday || notes) && (
+            <div className="border-t pt-4">
+              <button
+                onClick={() => setPersonalSectionOpen(!personalSectionOpen)}
+                className="flex items-center justify-between w-full group hover:opacity-80 transition-opacity"
+              >
+                <h3 className="font-semibold text-sm">Personal Information</h3>
+                <ChevronRight className={`h-4 w-4 transition-transform ${personalSectionOpen ? 'rotate-90' : ''}`} />
+              </button>
+              {personalSectionOpen && (
+                <div className="mt-3">
+                <div className="grid gap-4">
+                  {/* Birthday */}
+                  {(isEditing || birthday) && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="birthday">Birthday</Label>
+                      {isEditing ? (
+                        <Input
+                          id="birthday"
+                          type="date"
+                          value={birthday}
+                          onChange={(e) => setBirthday(e.target.value)}
+                          disabled={saving || loading}
+                        />
+                      ) : (
+                        <p className="text-sm">{new Date(birthday).toLocaleDateString()}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Notes */}
+                  {(isEditing || notes) && (
+                    <div className="grid gap-2">
+                      <Label htmlFor="notes">Notes</Label>
+                      {isEditing ? (
+                        <Textarea
+                          id="notes"
+                          placeholder="Add any additional notes..."
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          disabled={saving || loading}
+                          rows={4}
+                          className="resize-none"
+                        />
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap">{notes}</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Error Message */}
           {error && (
@@ -541,20 +1138,33 @@ export function ProfileEditor({
 
         <DialogFooter>
           {!required && (
+            <>
+              <Button
+                variant="outline"
+                onClick={handleCancel}
+                disabled={saving}
+              >
+                Close
+              </Button>
+              {!isEditing && isOwnerProfile && (
+                <Button
+                  variant="outline"
+                  onClick={() => setIsEditing(true)}
+                  disabled={saving}
+                >
+                  Edit
+                </Button>
+              )}
+            </>
+          )}
+          {isEditing && isOwnerProfile && (
             <Button
-              variant="outline"
-              onClick={handleCancel}
-              disabled={saving}
+              onClick={handleSave}
+              disabled={saving || !name.trim()}
             >
-              Cancel
+              {saving ? 'Saving...' : 'Save Changes'}
             </Button>
           )}
-          <Button
-            onClick={handleSave}
-            disabled={saving || !name.trim()}
-          >
-            {saving ? 'Saving...' : 'Save Profile'}
-          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

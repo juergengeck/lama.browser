@@ -63,9 +63,6 @@ import {AuditPlan} from '@lama/core/plans/AuditPlan';
 import {JournalPlan} from '@lama/core/plans/JournalPlan';
 import {SubjectsPlan} from '@lama/core/plans/SubjectsPlan';
 
-// LAMA core services
-import {SubjectService} from '@lama/core/services/SubjectService';
-
 // LAMA core AI models (message listener)
 import {AIMessageListener} from '@lama/core/models/ai';
 
@@ -436,8 +433,8 @@ export default class Model {
             calculateIdHashOfObj
         });
 
-        // Subjects plan for managing memory/topics/keywords (uses singleton SubjectService)
-        this.subjectsPlan = new SubjectsPlan(SubjectService.getInstance());
+        // Subjects plan for managing memory/topics/keywords (uses TopicAnalysisModel)
+        this.subjectsPlan = new SubjectsPlan();
 
         // Wire up JournalPlan's external dependencies for unified journal aggregation
         this.journalPlan.setExternalDeps({
@@ -865,6 +862,9 @@ export default class Model {
             // Initialize LAMA-specific models (create TopicAnalysisModel now that dependencies are ready)
             this.topicAnalysisModel = new TopicAnalysisModel(this.channelManager, this.topicModel);
             await this.topicAnalysisModel.init();
+
+            // Wire up SubjectsPlan with TopicAnalysisModel
+            this.subjectsPlan.setModel(this.topicAnalysisModel);
 
             // TODO: Re-enable when cube.core storage layer is implemented
             // Initialize CubeStorage for dimensional indexing of subjects/keywords
