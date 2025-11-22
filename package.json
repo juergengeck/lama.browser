@@ -4,6 +4,7 @@
   "type": "module",
   "main": "browser-ui/src/modules/index.ts",
   "scripts": {
+    "build": "cd browser-ui && npm run build",
     "test": "vitest",
     "typecheck": "tsc --noEmit"
   },
