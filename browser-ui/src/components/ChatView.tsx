@@ -73,6 +73,9 @@ export const ChatView = memo(function ChatView({
   const [showSubjectDetail, setShowSubjectDetail] = useState(false)
   const [selectedSubject, setSelectedSubject] = useState<any | null>(null)
 
+  // Scroll-to-time function ref (from MessageView)
+  const scrollToTimeRef = useRef<((timestamp: number) => void) | null>(null)
+
   // Check if this is an AI conversation
   // Source of truth: AIAssistantModel.topicManager.isAITopic() → ChatPlan → useTopics → ChatLayout → here
   const hasAIParticipant = hasAIParticipantProp ?? false
@@ -432,7 +435,17 @@ export const ChatView = memo(function ChatView({
                 <div className="space-y-3">
                   {matchingSubjects.map((subject, idx) => (
                     <div key={idx} className="p-3 bg-background/50 rounded border">
-                      <div className="space-y-2">
+                      <div className="space-y-3">
+                        {/* Description */}
+                        {subject.description && (
+                          <div>
+                            <p className="text-sm text-muted-foreground italic">
+                              "{subject.description}"
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Keywords */}
                         <div>
                           <span className="font-medium text-sm">Keywords:</span>
                           <div className="flex flex-wrap gap-1 mt-1">
@@ -448,10 +461,69 @@ export const ChatView = memo(function ChatView({
                             })}
                           </div>
                         </div>
-                        <div className="flex gap-4 text-xs text-muted-foreground">
+
+                        {/* History - Time Ranges */}
+                        {subject.timeRanges && subject.timeRanges.length > 0 && (
+                          <div>
+                            <span className="font-medium text-sm">Discussion History:</span>
+                            <div className="mt-1 space-y-1">
+                              {subject.timeRanges.map((range: any, rangeIdx: number) => (
+                                <button
+                                  key={rangeIdx}
+                                  onClick={() => {
+                                    console.log('[ChatView] Scrolling to time range:', range)
+                                    // Scroll to the start of this time range
+                                    if (scrollToTimeRef.current) {
+                                      scrollToTimeRef.current(range.start)
+                                      // Close the subject detail panel to show messages
+                                      setShowSubjectDetail(false)
+                                    }
+                                  }}
+                                  className="text-xs text-muted-foreground flex items-center gap-2 hover:text-primary hover:underline transition-colors cursor-pointer w-full text-left"
+                                >
+                                  <span>•</span>
+                                  <span>
+                                    {new Date(range.start).toLocaleDateString()} - {new Date(range.end).toLocaleDateString()}
+                                  </span>
+                                  <span className="text-primary/50">→</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Metadata */}
+                        <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
                           <span><span className="font-medium">Messages:</span> {subject.messageCount}</span>
-                          <span><span className="font-medium">Last:</span> {new Date(subject.timestamp).toLocaleDateString()}</span>
+                          {subject.createdAt && (
+                            <span><span className="font-medium">Created:</span> {new Date(subject.createdAt).toLocaleDateString()}</span>
+                          )}
+                          <span><span className="font-medium">Last seen:</span> {new Date(subject.lastSeenAt || subject.timestamp).toLocaleDateString()}</span>
+                          {subject.abstractionLevel !== undefined && (
+                            <span><span className="font-medium">Level:</span> {subject.abstractionLevel}</span>
+                          )}
                         </div>
+
+                        {/* Topic Reference */}
+                        {subject.topic && (
+                          <div className="pt-2 border-t">
+                            <span className="text-xs text-muted-foreground">
+                              <span className="font-medium">Topic:</span> {subject.topic.substring(0, 16)}...
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Likes/Dislikes if available */}
+                        {(subject.likes !== undefined || subject.dislikes !== undefined) && (
+                          <div className="flex gap-3 text-xs">
+                            {subject.likes !== undefined && (
+                              <span className="text-green-600">👍 {subject.likes}</span>
+                            )}
+                            {subject.dislikes !== undefined && (
+                              <span className="text-red-600">👎 {subject.dislikes}</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -474,6 +546,9 @@ export const ChatView = memo(function ChatView({
           aiModelName={aiModelName}
           aiError={aiError}
           topicId={conversationId}
+          onScrollToTimeReady={(scrollFn) => {
+            scrollToTimeRef.current = scrollFn
+          }}
         />
       </CardContent>
     </Card>

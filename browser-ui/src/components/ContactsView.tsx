@@ -306,6 +306,30 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
     }
   }
 
+  const handleWebRTCInvite = async () => {
+    try {
+      if (!model.initialized) {
+        alert('Model not initialized. Please wait.')
+        return
+      }
+
+      // WebRTC invitation creation
+      console.log('[ContactsView] Creating WebRTC invitation...')
+      const result = await connection.createWebRTCInvitation({})
+
+      if (result.success && result.invitation) {
+        // Copy invitation URL to clipboard
+        await navigator.clipboard.writeText(result.invitation.url)
+        alert('WebRTC invitation link copied to clipboard! Share it with your contact.')
+      } else {
+        alert(result.error || 'Failed to create WebRTC invitation')
+      }
+    } catch (error: any) {
+      console.error('[ContactsView] Failed to create WebRTC invitation:', error)
+      alert(error.message || 'Failed to create WebRTC invitation')
+    }
+  }
+
   const handleProfileSaved = () => {
     // Reload contacts to get updated owner name
     loadContacts()
@@ -321,10 +345,16 @@ export function ContactsView({ onNavigateToChat }: ContactsViewProps) {
               <Users className="h-5 w-5 text-primary" />
               <CardTitle>Contacts</CardTitle>
             </div>
-            <Button size="sm" onClick={handleAddContact}>
-              <UserPlus className="h-4 w-4 mr-2" />
-              Add Contact
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={handleAddContact}>
+                <UserPlus className="h-4 w-4 mr-2" />
+                CommServer Invite
+              </Button>
+              <Button size="sm" onClick={handleWebRTCInvite}>
+                <UserPlus className="h-4 w-4 mr-2" />
+                WebRTC Invite
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>

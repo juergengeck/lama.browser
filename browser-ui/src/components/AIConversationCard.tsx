@@ -28,6 +28,7 @@ export interface Conversation {
   isGroup?: boolean
   hasAIParticipant?: boolean
   isAITopic?: boolean
+  ownerId?: string  // ID of the topic owner
 }
 
 export interface PastIdentity {
@@ -71,6 +72,14 @@ export function AIConversationCard({
   const [showPastIdentities, setShowPastIdentities] = useState(false)
   const hasPastIdentities = pastIdentities.length > 0
 
+  // Separate owner from other participants
+  const owner = conversation.ownerId
+    ? conversation.participants.find(p => p.id === conversation.ownerId)
+    : null
+  const otherParticipants = conversation.ownerId
+    ? conversation.participants.filter(p => p.id !== conversation.ownerId)
+    : conversation.participants
+
   if (isCollapsed) {
     // Collapsed: show participant count in a badge
     const participantCount = conversation.participants?.length || 0
@@ -101,16 +110,47 @@ export function AIConversationCard({
   }
 
   // Expanded: full conversation card with past identities
+  const isGroupChat = conversation.participants.length > 2
+
   return (
     <div className="relative">
+      {/* Other Participants (shown above card ONLY for group chats with 3+ participants) */}
+      {isGroupChat && otherParticipants.length > 0 && (
+        <div className="flex items-center gap-1 mb-1 ml-2">
+          <ParticipantAvatars participants={otherParticipants} size="xs" maxDisplay={5} />
+          {otherParticipants.length > 1 && (
+            <span className="text-[9px] text-muted-foreground">
+              +{otherParticipants.length - 1} other{otherParticipants.length > 2 ? 's' : ''}
+            </span>
+          )}
+        </div>
+      )}
+
       <div
         onClick={() => onSelect(conversation.id)}
-        className={`group flex items-start p-2 rounded-lg cursor-pointer transition-colors ${
+        className={`group flex items-start gap-2 p-2 rounded-lg cursor-pointer transition-colors ${
           isSelected
             ? 'bg-primary/10 border border-primary/30'
             : 'hover:bg-muted/50 border border-transparent'
         }`}
       >
+        {/* Avatar on LEFT - show other participant for 1-on-1, owner for group */}
+        {!isProcessing && (
+          isGroupChat && owner ? (
+            <div className="flex-shrink-0 pt-0.5">
+              <ParticipantAvatars participants={[owner]} size="sm" maxDisplay={1} />
+            </div>
+          ) : otherParticipants.length > 0 ? (
+            <div className="flex-shrink-0 pt-0.5">
+              <ParticipantAvatars participants={[otherParticipants[0]]} size="sm" maxDisplay={1} />
+            </div>
+          ) : (
+            <div className="flex-shrink-0 pt-0.5">
+              <ParticipantAvatars participants={conversation.participants} size="sm" maxDisplay={1} />
+            </div>
+          )
+        )}
+
         {/* Content - full width */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2 mb-0.5">
@@ -140,15 +180,13 @@ export function AIConversationCard({
                 </button>
               )}
             </div>
-            {/* Time, Avatar, Menu */}
+            {/* Time and Menu on RIGHT */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
               <span className="text-[10px] text-muted-foreground">{formatTime(conversation.lastMessageTime)}</span>
-              {isProcessing ? (
-                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
+              {isProcessing && (
+                <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center">
                   <Loader2 className="w-3 h-3 text-primary animate-spin" />
                 </div>
-              ) : (
-                <ParticipantAvatars participants={conversation.participants} size="sm" maxDisplay={2} />
               )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

@@ -119,6 +119,7 @@ import {KeywordAccessStateRecipe} from '@lama/core/one-ai/recipes/KeywordAccessS
 import {WordCloudSettingsRecipe} from '@lama/core/one-ai/recipes/WordCloudSettingsRecipe';
 import {AIRecipe} from '@lama/core/recipes/AIRecipe';
 import {LLMRecipe} from '@lama/core/recipes/LLMRecipe';
+import {AISettingsRecipe} from '@lama/core/recipes/AISettingsRecipe';
 import {ProposalConfigRecipe} from '@lama/core/recipes/ProposalConfigRecipe';
 import {SubscriptionBalanceRecipe} from '../recipes/SubscriptionBalanceRecipe';
 import {MessageReadStatusRecipe} from '../recipes/MessageReadStatusRecipe';
@@ -131,6 +132,7 @@ import {AssemblyRecipe} from '@assembly/core/recipes/index.js';
 // LAMA core models (LLM and AI object management)
 import {LLMObjectManager} from '@lama/core/models/LLMObjectManager';
 import {AIObjectManager} from '@lama/core/models/AIObjectManager';
+import {AISettingsManager} from '@lama/core/models/settings/AISettingsManager';
 
 // Trust core recipes (identity subscription system)
 import {AllRecipes as TrustCoreRecipes, AllReverseMaps as TrustCoreReverseMaps} from '@trust/core/recipes/index.js';
@@ -191,6 +193,7 @@ export default class Model {
                 WordCloudSettingsRecipe,
                 AIRecipe,
                 LLMRecipe,
+                AISettingsRecipe,
                 ProposalConfigRecipe,
                 SubscriptionBalanceRecipe,
                 MessageReadStatusRecipe,
@@ -332,6 +335,9 @@ export default class Model {
         // LAMA Plans (AI-related)
         this.aiPlan = new AIPlan(this);
 
+        // AI Settings Manager for user preferences
+        this.aiSettingsManager = new AISettingsManager(this);
+
         // AI Assistant Plan with all dependencies ready
         this.aiAssistantPlan = new AIAssistantPlan({
             oneCore: this,
@@ -347,6 +353,7 @@ export default class Model {
             topicGroupManager: this.topicGroupManager,
             settingsPersistence: undefined, // Optional - use llmConfigPlan instead
             llmConfigPlan: undefined, // Will be set right after
+            aiSettingsManager: this.aiSettingsManager,
             storageDeps: {
                 storeVersionedObject,
                 storeUnversionedObject,
@@ -405,9 +412,10 @@ export default class Model {
             getObjectByIdHash
         });
 
-        // Create StoryFactory with AssemblyPlan
-        const storyFactory = new StoryFactory(assemblyPlan);
-        console.log('[Model] StoryFactory created with AssemblyPlan');
+        // Create StoryFactory with storage function (NOT AssemblyPlan object)
+        // StoryFactory expects a function, not an object
+        const storyFactory = new StoryFactory(storeVersionedObject);
+        console.log('[Model] StoryFactory created with storeVersionedObject function');
 
         // Create GroupPlan with TopicGroupManager and StoryFactory
         this.groupPlan = new GroupPlan(
@@ -481,7 +489,9 @@ export default class Model {
             undefined,     // No discovery config for browser
             trustDeps,     // Trust dependencies - enables automatic trust after pairing
             pairingCallbacks,  // Platform-specific UI updates
-            this.trustPlan     // trust.core TrustPlan for automatic trust level assignment
+            this.trustPlan,    // trust.core TrustPlan for automatic trust level assignment
+            undefined,     // No storyFactory
+            this.commServerUrl  // CommServer URL for WebRTC signaling
         );
 
         // Group chat plan dependencies (platform-agnostic from connection.core)

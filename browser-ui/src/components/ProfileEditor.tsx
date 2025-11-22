@@ -38,6 +38,7 @@ import { readBlobAsArrayBuffer } from '@refinio/one.core/lib/storage-blob.js'
 import { clearAvatarCache } from '@/hooks/useContactAvatar'
 import type { SHA256Hash, BLOB } from '@refinio/one.core/lib/recipes.js'
 import { AvatarSelectionDialog } from './AvatarSelectionDialog'
+import { ImageEditor } from './ImageEditor'
 import {
   saveAvatarPreference,
   loadDefaultAvatar,
@@ -84,6 +85,7 @@ export function ProfileEditor({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showAvatarSelection, setShowAvatarSelection] = useState(false)
+  const [showImageEditor, setShowImageEditor] = useState(false)
   const [currentAvatarConfig, setCurrentAvatarConfig] = useState<AvatarConfig | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -216,9 +218,11 @@ export function ProfileEditor({
       }
 
       // Load AvatarPreference (custom lama config)
+      let hasLamaAvatar = false
       try {
         const avatarPref = await loadDefaultAvatar(personId)
         if (avatarPref?.lamaConfig) {
+          hasLamaAvatar = true
           setCurrentAvatarConfig(avatarPref.lamaConfig)
           // Render lama avatar as preview
           const dataUrl = await renderLamaAvatar(avatarPref.lamaConfig, 200)
@@ -230,21 +234,25 @@ export function ProfileEditor({
       }
 
       // Load ProfileImage (uploaded photo - fallback if no lama config)
-      if (!currentAvatarConfig) {
-        const imageDesc = profile.personDescriptions.find((d: any) => d.$type$ === 'ProfileImage')
+      if (!hasLamaAvatar) {
+        const imageDesc = profile.personDescriptions?.find((d: any) => d.$type$ === 'ProfileImage')
         if (imageDesc && 'image' in imageDesc) {
           try {
             const blobHash = imageDesc.image as SHA256Hash<BLOB>
             setAvatarBlobHash(blobHash)
 
+            console.log('[ProfileEditor] Loading ProfileImage BLOB:', blobHash.substring(0, 16))
             // Read BLOB and create preview URL
             const arrayBuffer = await readBlobAsArrayBuffer(blobHash)
             const blob = new Blob([arrayBuffer])
             const url = URL.createObjectURL(blob)
             setAvatarPreviewUrl(url)
+            console.log('[ProfileEditor] ProfileImage loaded successfully')
           } catch (err) {
             console.error('[ProfileEditor] Failed to load profile image:', err)
           }
+        } else {
+          console.log('[ProfileEditor] No ProfileImage found in personDescriptions')
         }
       }
     } catch (err) {
@@ -255,7 +263,26 @@ export function ProfileEditor({
   }
 
   const handleAvatarClick = () => {
-    setShowAvatarSelection(true)
+    // If there's already an uploaded photo, open editor
+    // Otherwise open selection dialog
+    if (avatarPreviewUrl && !currentAvatarConfig) {
+      setShowImageEditor(true)
+    } else {
+      setShowAvatarSelection(true)
+    }
+  }
+
+  const handleImageEditorSave = (editedImageDataUrl: string) => {
+    // Convert data URL to file
+    const file = dataUrlToFile(editedImageDataUrl, 'avatar-edited.png')
+    setAvatarFile(file)
+    setAvatarPreviewUrl(editedImageDataUrl)
+    setCurrentAvatarConfig(null) // Clear lama config since this is a photo
+
+    // Enter edit mode
+    if (!isEditing) {
+      setIsEditing(true)
+    }
   }
 
   const handleAvatarSelection = async (type: 'custom' | 'upload', data: string | File, config?: AvatarConfig) => {
@@ -299,6 +326,11 @@ export function ProfileEditor({
 
       console.log('[ProfileEditor] Photo uploaded')
     }
+
+    // Enter edit mode when avatar is changed
+    if (!isEditing) {
+      setIsEditing(true)
+    }
   }
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -321,6 +353,11 @@ export function ProfileEditor({
     const previewUrl = URL.createObjectURL(file)
     setAvatarPreviewUrl(previewUrl)
     setError(null)
+
+    // Enter edit mode when avatar is changed
+    if (!isEditing) {
+      setIsEditing(true)
+    }
   }
 
   const handleRemoveAvatar = () => {
@@ -329,6 +366,11 @@ export function ProfileEditor({
     setAvatarBlobHash(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
+    }
+
+    // Enter edit mode when avatar is removed
+    if (!isEditing) {
+      setIsEditing(true)
     }
   }
 
@@ -347,12 +389,12 @@ export function ProfileEditor({
     setError(null)
 
     try {
-      // Get owner person ID
+      // Get the person ID to update (contactId if editing another profile, otherwise owner)
       const ownerPersonId = await model.leuteModel.myMainIdentity()
+      const personIdToUpdate = contactId || ownerPersonId
 
-      // Update name via LeuteModel
-      // Note: We access ProfileService through LeuteModel's profile management
-      const someone = await model.leuteModel.getSomeone(ownerPersonId)
+      // Update profile via LeuteModel
+      const someone = await model.leuteModel.getSomeone(personIdToUpdate)
       if (!someone) {
         throw new Error('Could not find owner profile')
       }
@@ -570,7 +612,7 @@ export function ProfileEditor({
       if (currentAvatarConfig) {
         try {
           await saveAvatarPreference(
-            ownerPersonId,
+            personIdToUpdate,
             'LAMA',  // Avatar name (default)
             currentAvatarConfig
           )
@@ -581,7 +623,7 @@ export function ProfileEditor({
       }
 
       // Clear avatar cache so ContactsView will reload the new avatar
-      clearAvatarCache(ownerPersonId)
+      clearAvatarCache(personIdToUpdate)
 
       onOpenChange(false)
       if (onSave) {
@@ -636,6 +678,13 @@ export function ProfileEditor({
         initialConfig={currentAvatarConfig || undefined}
       />
 
+      <ImageEditor
+        open={showImageEditor}
+        onOpenChange={setShowImageEditor}
+        imageUrl={avatarPreviewUrl || ''}
+        onSave={handleImageEditorSave}
+      />
+
       <Dialog open={open} onOpenChange={required ? undefined : onOpenChange}>
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -649,8 +698,8 @@ export function ProfileEditor({
             {required
               ? 'Please set your profile before creating connections. This information will be shared with your contacts.'
               : isOwnerProfile
-              ? (isEditing ? 'Edit profile information. Click sections to expand.' : 'View your profile information. Click Edit to make changes.')
-              : 'View contact information. This profile is read-only.'}
+              ? (isEditing ? 'Edit your profile information. Click sections to expand.' : 'View your profile information. Click Edit to make changes.')
+              : (isEditing ? 'Edit contact information. Click sections to expand.' : 'View contact information. Click Edit to make changes.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -678,9 +727,12 @@ export function ProfileEditor({
               {/* Avatar Overlay - Shows on hover */}
               <div
                 onClick={handleAvatarClick}
-                className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                className="absolute inset-0 flex flex-col items-center justify-center bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
               >
                 <Camera className="h-8 w-8 text-white" />
+                {avatarPreviewUrl && !currentAvatarConfig && (
+                  <span className="text-xs text-white mt-1">Click to edit</span>
+                )}
               </div>
 
               {/* Remove Avatar Button */}
@@ -1146,7 +1198,7 @@ export function ProfileEditor({
               >
                 Close
               </Button>
-              {!isEditing && isOwnerProfile && (
+              {!isEditing && (
                 <Button
                   variant="outline"
                   onClick={() => setIsEditing(true)}
@@ -1157,7 +1209,7 @@ export function ProfileEditor({
               )}
             </>
           )}
-          {isEditing && isOwnerProfile && (
+          {isEditing && (
             <Button
               onClick={handleSave}
               disabled={saving || !name.trim()}

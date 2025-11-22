@@ -1,33 +1,19 @@
 {
   "name": "@lama/browser",
   "version": "1.0.0",
-  "description": "lama.one - Local AI Messaging Assistant (Browser)",
-  "author": "lama.one Team",
-  "license": "CC-BY-SA-NC-4.0",
-  "private": true,
   "type": "module",
+  "main": "browser-ui/src/modules/index.ts",
   "scripts": {
-    "dev": "cd browser-ui && npm run dev",
-    "build": "cd browser-ui && npm run build",
-    "preview": "cd browser-ui && npm run preview",
     "test": "vitest",
-    "test:ui": "vitest --ui",
-    "test:e2e": "playwright test",
-    "typecheck": "tsc --noEmit",
-    "typecheck:worker": "tsc --project tsconfig.worker.json --noEmit",
-    "install:all": "npm install && npm install --prefix browser-ui"
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@lama/core": "file:../lama.core",
+    "@refinio/refinio-api": "file:../refinio.api"
   },
   "devDependencies": {
-    "@playwright/test": "^1.56.1",
-    "@types/node": "^22.10.2",
-    "@types/node-fetch": "^2.6.13",
-    "@types/ws": "^8.18.1",
-    "@vitejs/plugin-react": "^5.0.4",
-    "@vitest/ui": "^3.2.4",
-    "glob": "^11.0.3",
-    "playwright": "^1.56.1",
-    "typescript": "^5.7.2",
-    "vite": "^7.1.10",
-    "vitest": "^3.2.4"
+    "vitest": "^1.0.0",
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
   }
 }

@@ -15,7 +15,7 @@ import { PurchaseView } from '@/components/PurchaseView'
 import { VerificationView } from '@/components/VerificationView'
 import { ProfileView } from '@/components/ProfileView'
 import { MemoryView } from '@/components/MemoryView'
-import { LoginDeploy, ModelOnboarding, PlansProvider } from '@lama/ui'
+import { LoginDeploy, ModelOnboarding, PlansProvider, BridgeProvider } from '@lama/ui'
 import type { LAMAPlans } from '@lama/ui'
 import { InvitationAcceptance } from '@/components/InvitationAcceptance'
 import { MODEL_OPTIONS } from '@/constants/model-options'
@@ -26,6 +26,7 @@ import { isValidInvitationUrl } from '@/utils/invitation-url-parser'
 import type Model from '@/model/Model.js'
 import { ModelProvider } from '@/model/ModelContext'
 import { FaviconBadgeManager } from '@/components/FaviconBadgeManager'
+import { lamaBridge } from '@/bridge/lama-bridge'
 
 // Routing imports (re-exported from lama.core/ui/routing via lama.ui)
 import {
@@ -88,8 +89,11 @@ function AppContent({ model }: AppContentProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [isTabVisible, setIsTabVisible] = useState(!document.hidden)
 
-  // Proposal sensitivity slider state (default 0.9 = 90%)
-  const [proposalSensitivity, setProposalSensitivity] = useState<number>(0.9)
+  // Proposal sensitivity slider state (default 0.1 = 10% minimum match)
+  const [proposalSensitivity, setProposalSensitivity] = useState<number>(0.1)
+
+  // Response length slider state (default 0.2 = 20%)
+  const [responseLengthPercent, setResponseLengthPercent] = useState<number>(0.2)
 
   // Derive active tab from current route
   const activeTab = location.pathname.startsWith('/chat/')
@@ -210,9 +214,15 @@ function AppContent({ model }: AppContentProps) {
     const updateConfig = async () => {
       try {
         // Direct threshold: slider % = minimum similarity threshold
-        // 90% = only show proposals with ≥90% Jaccard similarity
+        // 10% = show proposals with ≥10% match (more proposals)
+        // 90% = show proposals with ≥90% match (fewer, very similar proposals)
         const minJaccard = proposalSensitivity
         await model.proposalsPlan.updateConfig({ config: { minJaccard } })
+
+        // Trigger immediate recalculation by invalidating cache
+        if (model.proposalsPlan.invalidateCache) {
+          model.proposalsPlan.invalidateCache()
+        }
       } catch (error) {
         console.error('[App] Failed to update proposal config:', error)
       }
@@ -220,6 +230,22 @@ function AppContent({ model }: AppContentProps) {
 
     updateConfig()
   }, [proposalSensitivity, isAuthenticated, modelInitialized, model])
+
+  // Update AI response length when slider changes
+  useEffect(() => {
+    if (!isAuthenticated || !modelInitialized) return
+
+    const updateResponseLength = async () => {
+      const maxTokens = Math.round(4096 * responseLengthPercent)
+      await model.aiAssistantPlan.setResponseLength(maxTokens)
+      console.log(`[App] Response length updated: ${(responseLengthPercent * 100).toFixed(0)}% = ${maxTokens} tokens`)
+    }
+
+    updateResponseLength().catch(error => {
+      console.error('[App] Failed to update response length:', error)
+      throw error
+    })
+  }, [responseLengthPercent, isAuthenticated, modelInitialized, model])
 
   // Login function
   const login = async (instanceName: string, password: string) => {
@@ -379,15 +405,16 @@ function AppContent({ model }: AppContentProps) {
   return (
     <ModelProvider model={model}>
       <PlansProvider plans={modelToPlans(model)}>
-        <FaviconBadgeManager
-          isTabVisible={isTabVisible}
-          selectedConversationId={selectedConversationId}
-          isAuthenticated={isAuthenticated}
-          modelInitialized={modelInitialized}
-        />
+        <BridgeProvider bridge={lamaBridge}>
+          <FaviconBadgeManager
+            isTabVisible={isTabVisible}
+            selectedConversationId={selectedConversationId}
+            isAuthenticated={isAuthenticated}
+            modelInitialized={modelInitialized}
+          />
 
-        {/* Invitation acceptance */}
-        {isAuthenticated && model.initialized && pendingInvitation ? (
+          {/* Invitation acceptance */}
+          {isAuthenticated && model.initialized && pendingInvitation ? (
           <InvitationAcceptance
             invitationUrl={pendingInvitation}
             onComplete={(success) => {
@@ -491,9 +518,22 @@ function AppContent({ model }: AppContentProps) {
                   <span>Platform: Browser Direct</span>
                 </div>
                 <div className="flex items-center space-x-4">
-                  <span>Identity: {isAuthenticated ? 'Active' : 'None'}</span>
                   {isAuthenticated && (
                     <>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs text-muted-foreground">Response:</span>
+                        <input
+                          type="range"
+                          min="0.1"
+                          max="1"
+                          step="0.05"
+                          value={responseLengthPercent}
+                          onChange={(e) => setResponseLengthPercent(parseFloat(e.target.value))}
+                          className="w-24 h-1 bg-muted rounded-lg appearance-none cursor-pointer"
+                          title="AI response length: 20% = shorter responses, 100% = full length"
+                        />
+                        <span className="font-mono min-w-[3ch]">{(responseLengthPercent * 100).toFixed(0)}%</span>
+                      </div>
                       <span>·</span>
                       <div className="flex items-center space-x-2">
                         <span className="text-xs text-muted-foreground">Proposals:</span>
@@ -505,7 +545,7 @@ function AppContent({ model }: AppContentProps) {
                           value={proposalSensitivity}
                           onChange={(e) => setProposalSensitivity(parseFloat(e.target.value))}
                           className="w-24 h-1 bg-muted rounded-lg appearance-none cursor-pointer"
-                          title="Minimum similarity threshold: 90% = only show ≥90% matches"
+                          title="Minimum match threshold: 10% = show most proposals, 90% = only very similar"
                         />
                         <span className="font-mono min-w-[3ch]">{(proposalSensitivity * 100).toFixed(0)}%</span>
                       </div>
@@ -516,6 +556,7 @@ function AppContent({ model }: AppContentProps) {
             </div>
           </div>
         )}
+        </BridgeProvider>
       </PlansProvider>
     </ModelProvider>
   )

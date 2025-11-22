@@ -54,6 +54,7 @@ interface MessageViewProps {
   aiModelName?: string // Model name for streaming responses
   aiError?: string | null // Error message from AI processing
   topicId?: string // Topic ID for context panel
+  onScrollToTimeReady?: (scrollFn: (timestamp: number) => void) => void // Callback to expose scroll-to-time function
 }
 
 export function MessageView({
@@ -68,7 +69,8 @@ export function MessageView({
   aiStreamingContent = '',
   aiModelName,
   aiError = null,
-  topicId
+  topicId,
+  onScrollToTimeReady
 }: MessageViewProps) {
   // Keep Model for platform-specific features (initialized, currentUserId)
   const model = useModel()
@@ -80,6 +82,10 @@ export function MessageView({
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false)
+
+  // For time-based scrolling
+  const messageRefsMap = useRef<Map<string, HTMLDivElement>>(new Map())
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null)
 
   // Store attachment descriptors for display
   const [attachmentDescriptors, setAttachmentDescriptors] = useState<Map<string, BlobDescriptor>>(new Map())
@@ -337,6 +343,62 @@ export function MessageView({
     }
   }
 
+  // Scroll to specific timestamp - finds nearest message and scrolls to it
+  const scrollToTimestamp = useCallback((timestamp: number) => {
+    console.log('[MessageView] Scrolling to timestamp:', new Date(timestamp).toISOString())
+
+    // Find the message closest to this timestamp
+    let closestMessage = null
+    let minDiff = Infinity
+
+    for (const message of messages) {
+      const diff = Math.abs(message.timestamp - timestamp)
+      if (diff < minDiff) {
+        minDiff = diff
+        closestMessage = message
+      }
+    }
+
+    if (!closestMessage) {
+      console.warn('[MessageView] No messages found to scroll to')
+      return
+    }
+
+    console.log('[MessageView] Closest message:', closestMessage.id, 'diff:', minDiff, 'ms')
+
+    // Get the DOM element for this message
+    const messageElement = messageRefsMap.current.get(closestMessage.id)
+    if (!messageElement) {
+      console.warn('[MessageView] Message element not found in DOM:', closestMessage.id)
+      return
+    }
+
+    // Scroll to the message
+    isAutoScrollingRef.current = true
+    messageElement.scrollIntoView({
+      behavior: 'smooth',
+      block: 'center' // Center the target message in viewport
+    })
+
+    // Highlight the message for 3 seconds
+    setHighlightedMessageId(closestMessage.id)
+    setTimeout(() => {
+      setHighlightedMessageId(null)
+    }, 3000)
+
+    // Clear auto-scroll flag
+    setTimeout(() => {
+      isAutoScrollingRef.current = false
+    }, 500)
+  }, [messages])
+
+  // Expose scroll-to-time function to parent
+  useEffect(() => {
+    if (onScrollToTimeReady) {
+      onScrollToTimeReady(scrollToTimestamp)
+    }
+  }, [onScrollToTimeReady, scrollToTimestamp])
+
   // Handle attachment clicks
   const handleAttachmentClick = (attachmentId: string) => {
     // TODO: Implement attachment viewer
@@ -426,7 +488,22 @@ export function MessageView({
               .substring(0, 2) || 'U'
 
             return (
-              <div key={message.id} className="flex gap-2 mb-2" style={{ justifyContent: isCurrentUser ? 'flex-end' : 'flex-start' }}>
+              <div
+                key={message.id}
+                ref={(el) => {
+                  if (el) {
+                    messageRefsMap.current.set(message.id, el)
+                  } else {
+                    messageRefsMap.current.delete(message.id)
+                  }
+                }}
+                className={`flex gap-2 mb-2 transition-all duration-300 ${
+                  highlightedMessageId === message.id
+                    ? 'bg-primary/10 rounded-lg p-2 -mx-2 ring-2 ring-primary/30'
+                    : ''
+                }`}
+                style={{ justifyContent: isCurrentUser ? 'flex-end' : 'flex-start' }}
+              >
                 {!isCurrentUser && (
                   <Avatar className="h-8 w-8 shrink-0">
                     <AvatarFallback className="text-xs bg-primary/20 text-primary">
@@ -488,6 +565,11 @@ export function MessageView({
                   theme="dark"
                   attachmentDescriptors={attachmentDescriptors}
                 />
+                {/* Character count indicator with spinner during streaming */}
+                <div className="flex items-center gap-2 text-xs text-muted-foreground ml-12 -mt-2 mb-2">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>Streaming... {throttledStreamingContent.length} characters</span>
+                </div>
               </div>
             </div>
           )}

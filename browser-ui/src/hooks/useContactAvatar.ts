@@ -23,6 +23,7 @@ export function useContactAvatar(personId: SHA256IdHash<Person> | string | null)
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   useEffect(() => {
     if (!personId || !model.initialized) {
@@ -38,7 +39,27 @@ export function useContactAvatar(personId: SHA256IdHash<Person> | string | null)
     }
 
     loadAvatar()
-  }, [personId, model.initialized])
+  }, [personId, model.initialized, refreshTrigger])
+
+  // Listen for profile updates
+  useEffect(() => {
+    const handleContactsUpdated = () => {
+      if (personId) {
+        // Clear cache for this person and trigger reload
+        const cached = avatarCache.get(personId)
+        if (cached) {
+          URL.revokeObjectURL(cached)
+          avatarCache.delete(personId)
+        }
+        setRefreshTrigger(prev => prev + 1)
+      }
+    }
+
+    window.addEventListener('contacts:updated', handleContactsUpdated)
+    return () => {
+      window.removeEventListener('contacts:updated', handleContactsUpdated)
+    }
+  }, [personId])
 
   const loadAvatar = async () => {
     if (!personId || !model.initialized) return

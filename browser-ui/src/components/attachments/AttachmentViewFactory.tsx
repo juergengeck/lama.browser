@@ -150,8 +150,9 @@ export function useAttachmentDescriptor(
         // Dynamic import to avoid circular dependencies
         const { attachmentService } = await import('@/services/attachments/AttachmentService')
         const desc = await attachmentService.getAttachment(attachment.hash, {
-          type: attachment.mimeType,
-          name: attachment.name
+          type: attachment.type,  // Pass ONE object type ('blob', 'clob', 'document')
+          name: attachment.name,
+          mimeType: attachment.mimeType
         })
         
         if (!cancelled) {

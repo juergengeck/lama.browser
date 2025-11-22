@@ -173,6 +173,21 @@ class LamaBridge {
 
     return null
   }
+
+  async setResponseLength(maxTokens: number): Promise<void> {
+    const model = getModel()
+    await model.aiAssistantPlan.setResponseLength(maxTokens)
+  }
+
+  async getResponseLength(): Promise<number> {
+    const model = getModel()
+    return await model.aiAssistantPlan.getResponseLength()
+  }
+
+  async switchTopicModel(topicId: string, newModelId: string): Promise<void> {
+    const model = getModel()
+    await model.aiAssistantPlan.topicManager.setTopicModel(topicId, newModelId)
+  }
 }
 
 export const lamaBridge = new LamaBridge()

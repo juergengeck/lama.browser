@@ -117,7 +117,8 @@ export function ChatLayout({ selectedConversationId }: ChatLayoutProps = {}) {
         lastMessageTime: new Date(topic.lastActivity),
         modelName: topic.modelName || topic.aiModelId,
         hasAIParticipant: topic.isAITopic ?? false,
-        isAITopic: topic.isAITopic ?? false
+        isAITopic: topic.isAITopic ?? false,
+        ownerId: topic.ownerId || (model.ownerId ? String(model.ownerId) : undefined)
       };
     })
   }, [topics, contactsMap, model.initialized, model.aiAssistantModel?.topicManager])

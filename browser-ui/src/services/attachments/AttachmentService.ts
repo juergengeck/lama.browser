@@ -1,18 +1,28 @@
 /**
- * AttachmentService - Browser-native attachment handling using ONE.core BLOB storage
+ * AttachmentService - Browser implementation using shared chat.core service
  *
- * This is a PURE BROWSER implementation that uses ONE.core directly.
- * NO Electron IPC - storage happens in IndexedDB via ONE.core.
+ * This is the STORAGE LAYER for browser platform.
+ * Uses ONE.core BLOB/CLOB storage directly (IndexedDB) via chat.core's AttachmentService.
  */
 
-import type { MessageAttachment } from '@/types/attachments'
-import { storeArrayBufferAsBlob, readBlobAsArrayBuffer } from '@refinio/one.core/lib/storage-blob.js'
+import type { IAttachmentService, MessageAttachment, AttachmentMetadata } from '@lama/ui/services/attachments/AttachmentService'
+import { AttachmentService as CoreAttachmentService } from '@chat/core/services/AttachmentService.js'
+import { storeArrayBufferAsBlob, readBlobAsArrayBuffer, storeUTF8Clob } from '@refinio/one.core/lib/storage-blob.js'
+import { createFileReadStream } from '@refinio/one.core/lib/system/storage-streams.js'
 import type { SHA256Hash } from '@refinio/one.core/lib/util/type-checks.js'
 
-class AttachmentService {
-  /**
-   * Store an attachment using ONE.core BLOB storage
-   */
+// Create core service with injected ONE.core dependencies
+const coreService = new CoreAttachmentService({
+  storeArrayBufferAsBlob,
+  readBlobAsArrayBuffer,
+  storeUTF8Clob,
+  createFileReadStream,
+})
+
+/**
+ * Browser implementation wrapping chat.core's AttachmentService
+ */
+class BrowserAttachmentService implements IAttachmentService {
   async storeAttachment(
     data: ArrayBuffer | Uint8Array | string,
     metadata: {
@@ -21,111 +31,43 @@ class AttachmentService {
       size?: number
     }
   ): Promise<MessageAttachment> {
-    try {
-      // Convert to ArrayBuffer if needed
-      let buffer: ArrayBuffer
-      if (typeof data === 'string') {
-        // Assume base64 string
-        const binaryString = atob(data)
-        const bytes = new Uint8Array(binaryString.length)
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i)
-        }
-        buffer = bytes.buffer
-      } else if (data instanceof Uint8Array) {
-        buffer = data.buffer
-      } else {
-        buffer = data
-      }
-
-      // Store as BLOB using ONE.core
-      const result = await storeArrayBufferAsBlob(buffer)
-
-      console.log('[AttachmentService] Stored BLOB:', {
-        hash: result.hash.substring(0, 8),
-        status: result.status,
-        size: metadata.size,
-        name: metadata.name
-      })
-
-      // Return MessageAttachment with hash
-      return {
-        hash: result.hash as string,
-        type: 'BLOB',  // ONE.core type convention (uppercase)
-        mimeType: metadata.mimeType,
-        name: metadata.name,
-        size: metadata.size || buffer.byteLength
-      }
-    } catch (error) {
-      console.error('[AttachmentService] Failed to store attachment:', error)
-      throw new Error(`Failed to store attachment: ${error}`)
-    }
+    const result = await coreService.storeAttachment(data, metadata)
+    console.log(`[BrowserAttachmentService] Stored ${result.type.toUpperCase()}:`, {
+      hash: result.hash.substring(0, 8),
+      size: result.size,
+      name: metadata.name,
+    })
+    return result
   }
-  
-  /**
-   * Get an attachment by hash using ONE.core BLOB storage
-   */
-  async getAttachment(hash: string): Promise<{
+
+  async getAttachment(
+    hash: string,
+    options?: { type?: 'blob' | 'clob' | 'document'; name?: string; mimeType?: string }
+  ): Promise<{
     data: ArrayBuffer
-    metadata: {
-      name: string
-      mimeType: string
-      size: number
-    }
+    metadata: AttachmentMetadata
   }> {
-    try {
-      // Read BLOB from ONE.core storage
-      const data = await readBlobAsArrayBuffer(hash as SHA256Hash<'BLOB'>)
+    const logType = options?.type || 'blob'
+    console.log(`[BrowserAttachmentService] Reading ${logType.toUpperCase()}:`, {
+      hash: hash.substring(0, 8),
+      type: logType,
+    })
 
-      console.log('[AttachmentService] Retrieved BLOB:', {
-        hash: hash.substring(0, 8),
-        size: data.byteLength
-      })
+    const result = await coreService.getAttachment(hash, options)
 
-      // TODO: Metadata is not stored with BLOBs in ONE.core
-      // We should store metadata separately if needed
-      return {
-        data,
-        metadata: {
-          name: 'attachment',
-          mimeType: 'application/octet-stream',
-          size: data.byteLength
-        }
-      }
-    } catch (error) {
-      console.error('[AttachmentService] Failed to get attachment:', error)
-      throw new Error(`Failed to get attachment: ${error}`)
-    }
+    console.log('[BrowserAttachmentService] Retrieved attachment:', {
+      hash: hash.substring(0, 8),
+      type: logType,
+      size: result.data.byteLength,
+    })
+
+    return result
   }
-  
-  /**
-   * Get attachment metadata only
-   *
-   * NOTE: ONE.core BLOBs don't store metadata, so we need to fetch the full blob
-   * and return basic metadata.
-   */
-  async getAttachmentMetadata(hash: string): Promise<{
-    name: string
-    mimeType: string
-    size: number
-  }> {
-    try {
-      const data = await readBlobAsArrayBuffer(hash as SHA256Hash<'BLOB'>)
 
-      return {
-        name: 'attachment',
-        mimeType: 'application/octet-stream',
-        size: data.byteLength
-      }
-    } catch (error) {
-      console.error('[AttachmentService] Failed to get metadata:', error)
-      throw new Error(`Failed to get metadata: ${error}`)
-    }
+  async getAttachmentMetadata(hash: string): Promise<AttachmentMetadata> {
+    return coreService.getAttachmentMetadata(hash)
   }
-  
-  /**
-   * Store multiple attachments using ONE.core BLOB storage
-   */
+
   async storeMultiple(
     attachments: Array<{
       data: ArrayBuffer | Uint8Array | string
@@ -136,66 +78,26 @@ class AttachmentService {
       }
     }>
   ): Promise<MessageAttachment[]> {
-    // Store each attachment individually
-    const results = await Promise.all(
-      attachments.map(att => this.storeAttachment(att.data, att.metadata))
-    )
-
-    console.log('[AttachmentService] Stored multiple BLOBs:', results.length)
-
+    const results = await coreService.storeMultiple(attachments)
+    console.log('[BrowserAttachmentService] Stored multiple attachments:', results.length)
     return results
   }
-  
-  /**
-   * Process file for attachment
-   */
+
   async processFile(file: File): Promise<MessageAttachment> {
-    const buffer = await file.arrayBuffer()
-    
-    return this.storeAttachment(buffer, {
-      name: file.name,
-      mimeType: file.type || 'application/octet-stream',
-      size: file.size
-    })
+    return coreService.processFile(file)
   }
-  
-  /**
-   * Process multiple files
-   */
+
   async processFiles(files: File[]): Promise<MessageAttachment[]> {
-    const attachments = await Promise.all(
-      files.map(async file => ({
-        data: await file.arrayBuffer(),
-        metadata: {
-          name: file.name,
-          mimeType: file.type || 'application/octet-stream',
-          size: file.size
-        }
-      }))
-    )
-    
-    return this.storeMultiple(attachments)
+    return coreService.processFiles(files)
   }
-  
-  /**
-   * Create data URL for attachment
-   */
+
   async getDataUrl(hash: string): Promise<string> {
-    const { data, metadata } = await this.getAttachment(hash)
-    const bytes = new Uint8Array(data)
-
-    // Convert to base64 in chunks to avoid stack overflow
-    let binary = ''
-    const chunkSize = 32768
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length))
-      binary += String.fromCharCode.apply(null, Array.from(chunk))
-    }
-    const base64 = btoa(binary)
-
-    return `data:${metadata.mimeType};base64,${base64}`
+    return coreService.getDataUrl(hash)
   }
 }
 
-// Export singleton instance
-export const attachmentService = new AttachmentService()
+// Create and export singleton instance
+const browserAttachmentService = new BrowserAttachmentService()
+
+export { browserAttachmentService }
+export const attachmentService = browserAttachmentService
