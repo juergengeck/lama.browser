@@ -352,74 +352,67 @@ export const EnhancedMessageBubble: React.FC<EnhancedMessageBubbleProps> = ({
           </div>
         )}
 
-        <div className="flex items-end gap-2">
-          <div className="flex-1">
-            {message.isRetracted ? (
-              <div className="retracted-message" style={{
-                opacity: 0.6,
-                fontStyle: 'italic',
-                color: theme === 'dark' ? '#999' : '#666'
-              }}>
-                [Message retracted{message.retractReason ? `: ${message.retractReason}` : ''}]
-              </div>
-            ) : message.content ? (
-              <div className="formatted-message-content markdown-content" style={{
-                overflowX: 'auto',
-                maxWidth: '100%'
-              }}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {message.content}
-                </ReactMarkdown>
-              </div>
-            ) : (
-              <div style={{color: 'red'}}>[No message text]</div>
-            )}
-            
-            {!message.isRetracted && message.attachments && message.attachments.length > 0 && (
-              <div className="message-attachments">
-                {message.attachments.map((attachment) => {
-                  const descriptor = attachmentDescriptors?.get(attachment.hash as string);
-                  return (
-                    <div key={attachment.hash as string} className="mb-2">
-                      {createAttachmentView(attachment, descriptor, {
-                        mode: 'inline',
-                        showMetadata: true,
-                        maxWidth: 400,
-                        maxHeight: 300
-                      })}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            
-            {!message.isRetracted && message.subjects.length > 0 && (!message.attachments || message.attachments.length === 0) && (
-              <div className="message-subjects">
-                {message.subjects.map((subject, index) => (
-                  <SubjectHashtagChip
-                    key={index}
-                    hashtag={subject}
-                    onClick={() => onHashtagClick?.(subject)}
-                    theme={theme}
-                  />
-                ))}
-              </div>
-            )}
+        {message.isRetracted ? (
+          <div className="retracted-message" style={{
+            opacity: 0.6,
+            fontStyle: 'italic',
+            color: theme === 'dark' ? '#999' : '#666'
+          }}>
+            [Message retracted{message.retractReason ? `: ${message.retractReason}` : ''}]
           </div>
-          
-          {/* Timestamp and checkmarks in bottom right of bubble */}
-          <div className="flex items-end gap-1 text-xs opacity-60 shrink-0 ml-2 mr-1">
-            <span className="text-[10px]">
-              {new Date(message.timestamp).toLocaleTimeString('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-              }).toLowerCase()}
-            </span>
-            {message.isOwn && (
-              <span className="text-xs">✓✓</span>
-            )}
+        ) : message.content ? (
+          <div className="formatted-message-content markdown-content">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {message.content}
+            </ReactMarkdown>
           </div>
+        ) : (
+          <div style={{color: 'red'}}>[No message text]</div>
+        )}
+
+        {!message.isRetracted && message.attachments && message.attachments.length > 0 && (
+          <div className="message-attachments">
+            {message.attachments.map((attachment) => {
+              const descriptor = attachmentDescriptors?.get(attachment.hash as string);
+              return (
+                <div key={attachment.hash as string} className="mb-2">
+                  {createAttachmentView(attachment, descriptor, {
+                    mode: 'inline',
+                    showMetadata: true,
+                    maxWidth: 400,
+                    maxHeight: 300
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {!message.isRetracted && message.subjects.length > 0 && (!message.attachments || message.attachments.length === 0) && (
+          <div className="message-subjects">
+            {message.subjects.map((subject, index) => (
+              <SubjectHashtagChip
+                key={index}
+                hashtag={subject}
+                onClick={() => onHashtagClick?.(subject)}
+                theme={theme}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Timestamp and checkmarks - absolutely positioned in bottom right */}
+        <div className="message-timestamp-simple">
+          <span className="message-time">
+            {new Date(message.timestamp).toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true
+            }).toLowerCase()}
+          </span>
+          {message.isOwn && (
+            <span className="message-checkmarks">✓✓</span>
+          )}
         </div>
       </div>
       </div>

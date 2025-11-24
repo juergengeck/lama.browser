@@ -114,10 +114,11 @@
 .message-content {
   background: #333;
   border-radius: 12px;
-  padding: 12px 20px 12px 16px;
+  padding: 12px 16px 30px 20px; /* Bottom padding for timestamp, left padding for breathing room */
   position: relative;
-  overflow-x: auto;
   max-width: 100%;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 /* Message actions in upper right corner */
@@ -356,7 +357,19 @@
   background: rgba(0, 0, 0, 0.8);
 }
 
-/* Message status overlay - time and checkmarks */
+/* Message timestamp - simple, no background */
+.message-timestamp-simple {
+  position: absolute;
+  bottom: 8px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* Message status overlay - time and checkmarks (legacy, with background) */
 .message-status-overlay {
   position: absolute;
   bottom: 8px;
@@ -675,7 +688,7 @@
   }
   
   .message-content {
-    padding: 10px;
+    padding: 10px 12px 30px 16px; /* Reserve space for timestamp, left padding for breathing room on mobile */
   }
   
   .attachment-view {
