@@ -111,6 +111,9 @@ import {
 // Chat core models
 import TopicGroupManager from '@chat/core/models/TopicGroupManager.js';
 
+// Memory module for persistent memory management
+import { MemoryModule } from '../modules/MemoryModule';
+
 // LAMA core recipes
 import {SubjectRecipe} from '@lama/core/one-ai/recipes/SubjectRecipe';
 import {KeywordRecipe} from '@lama/core/one-ai/recipes/KeywordRecipe';
@@ -443,6 +446,9 @@ export default class Model {
 
         // Subjects plan for managing memory/topics/keywords (uses TopicAnalysisModel)
         this.subjectsPlan = new SubjectsPlan();
+
+        // Memory module for persistent memory management (will be initialized in init())
+        this.memoryModule = new MemoryModule();
 
         // Wire up JournalPlan's external dependencies for unified journal aggregation
         this.journalPlan.setExternalDeps({
@@ -998,6 +1004,15 @@ export default class Model {
             await this.feedForwardPlan.init?.();
             // NOTE: topicGroupManager has no init() method
 
+            // Initialize MemoryModule with dependencies
+            console.log('[Model] Initializing MemoryModule...');
+            this.memoryModule.setDependency('ChannelManager', this.channelManager);
+            this.memoryModule.setDependency('TopicAnalysisModel', this.topicAnalysisModel);
+            this.memoryModule.setDependency('SubjectsPlan', this.subjectsPlan);
+            this.memoryModule.setDependency('OneCore', this);
+            await this.memoryModule.init();
+            console.log('[Model] ✅ MemoryModule initialized');
+
             // Initialize AIPlan with all dependencies
             console.log('[Model] Initializing AIPlan with dependencies...');
             this.aiPlan.setModels(
@@ -1047,6 +1062,7 @@ export default class Model {
 
         // Shutdown platform-specific handlers first
         const platformHandlers = [
+            { name: 'MemoryModule', fn: () => this.memoryModule?.shutdown?.() },
             { name: 'AuditPlan', fn: () => this.auditPlan?.shutdown?.() },
             { name: 'CryptoPlan', fn: () => this.cryptoPlan?.shutdown?.() },
             { name: 'LLMConfigPlan', fn: () => this.llmConfigPlan?.shutdown?.() },
@@ -1166,6 +1182,13 @@ export default class Model {
     public llmManager: LLMManager;
     public llmObjectManager: LLMObjectManager;
     public aiObjectManager: AIObjectManager;
+
+    // Memory module
+    public memoryModule: MemoryModule;
+
+    // Memory plan getters
+    get memoryPlan() { return this.memoryModule?.memoryPlan; }
+    get chatMemoryPlan() { return this.memoryModule?.chatMemoryPlan; }
 
     /**
      * Send message - AIMessageListener will automatically trigger AI response
