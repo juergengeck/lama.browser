@@ -1,7 +1,6 @@
 // packages/lama.browser/browser-ui/src/modules/MemoryModule.ts
-import type { Module } from '@refinio/api';
+import type { Module } from '@refinio/refinio-api/plan-system';
 import type ChannelManager from '@refinio/one.models/lib/models/ChannelManager.js';
-import type TopicModel from '@refinio/one.models/lib/models/Chat/TopicModel.js';
 import type TopicAnalysisModel from '@lama/core/one-ai/models/TopicAnalysisModel';
 import type { SubjectsPlan } from '@lama/core/plans/SubjectsPlan';
 
@@ -24,7 +23,6 @@ export class MemoryModule implements Module {
 
   static demands = [
     { targetType: 'ChannelManager', required: true },
-    { targetType: 'TopicModel', required: true },
     { targetType: 'TopicAnalysisModel', required: true },
     { targetType: 'SubjectsPlan', required: true },
     { targetType: 'OneCore', required: true }
@@ -38,7 +36,6 @@ export class MemoryModule implements Module {
 
   private deps: {
     channelManager?: ChannelManager;
-    topicModel?: TopicModel;
     topicAnalysisModel?: TopicAnalysisModel;
     subjectsPlan?: SubjectsPlan;
     oneCore?: any;
@@ -56,7 +53,7 @@ export class MemoryModule implements Module {
 
     console.log('[MemoryModule] Initializing memory module...');
 
-    const { channelManager, topicModel, topicAnalysisModel, subjectsPlan, oneCore } = this.deps;
+    const { channelManager, topicAnalysisModel, subjectsPlan, oneCore } = this.deps;
 
     // Create ChatMemoryService with all dependencies
     this.chatMemoryService = new ChatMemoryService({
@@ -110,7 +107,6 @@ export class MemoryModule implements Module {
   private hasRequiredDeps(): boolean {
     return !!(
       this.deps.channelManager &&
-      this.deps.topicModel &&
       this.deps.topicAnalysisModel &&
       this.deps.subjectsPlan &&
       this.deps.oneCore
