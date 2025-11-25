@@ -76,3 +76,4 @@ archive/lama.worker/
 
 # Exclude lama subdirectory (separate project)
 lama/
+.worktrees/
