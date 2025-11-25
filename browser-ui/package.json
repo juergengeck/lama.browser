@@ -31,6 +31,7 @@
     "@lama/connection.core": "file:../../connection.core",
     "@lama/core": "file:../../lama.core",
     "@lama/ui": "file:../../lama.ui",
+    "@memory/core": "file:../../memory.core",
     "@modelcontextprotocol/sdk": "^1.17.2",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-avatar": "^1.0.4",
