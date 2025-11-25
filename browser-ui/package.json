@@ -50,6 +50,7 @@
     "@types/dompurify": "^3.0.5",
     "@types/marked": "^5.0.2",
     "@types/qrcode.react": "^1.0.5",
+    "@xyflow/react": "^12.9.3",
     "ai": "^5.0.71",
     "buffer": "^6.0.3",
     "class-variance-authority": "^0.7.0",
