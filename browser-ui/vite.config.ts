@@ -32,15 +32,17 @@ export default defineConfig({
       { find: /^@lama\/core\/(.*)$/, replacement: path.resolve(__dirname, '../../lama.core/dist/lama.core/$1') },
       { find: '@lama/ui', replacement: path.resolve(__dirname, '../../lama.ui/src') },
       { find: '@chat/core', replacement: path.resolve(__dirname, '../../chat.core') },
-      { find: '@connection/core', replacement: path.resolve(__dirname, '../../connection.core/src') },
+      { find: '@connection/core', replacement: path.resolve(__dirname, '../../connection.core/dist/esm') },
+      { find: '@device/core', replacement: path.resolve(__dirname, '../../device.core/src') },
       { find: '@trust/core', replacement: path.resolve(__dirname, '../../trust.core') },
       { find: '@assembly/core', replacement: path.resolve(__dirname, '../../assembly.core') },
+      { find: /^@memory\/core\/(.*)$/, replacement: path.resolve(__dirname, '../../memory.core/dist/memory.core/src/$1') },
 
       // CRITICAL: Use the ONE.core packages directly - NO duplication
       { find: '@refinio/one.core', replacement: path.resolve(__dirname, '../../one.core') },
       { find: '@refinio/one.models', replacement: path.resolve(__dirname, '../../one.models') },
 
-      // Stub out Claude for browser builds (CORS restrictions)
+      // Stub out Node.js modules for browser builds
       { find: '@anthropic-ai/sdk', replacement: path.resolve(__dirname, './src/stubs/claude-stub.ts') }
     ],
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
@@ -89,8 +91,7 @@ export default defineConfig({
     sourcemap: false,  // No source maps in production
     rollupOptions: {
       external: [
-        'ws',
-        'dgram'
+        'ws'
       ],
       output: {
         format: 'es',

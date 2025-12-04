@@ -11,19 +11,19 @@ import type { ModelOption } from '@lama/ui'
 export const MODEL_OPTIONS: ModelOption[] = [
   // Anthropic Models (2025)
   {
-    id: 'claude-sonnet-4-5-20250929',
-    name: 'Claude Sonnet 4.5',
+    id: 'claude-opus-4-5-20251101',
+    name: 'Claude Opus 4.5',
     size: 'Cloud',
-    description: 'Best coding model. Strongest for complex agents and computer use.',
+    description: 'Most capable model. Best for complex reasoning, coding, and agentic tasks.',
     requiresDownload: false,
     apiKey: true,
     provider: 'anthropic'
   },
   {
-    id: 'claude-opus-4-1',
-    name: 'Claude Opus 4.1',
+    id: 'claude-sonnet-4-5-20250929',
+    name: 'Claude Sonnet 4.5',
     size: 'Cloud',
-    description: 'Highest capability. Best for agentic tasks and advanced reasoning.',
+    description: 'Best coding model. Strongest for complex agents and computer use.',
     requiresDownload: false,
     apiKey: true,
     provider: 'anthropic'
@@ -74,6 +74,26 @@ export const MODEL_OPTIONS: ModelOption[] = [
     requiresDownload: false,
     apiKey: true,
     provider: 'openai'
+  },
+
+  // Google Gemini Models (2025)
+  {
+    id: 'gemini-2.5-pro',
+    name: 'Gemini 2.5 Pro',
+    size: 'Cloud',
+    description: 'Most capable Gemini. 1M token context, strong reasoning and coding.',
+    requiresDownload: false,
+    apiKey: true,
+    provider: 'google'
+  },
+  {
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    size: 'Cloud',
+    description: 'Fast and efficient. Great balance of speed and capability.',
+    requiresDownload: false,
+    apiKey: true,
+    provider: 'google'
   },
 
   // DeepSeek Models (2025)

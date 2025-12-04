@@ -45,13 +45,13 @@ class LamaBridge {
 
   async getMessages(conversationId: string): Promise<Message[]> {
     const model = getModel()
-    const result = await model.chatPlan.getMessages({ topicId: conversationId })
+    const result = await model.chatPlan.getMessages({ conversationId })
 
-    if (!result.success || !result.data) {
+    if (!result.success || !result.messages) {
       return []
     }
 
-    return result.data.map((msg: any) => ({
+    return result.messages.map((msg: any) => ({
       id: msg.id || msg.hash,
       senderId: msg.sender || msg.senderId,
       content: msg.text || msg.content,
@@ -66,7 +66,7 @@ class LamaBridge {
   async sendMessage(topicId: string, content: string, attachments?: any[]): Promise<string> {
     const model = getModel()
     const result = await model.chatPlan.sendMessage({
-      topicId,
+      conversationId: topicId,
       content,
       attachments
     })
@@ -187,6 +187,20 @@ class LamaBridge {
   async switchTopicModel(topicId: string, newModelId: string): Promise<void> {
     const model = getModel()
     await model.aiAssistantPlan.topicManager.setTopicModel(topicId, newModelId)
+  }
+
+  async getSubjects(topicId: string): Promise<{ success: boolean; data?: { subjects: any[] }; error?: string }> {
+    const model = getModel()
+    return await model.topicAnalysisPlan.getSubjects({ topicId })
+  }
+
+  async getAvailableModels(): Promise<Array<{ id: string; name: string }>> {
+    const model = getModel()
+    const result = await model.llmConfigPlan.getAvailableModels({})
+    if (result.success && result.models) {
+      return result.models.map((m: any) => ({ id: m.id || m.name, name: m.name }))
+    }
+    return []
   }
 }
 

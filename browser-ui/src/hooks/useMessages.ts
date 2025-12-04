@@ -162,13 +162,21 @@ export function useMessages({
     attachments?: any[]
   ): Promise<Message> => {
     try {
-      // Use Model's wrapper that triggers AI response
-      const message = await model.sendMessageWithAI(topicId, content, attachments)
+      // Send message via ChatPlan - AIMessageListener will trigger AI response automatically
+      const response = await model.chatPlan.sendMessage({
+        conversationId: topicId,
+        content,
+        attachments
+      })
+
+      if (!response.success || !response.data) {
+        throw new Error(response.error || 'Failed to send message')
+      }
 
       // Don't optimistically add - channel listener will handle it
       // This prevents duplicate messages (one from optimistic add, one from channel update)
 
-      return message as Message
+      return response.data as Message
     } catch (err) {
       console.error('[useMessages] Failed to send message:', err)
       throw err

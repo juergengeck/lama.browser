@@ -18,15 +18,6 @@ import {
     ReverseMapsForIdObjectsExperimental
 } from '@refinio/one.models/lib/recipes/reversemaps-experimental.js';
 
-// ONE.core imports for JournalPlan
-import { storeVersionedObject } from '@refinio/one.core/lib/storage-versioned-objects.js';
-import { getInstanceIdHash } from '@refinio/one.core/lib/instance.js';
-import { calculateIdHashOfObj } from '@refinio/one.core/lib/util/object.js';
-
-// JournalPlan for assembly tracking
-import { JournalPlan } from '@lama/core/plans/JournalPlan';
-import { CubePlan } from '@lama/core/plans/CubePlan';
-
 // LAMA recipes
 import { LAMA_CORE_RECIPES } from '@lama/core/recipes';
 
@@ -88,9 +79,6 @@ export default class Model {
     // MultiUser instance (ONE.core authentication and storage)
     public one: MultiUser;
 
-    // Journal plan for assembly tracking
-    public journalPlan: JournalPlan;
-
     constructor(
         private commServerUrl: string,
         private webUrl: string = 'https://lama.one'
@@ -102,18 +90,8 @@ export default class Model {
         // Initialize module registry
         this.moduleRegistry = new ModuleRegistry();
 
-        // Create JournalPlan for assembly tracking
-        this.journalPlan = new JournalPlan({
-            storeVersionedObject,
-            getInstanceIdHash,
-            calculateIdHashOfObj
-        });
-
         // Supply Model instance as "OneCore" for modules that need it
         this.moduleRegistry.supply('OneCore', this);
-
-        // Supply JournalPlan for modules that need it
-        this.moduleRegistry.supply('JournalPlan', this.journalPlan);
 
         // Supply browser-specific adapters before module registration
         this.moduleRegistry.supply('LLMPlatform', new BrowserLLMPlatform());
@@ -125,10 +103,14 @@ export default class Model {
         this.modules.set('trust', new TrustModule());
         this.modules.set('chat', new ChatModule());
         this.modules.set('analysis', new AnalysisModule());
-        this.modules.set('ai', new AIModule());
+        this.modules.set('ai', new AIModule(
+            new BrowserLLMPlatform(),
+            { ollamaValidator: browserOllamaValidator }
+        ));
         this.modules.set('connection', new ConnectionModule(commServerUrl, webUrl));
         this.modules.set('device', new DeviceModule());
         this.modules.set('memory', new MemoryModule());
+        this.modules.set('journal', new JournalModule());
 
         // Register all modules with the registry
         for (const [name, module] of this.modules) {
@@ -284,6 +266,12 @@ export default class Model {
     get memoryPlan() { return this.modules.get('memory').memoryPlan; }
     get chatMemoryPlan() { return this.modules.get('memory').chatMemoryPlan; }
     get chatMemoryService() { return this.modules.get('memory').chatMemoryService; }
+
+    // JournalModule services (Assembly-based audit trail)
+    get journalPlan() { return this.modules.get('journal').journalPlan; }
+    get storyFactory() { return this.modules.get('journal').storyFactory; }
+    get assemblyPlan() { return this.modules.get('journal').assemblyPlan; }
+    get assemblyListener() { return this.modules.get('journal').assemblyListener; }
 
     // Additional services (to be moved to appropriate modules in future iterations)
     get cubeStorage() { return this.modules.get('ai').cubeStorage; }

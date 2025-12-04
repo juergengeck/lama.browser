@@ -15,7 +15,7 @@ import { MediaViewer, type MediaItem } from './media/MediaViewer'
 import { subjectService } from '@/services/subjects/SubjectService'
 import { attachmentService } from '@/services/attachments/AttachmentService'
 import type { MessageAttachment } from '@/types/attachments'
-import { EnhancedMessageInput } from './chat/EnhancedMessageInput'
+import { EnhancedMessageInput } from '@lama/ui'
 import { useModel } from '@/model/index.js'
 import { usePlans } from '@lama/ui'
 

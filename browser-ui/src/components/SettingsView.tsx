@@ -31,6 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
+  AppHeader,
 } from '@lama/ui'
 import {
   Settings, User, Shield, Globe, Cpu, HardDrive,
@@ -38,12 +39,14 @@ import {
 } from 'lucide-react'
 import { sessionStorage } from '@/services/session-storage'
 import InstancesView from './InstancesView'
-import { MCPSettings } from './settings/MCPSettings'
-import { StorageQuota } from './Settings/StorageQuota'
-import { DataCleanup } from './Settings/DataCleanup'
-import { SubscriptionSettings } from './Settings/SubscriptionSettings'
-import { LLMSettings } from './Settings/LLMSettings'
-import { ProposalSettings } from './Settings/ProposalSettings'
+import {
+  MCPSettings,
+  StorageQuota,
+  DataCleanup,
+  SubscriptionSettings,
+  LLMSettings,
+  ProposalSettings
+} from './Settings'
 import { useModel } from '@/model/ModelContext'
 import { usePlans } from '@lama/ui'
 
@@ -59,6 +62,13 @@ interface NetworkSettings {
 interface SettingsViewProps {
   onLogout?: () => void
   onNavigate?: (tab: string, conversationId?: string, section?: string) => void
+  appMenuItems?: Array<{
+    label: string
+    onClick: () => void
+    icon?: React.ReactNode
+    active?: boolean
+  }>
+  trafficLightSpace?: boolean
 }
 
 interface ModelInfo {
@@ -84,7 +94,7 @@ interface SystemObject {
   metadata?: Record<string, any>
 }
 
-export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
+export function SettingsView({ onLogout, onNavigate, appMenuItems = [], trafficLightSpace = false }: SettingsViewProps) {
   const model = useModel()
   const plans = usePlans()
   const [models, setModels] = useState<ModelInfo[]>([])
@@ -201,9 +211,7 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
   const loadModels = async () => {
     try {
       setLoadingModels(true)
-      // TODO: Implement getAvailableModels via Model
-      // For now, use the LLM configs from storage
-      console.log('[SettingsView] Loading models - TODO: implement via Model')
+      // Model loading is handled by LLMSettings component via llmConfigPlan
       setModels([])
     } catch (error) {
       console.error('Failed to load models:', error)
@@ -215,8 +223,8 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
   const handleLoadModel = async (modelId: string) => {
     setLoadingStates(prev => ({ ...prev, [modelId]: true }))
     try {
-      // TODO: Implement loadModel via Model
-      console.log('[SettingsView] Load model - TODO: implement via Model:', modelId)
+      // Model loading is handled by LLMSettings component
+      // This function is deprecated - kept for backwards compatibility
     } catch (error) {
       console.error('Failed to load model:', error)
     } finally {
@@ -226,8 +234,8 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
 
   const handleSetDefault = async (modelId: string) => {
     try {
-      // TODO: Implement setDefaultModel via Model
-      console.log('[SettingsView] Set default model - TODO: implement via Model:', modelId)
+      // Default model is set via LLMSettings component
+      // This function is deprecated
     } catch (error) {
       console.error('Failed to set default model:', error)
     }
@@ -751,35 +759,31 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
-      <Card className="mb-4">
-        <CardHeader>
+      <AppHeader title="Settings" menuItems={appMenuItems} trafficLightSpace={trafficLightSpace} />
+      {/* Save Changes Banner - shown when there are unsaved changes */}
+      {hasChanges && (
+        <div className="p-3 md:p-4 border-b bg-primary/10">
           <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Settings className="h-5 w-5 text-primary" />
-              <CardTitle>Settings</CardTitle>
-            </div>
-            {hasChanges && (
-              <Button onClick={handleSave} size="sm">
-                <Save className="h-4 w-4 mr-2" />
-                Save Changes
-              </Button>
-            )}
+            <span className="text-sm text-muted-foreground">You have unsaved changes</span>
+            <Button onClick={handleSave} size="sm">
+              <Save className="h-4 w-4 md:mr-2" />
+              <span className="hidden md:inline">Save Changes</span>
+            </Button>
           </div>
-        </CardHeader>
-      </Card>
+        </div>
+      )}
 
       {/* Settings Content */}
       <ScrollArea className="flex-1">
-        <div className="space-y-4">
+        <div className="space-y-4 p-3 md:p-4">
           {/* Profile Settings */}
           <Card>
-            <CardHeader>
+            <CardHeader className="py-3 md:py-6">
               <div className="flex items-center space-x-2">
                 <User className="h-4 w-4" />
-                <CardTitle className="text-lg">Profile</CardTitle>
+                <CardTitle className="text-base sm:text-lg">Profile</CardTitle>
               </div>
-              <CardDescription>Manage your identity and keys</CardDescription>
+              <CardDescription className="hidden sm:block">Manage your identity and keys</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
@@ -857,12 +861,12 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
 
           {/* Network & Connections */}
           <Card>
-            <CardHeader>
+            <CardHeader className="py-3 md:py-6">
               <div className="flex items-center space-x-2">
                 <Globe className="h-4 w-4" />
-                <CardTitle className="text-lg">Network & Connections</CardTitle>
+                <CardTitle className="text-base sm:text-lg">Network & Connections</CardTitle>
               </div>
-              <CardDescription>P2P connections and device pairing</CardDescription>
+              <CardDescription className="hidden sm:block">P2P connections and device pairing</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* LAMA Domain Configuration */}
@@ -939,12 +943,12 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
 
           {/* Privacy Settings */}
           <Card>
-            <CardHeader>
+            <CardHeader className="py-3 md:py-6">
               <div className="flex items-center space-x-2">
                 <Shield className="h-4 w-4" />
-                <CardTitle className="text-lg">Privacy</CardTitle>
+                <CardTitle className="text-base sm:text-lg">Privacy</CardTitle>
               </div>
-              <CardDescription>Security and data preferences</CardDescription>
+              <CardDescription className="hidden sm:block">Security and data preferences</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
@@ -1129,27 +1133,27 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
 
           {/* System Objects */}
           <Card id="system-objects-section">
-            <CardHeader>
+            <CardHeader className="py-3 md:py-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Package className="h-4 w-4" />
-                  <CardTitle className="text-lg">System Objects</CardTitle>
+                  <CardTitle className="text-base sm:text-lg">System Objects</CardTitle>
                 </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={loadSystemObjects}
                   disabled={loadingSystemObjects}
                 >
                   {loadingSystemObjects ? (
                     <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary mr-2" />
                   ) : (
-                    <RefreshCw className="h-3 w-3 mr-2" />
+                    <RefreshCw className="h-3 w-3 sm:mr-2" />
                   )}
-                  Refresh
+                  <span className="hidden sm:inline">Refresh</span>
                 </Button>
               </div>
-              <CardDescription>View cryptographic keys, metadata indexes, and CRDT state</CardDescription>
+              <CardDescription className="hidden sm:block">View cryptographic keys, metadata indexes, and CRDT state</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Keys & Certificates */}
@@ -1360,12 +1364,12 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
 
           {/* Devices Section */}
           <Card>
-            <CardHeader>
+            <CardHeader className="py-3 md:py-6">
               <div className="flex items-center space-x-2">
                 <Smartphone className="h-4 w-4" />
-                <CardTitle className="text-lg">Devices</CardTitle>
+                <CardTitle className="text-base sm:text-lg">Devices</CardTitle>
               </div>
-              <CardDescription>Manage your connected devices and pairing</CardDescription>
+              <CardDescription className="hidden sm:block">Manage your connected devices and pairing</CardDescription>
             </CardHeader>
             <CardContent>
               <Button
@@ -1381,12 +1385,12 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
 
           {/* Subscription Settings */}
           <Card>
-            <CardHeader>
+            <CardHeader className="py-3 md:py-6">
               <div className="flex items-center space-x-2">
                 <CreditCard className="h-4 w-4" />
-                <CardTitle className="text-lg">Subscription</CardTitle>
+                <CardTitle className="text-base sm:text-lg">Subscription</CardTitle>
               </div>
-              <CardDescription>Manage your subscription and identity service</CardDescription>
+              <CardDescription className="hidden sm:block">Manage your subscription and identity service</CardDescription>
             </CardHeader>
             <CardContent>
               <SubscriptionSettings onNavigateToPurchase={() => onNavigate?.('purchase')} />
@@ -1402,10 +1406,10 @@ export function SettingsView({ onLogout, onNavigate }: SettingsViewProps) {
           {/* Logout Section */}
           {onLogout && (
             <Card>
-              <CardHeader>
+              <CardHeader className="py-3 md:py-6">
                 <div className="flex items-center space-x-2">
                   <User className="h-4 w-4" />
-                  <CardTitle className="text-lg">Account</CardTitle>
+                  <CardTitle className="text-base sm:text-lg">Account</CardTitle>
                 </div>
               </CardHeader>
               <CardContent>

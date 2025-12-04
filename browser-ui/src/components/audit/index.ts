@@ -1,10 +1,11 @@
 /**
- * Audit Components Export
+ * Audit Components - Browser Platform Wrapper
  *
- * Central export for all audit-related UI components
+ * Re-exports lama.ui's audit components.
+ * All UI logic lives in @lama/ui - this is just the platform re-export.
  */
 
-export { QRCodeDisplay } from './QRCodeDisplay';
-export { AttestationStatus, AttestationBadge } from './AttestationStatus';
-export { AuditPanel } from './AuditPanel';
-export { AuditorBadge, AuditorGroup } from './AuditorBadge';
+export { QRCodeDisplay } from '@lama/ui';
+export { AttestationStatus, AttestationBadge } from '@lama/ui';
+export { AuditPanel } from '@lama/ui';
+export { AuditorBadge, AuditorGroup } from '@lama/ui';

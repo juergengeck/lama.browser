@@ -46,14 +46,14 @@ export function useLamaMessages(conversationId: string) {
     console.log('🔄 Loading messages for:', conversationId)
     try {
       setLoading(true)
-      const result = await model.chatPlan.getMessages({ topicId: conversationId })
+      const result = await model.chatPlan.getMessages({ conversationId })
 
-      if (!result.success || !result.data) {
+      if (!result.success || !result.messages) {
         setMessages([])
         return
       }
 
-      const msgs = result.data.map((msg: any) => ({
+      const msgs = result.messages.map((msg: any) => ({
         id: msg.id || msg.hash,
         senderId: msg.sender || msg.senderId,
         senderName: msg.senderName,

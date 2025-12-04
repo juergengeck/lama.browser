@@ -14,8 +14,7 @@
 
 import type { SHA256IdHash, SHA256Hash } from '@refinio/one.core/lib/util/type-checks.js';
 import type { Person } from '@refinio/one.core/lib/recipes.js';
-import type { Story } from '../recipes/StoryRecipe';
-import type { Assembly } from '@assembly/core/types/Assembly.js';
+import type { Story, Assembly, Plan } from '@assembly/core';
 
 declare module '@OneObjectInterfaces' {
     // ============================================================================
@@ -56,6 +55,7 @@ declare module '@OneObjectInterfaces' {
         SubscriptionBalance: SubscriptionBalance;
 
         // Assembly Tracking (assembly.core)
+        Plan: Plan;
         Story: Story;
         Assembly: Assembly;
     }
@@ -74,10 +74,11 @@ declare module '@OneObjectInterfaces' {
         ProposalConfig: Pick<ProposalConfig, '$type$' | 'userEmail'>;
         AvatarPreference: Pick<AvatarPreference, '$type$' | 'personId' | 'name'>;
         MessageReadStatus: Pick<MessageReadStatus, '$type$' | 'conversationId'>;
-        Keyword: Pick<Keyword, '$type$' | 'term'>;
-        SubscriptionBalance: Pick<SubscriptionBalance, '$type$' | 'userId'>;
-        Story: Pick<Story, '$type$' | 'id'>;
-        Assembly: Pick<Assembly, '$type$' | 'storyRef'>;
+        Keyword: Keyword;
+        SubscriptionBalance: SubscriptionBalance;
+        Plan: Plan;
+        Story: Story;
+        Assembly: Assembly;
     }
 
     // ============================================================================
@@ -375,15 +376,9 @@ declare module '@OneObjectInterfaces' {
             krawatte: boolean;  // Tie accessory
             hut: boolean;       // Hat accessory
             punk: boolean;      // Mohawk accessory
-            // Color overlays per layer
-            fellColor?: string;
-            hufenColor?: string;
-            schwanzColor?: string;
-            ohrenColor?: string;
-            augenColor?: string;
-            krawatteColor?: string;
-            hutColor?: string;
-            punkColor?: string;
+            // Color overlay configuration
+            colorTargets?: Array<'outline' | 'fell' | 'hufen' | 'schwanz' | 'ohren' | 'augen' | 'krawatte' | 'hut' | 'punk'>;  // Parts to color
+            overlayColor?: string;  // Color to apply to selected parts
         };
 
         // Simple color preference (fallback if no lama config)

@@ -14,7 +14,7 @@ import { Badge } from '@lama/ui'
 import { Textarea } from '@lama/ui'
 import { Input } from '@lama/ui'
 import { Label } from '@lama/ui'
-import { Brain, ChevronDown, ChevronRight, RefreshCw, Save, Bot, Key, Eye, EyeOff, Plus, ExternalLink } from 'lucide-react'
+import { Brain, ChevronDown, ChevronRight, RefreshCw, Save, Bot, Key, Eye, EyeOff, Plus, ExternalLink, X } from 'lucide-react'
 import { Alert, AlertDescription } from '@lama/ui'
 import { Separator } from '@lama/ui'
 import {
@@ -78,6 +78,9 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
   const [showAddProvider, setShowAddProvider] = useState(false)
   const [addProviderDialogOpen, setAddProviderDialogOpen] = useState(false)
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
+
+  // Error/success message state (replaces alert())
+  const [statusMessage, setStatusMessage] = useState<{ type: 'error' | 'success'; message: string } | null>(null)
   const [selectedModel, setSelectedModel] = useState<string>('')
   const [providerApiKey, setProviderApiKey] = useState('')
   const [addingProvider, setAddingProvider] = useState(false)
@@ -90,8 +93,8 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
       description: 'Claude models - Advanced reasoning and coding',
       icon: '🧠',
       models: [
+        { id: 'claude-opus-4-5-20251101', name: 'Claude Opus 4.5' },
         { id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5 (Recommended)' },
-        { id: 'claude-opus-4-1', name: 'Claude Opus 4.1' },
         { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5' },
         { id: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku' },
       ],
@@ -116,6 +119,19 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
       websiteUrl: 'https://platform.openai.com/api-keys',
       apiKeyLabel: 'OpenAI API Key',
       apiKeyPlaceholder: 'sk-...'
+    },
+    {
+      id: 'google',
+      name: 'Google',
+      description: 'Gemini models - 1M context, multimodal',
+      icon: '🧠',
+      models: [
+        { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro (Recommended)' },
+        { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+      ],
+      websiteUrl: 'https://aistudio.google.com/apikey',
+      apiKeyLabel: 'Google API Key',
+      apiKeyPlaceholder: 'AIza...'
     },
     {
       id: 'deepseek',
@@ -211,7 +227,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
       console.log('[LLMSettings] System prompt saved successfully')
     } catch (error) {
       console.error('[LLMSettings] Failed to save system prompt:', error)
-      alert('Failed to save system prompt')
+      setStatusMessage({ type: 'error', message: 'Failed to save system prompt' })
     } finally {
       setSaving(null)
     }
@@ -234,11 +250,11 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
 
         console.log('[LLMSettings] System prompt regenerated successfully')
       } else {
-        alert('Failed to regenerate system prompt: ' + result.error)
+        setStatusMessage({ type: 'error', message: 'Failed to regenerate system prompt: ' + result.error })
       }
     } catch (error) {
       console.error('[LLMSettings] Failed to regenerate system prompt:', error)
-      alert('Failed to regenerate system prompt')
+      setStatusMessage({ type: 'error', message: 'Failed to regenerate system prompt' })
     } finally {
       setRegenerating(null)
     }
@@ -262,7 +278,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
   const handleSaveApiKey = async (llmId: string) => {
     const apiKey = editedApiKeys[llmId]
     if (!apiKey || apiKey.trim() === '') {
-      alert('API key cannot be empty')
+      setStatusMessage({ type: 'error', message: 'API key cannot be empty' })
       return
     }
 
@@ -286,7 +302,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
       console.log('[LLMSettings] API key saved successfully')
     } catch (error) {
       console.error('[LLMSettings] Failed to save API key:', error)
-      alert('Failed to save API key: ' + (error as Error).message)
+      setStatusMessage({ type: 'error', message: 'Failed to save API key: ' + (error as Error).message })
     } finally {
       setSavingApiKey(null)
     }
@@ -406,11 +422,11 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
         console.log(`[LLMSettings] Successfully registered model: ${modelName}`)
         await loadLLMConfigs()
       } else {
-        alert(`Failed to register model: ${result.error}`)
+        setStatusMessage({ type: 'error', message: `Failed to register model: ${result.error}` })
       }
     } catch (error) {
       console.error('[LLMSettings] Failed to register model:', error)
-      alert(`Failed to register model: ${(error as Error).message}`)
+      setStatusMessage({ type: 'error', message: `Failed to register model: ${(error as Error).message}` })
     } finally {
       setRegisteringModel(null)
     }
@@ -439,7 +455,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
 
   const handleAddProvider = async () => {
     if (!selectedModel || !providerApiKey) {
-      alert('Please select a model and enter an API key')
+      setStatusMessage({ type: 'error', message: 'Please select a model and enter an API key' })
       return
     }
 
@@ -458,11 +474,11 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
         await loadLLMConfigs()
         handleCloseProviderDialog()
       } else {
-        alert(`Failed to add provider: ${result.error}`)
+        setStatusMessage({ type: 'error', message: `Failed to add provider: ${result.error}` })
       }
     } catch (error) {
       console.error('[LLMSettings] Failed to add provider:', error)
-      alert(`Failed to add provider: ${(error as Error).message}`)
+      setStatusMessage({ type: 'error', message: `Failed to add provider: ${(error as Error).message}` })
     } finally {
       setAddingProvider(false)
     }
@@ -470,7 +486,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
 
   const startChatWithModel = async (llmConfig: LLMConfig) => {
     if (!initialized) {
-      alert('System not initialized. Please wait and try again.')
+      setStatusMessage({ type: 'error', message: 'System not initialized. Please wait and try again.' })
       return
     }
 
@@ -509,7 +525,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
       }
     } catch (error) {
       console.error('[LLMSettings] Failed to start chat:', error)
-      alert(`Failed to start chat: ${(error as Error).message}`)
+      setStatusMessage({ type: 'error', message: `Failed to start chat: ${(error as Error).message}` })
     } finally {
       setCreatingChat(null)
     }
@@ -746,6 +762,26 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
         <CardDescription>Configure AI models and server connections</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Status message banner (replaces alert()) */}
+        {statusMessage && (
+          <div
+            className={`p-3 rounded-lg flex items-center justify-between ${
+              statusMessage.type === 'error'
+                ? 'bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+                : 'bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
+            }`}
+          >
+            <span className="text-sm">{statusMessage.message}</span>
+            <button
+              onClick={() => setStatusMessage(null)}
+              className="text-current hover:opacity-70 transition-opacity"
+              aria-label="Dismiss message"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
         {/* Section 1: Detected Local Models */}
         {localModels.length > 0 && (
           <div className="space-y-3">

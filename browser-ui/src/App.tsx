@@ -4,29 +4,24 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Button } from '@lama/ui'
-import { ChatLayout } from '@/components/ChatLayout'
-import { JournalView } from '@/components/JournalView'
-import { ContactsView } from '@/components/ContactsView'
+import { ContactsView, LoginDeploy, ModelOnboarding, PlansProvider, BridgeProvider, ProfileEditor, ChatLayout, AssemblyJournalView, MemoryView, DevicesView, MobileBottomNav, StatusBar, NavigateHomeProvider } from '@lama/ui'
+import type { AssemblyQueryOptions, AssemblyWithStory } from '@assembly/core'
+import type { DevicePlatformAdapter } from '@lama/ui'
+import type { NavTab } from '@lama/ui'
 import { SettingsView } from '@/components/SettingsView'
-import { DataDashboard } from '@/components/DataDashboard'
-import { DevicesView } from '@/components/DevicesView'
 import { PurchaseView } from '@/components/PurchaseView'
 import { VerificationView } from '@/components/VerificationView'
-import { ProfileView } from '@/components/ProfileView'
-import { MemoryView } from '@/components/MemoryView'
-import { LoginDeploy, ModelOnboarding, PlansProvider, BridgeProvider } from '@lama/ui'
 import type { LAMAPlans } from '@lama/ui'
 import { InvitationAcceptance } from '@/components/InvitationAcceptance'
 import { MODEL_OPTIONS } from '@/constants/model-options'
-import { MessageSquare, BookOpen, Users, Settings, Loader2, Smartphone, BarChart3, CreditCard, User, Brain } from 'lucide-react'
-import { MobileTabBar } from '@/components/MobileTabBar'
+import { MessageSquare, BookOpen, Users, Settings, Loader2, Smartphone, Brain } from 'lucide-react'
 import { sessionStorage } from '@/services/session-storage'
 import { isValidInvitationUrl } from '@/utils/invitation-url-parser'
 import type Model from '@/model/Model.js'
 import { ModelProvider } from '@/model/ModelContext'
 import { FaviconBadgeManager } from '@/components/FaviconBadgeManager'
 import { lamaBridge } from '@/bridge/lama-bridge'
+import { browserOllamaValidator } from '../../adapters/browser-llm-config'
 
 // Routing imports (re-exported from lama.core/ui/routing via lama.ui)
 import {
@@ -55,12 +50,99 @@ function modelToPlans(model: Model): LAMAPlans {
     crypto: model.cryptoPlan,
     audit: model.auditPlan,
     journal: model.journalPlan,
-    subjects: model.subjectsPlan,
     chat: model.chatPlan,
     contacts: model.contactsPlan,
     export: model.exportPlan,
     feedForward: model.feedForwardPlan,
     connection: model.connectionPlan,
+    memory: model.memoryPlan,
+    cube: model.cubePlan,
+  }
+}
+
+/**
+ * Create browser-specific DevicePlatformAdapter
+ * Browser doesn't support UDP discovery (Node.js only)
+ */
+function createBrowserDeviceAdapter(model: Model): DevicePlatformAdapter {
+  return {
+    async getInstanceInfo() {
+      return {
+        success: true,
+        instance: {
+          id: 'browser-instance',
+          name: 'Browser Instance',
+          initialized: model.initialized,
+          hasPairing: false,
+          capabilities: {
+            network: false,
+            storage: true,
+            llm: true
+          }
+        }
+      }
+    },
+    async getContacts() {
+      try {
+        const result = await model.contactsPlan.getContacts()
+        return {
+          success: result.success,
+          contacts: result.contacts || []
+        }
+      } catch (error) {
+        return { success: false, contacts: [] }
+      }
+    },
+    async getTrustLevels() {
+      try {
+        const result = await model.trustPlan.getTrustLevels()
+        return {
+          success: result.success,
+          trustLevels: result.trustLevels || {}
+        }
+      } catch (error) {
+        return { success: false, trustLevels: {} }
+      }
+    },
+    async setTrustLevel(instanceId: string, trustLevel: string) {
+      try {
+        const result = await model.trustPlan.setTrustLevel({ instanceId, trustLevel })
+        return { success: result.success, error: result.error }
+      } catch (error) {
+        return { success: false, error: (error as Error).message }
+      }
+    },
+    async createInvitation() {
+      try {
+        const result = await model.connectionPlan.createInvitation()
+        return {
+          success: result.success,
+          invitation: result.invitation,
+          error: result.error
+        }
+      } catch (error) {
+        return { success: false, error: (error as Error).message }
+      }
+    },
+    async acceptInvitation(invitationUrl: string) {
+      try {
+        const result = await model.connectionPlan.acceptInvitation({ invitationUrl })
+        return {
+          success: result.success,
+          message: result.message,
+          error: result.error
+        }
+      } catch (error) {
+        return { success: false, error: (error as Error).message }
+      }
+    },
+    // Browser doesn't support UDP discovery
+    async getDiscoveredDevices() {
+      return { success: true, devices: [] }
+    },
+    async scanForDevices(_timeout: number) {
+      return { success: true, devices: [] }
+    }
   }
 }
 
@@ -94,6 +176,12 @@ function AppContent({ model }: AppContentProps) {
 
   // Response length slider state (default 0.2 = 20%)
   const [responseLengthPercent, setResponseLengthPercent] = useState<number>(0.2)
+
+  // Mobile detection state
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768)
+
+  // Toolbar controls from active view
+  const [toolbarControls, setToolbarControls] = useState<React.ReactNode>(null)
 
   // Derive active tab from current route
   const activeTab = location.pathname.startsWith('/chat/')
@@ -207,6 +295,20 @@ function AppContent({ model }: AppContentProps) {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
+  // Detect mobile viewport changes
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // Clear toolbar controls when route changes
+  useEffect(() => {
+    setToolbarControls(null)
+  }, [location.pathname])
+
   // Update proposal config when sensitivity changes
   useEffect(() => {
     if (!isAuthenticated || !modelInitialized) return
@@ -301,13 +403,14 @@ function AppContent({ model }: AppContentProps) {
       <LoginDeploy
         onLogin={login}
         logo={
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            LAMA
-          </h1>
+          <>
+            <img src="/assets/icons/lama_f_w.svg" alt="LAMA" className="h-12 hidden dark:block" />
+            <img src="/assets/icons/lama_f_b.svg" alt="LAMA" className="h-12 block dark:hidden" />
+          </>
         }
         testOllamaConnection={async (baseUrl: string) => {
           try {
-            const result = await model.llmConfigPlan.testConnection({ server: baseUrl })
+            const result = await browserOllamaValidator.testOllamaConnection(baseUrl)
             return { success: result.success }
           } catch (error) {
             return { success: false }
@@ -344,61 +447,100 @@ function AppContent({ model }: AppContentProps) {
     )
   }
 
-  const tabs = [
-    { id: 'chats', label: 'Chats', icon: MessageSquare, path: '/chats' },
-    { id: 'journal', label: 'Journal', icon: BookOpen, path: '/journal' },
-    { id: 'contacts', label: 'Contacts', icon: Users, path: '/contacts' },
-    { id: 'memory', label: 'Memory', icon: Brain, path: '/memory' },
-    { id: 'settings', label: null, icon: Settings, path: '/settings' },
+  // Navigation tabs - compatible with NavTab type for MobileBottomNav
+  const navTabs: NavTab[] = [
+    { id: 'chats', label: 'Chats', icon: MessageSquare },
+    { id: 'journal', label: 'Journal', icon: BookOpen },
+    { id: 'contacts', label: 'Contacts', icon: Users },
+    { id: 'memory', label: 'Memory', icon: Brain },
+    { id: 'devices', label: 'Devices', icon: Smartphone },
+    { id: 'settings', label: null, icon: Settings },
   ]
+
+  // Map tab IDs to routes
+  const tabPaths: Record<string, string> = {
+    chats: '/chats',
+    journal: '/journal',
+    contacts: '/contacts',
+    memory: '/memory',
+    devices: '/devices',
+    settings: '/settings',
+  }
 
   const handleNavigate = (tab: string, conversationId?: string, section?: string) => {
     if (conversationId) {
       navigate(`/chat/${conversationId}`)
     } else if (section) {
       navigate(`/settings/${section}`)
-    } else {
-      const tabDef = tabs.find(t => t.id === tab)
-      if (tabDef) {
-        navigate(tabDef.path)
-      }
+    } else if (tabPaths[tab]) {
+      navigate(tabPaths[tab])
     }
   }
 
+  // Build menu items for navigation between views (like lama.cube)
+  const appMenuItems = navTabs.map((tab) => ({
+    label: tab.label || 'Settings',
+    onClick: () => navigate(tabPaths[tab.id]),
+    icon: <tab.icon className="h-4 w-4" />,
+    active: tab.id === activeTab
+  }))
+
+  // Browser has no traffic lights (no Electron window controls)
+  const trafficLightSpace = false
+
   const renderContent = () => {
-    // Route-based rendering
+    // Route-based rendering with appMenuItems and trafficLightSpace passed to views
+    // Browser has no traffic lights (no Electron window controls)
+    // Only pass these props to components that support them (ChatLayout, JournalView, MemoryView, DevicesView)
+    const headerProps = {
+      appMenuItems,
+      trafficLightSpace: false
+    }
+
     if (location.pathname.startsWith('/chat/')) {
-      return <ChatLayout selectedConversationId={selectedConversationId} />
+      return <ChatLayout selectedConversationId={selectedConversationId} {...headerProps} />
     }
 
     switch (location.pathname) {
       case '/chats':
-        return <ChatLayout selectedConversationId={selectedConversationId} />
+        return <ChatLayout selectedConversationId={selectedConversationId} {...headerProps} />
       case '/journal':
-        return <JournalView />
+        return <AssemblyJournalView
+          queryAssemblies={async (options: AssemblyQueryOptions): Promise<AssemblyWithStory[]> => {
+            return await model.journalPlan.queryAssemblies(options)
+          }}
+          onSetToolbarControls={setToolbarControls}
+          {...headerProps}
+        />
       case '/contacts':
-        return <ContactsView onNavigateToChat={(topicId, contactName) => {
-          navigate(`/chat/${topicId}`)
-        }} />
+        return <ContactsView
+          onNavigateToChat={(topicId, contactName) => {
+            navigate(`/chat/${topicId}`)
+          }}
+          {...headerProps}
+        />
       case '/profile':
-        return <ProfileView onClose={() => navigate('/chats')} />
+        return <ProfileEditor open={true} onOpenChange={() => {}} fullPage={true} onClose={() => navigate('/chats')} />
       case '/memory':
-        return <MemoryView />
+        return <MemoryView {...headerProps} />
       case '/devices':
-        return <DevicesView />
+        return <DevicesView
+          adapter={createBrowserDeviceAdapter(model)}
+          {...headerProps}
+        />
       case '/purchase':
         return <PurchaseView onPurchaseComplete={() => navigate('/chats')} />
       case '/settings':
-        return <SettingsView onLogout={logout} onNavigate={handleNavigate} />
+        return <SettingsView onLogout={logout} onNavigate={handleNavigate} {...headerProps} />
       default:
         if (location.pathname.startsWith('/settings/')) {
-          return <SettingsView onLogout={logout} onNavigate={handleNavigate} />
+          return <SettingsView onLogout={logout} onNavigate={handleNavigate} {...headerProps} />
         }
         if (location.pathname.startsWith('/contact/')) {
           // View another user's profile
-          return <ProfileView personId={params.personId} onClose={() => navigate('/contacts')} />
+          return <ProfileEditor open={true} onOpenChange={() => {}} fullPage={true} contactId={params.personId} onClose={() => navigate('/contacts')} />
         }
-        return <ChatLayout />
+        return <ChatLayout {...headerProps} />
     }
   }
 
@@ -425,136 +567,39 @@ function AppContent({ model }: AppContentProps) {
             }}
           />
         ) : (
+          <NavigateHomeProvider onNavigateHome={() => navigate('/chats')}>
           <div className="flex flex-col h-screen bg-background text-foreground">
-            {/* Desktop navigation */}
-            <div className="hidden md:block border-b bg-card">
-              <div className="flex items-center justify-between px-6 py-3">
-                <div className="flex items-center space-x-4">
-                  <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                    LAMA
-                  </h1>
-                  <div className="h-6 w-px bg-border" />
-                </div>
-
-                <div className="flex items-center justify-between flex-1">
-                  <div className="flex items-center space-x-2">
-                    {tabs.filter(tab => tab.id !== 'settings').map((tab) => {
-                      const Icon = tab.icon
-                      return (
-                        <Button
-                          key={tab.id}
-                          variant={activeTab === tab.id ? 'default' : 'ghost'}
-                          size="sm"
-                          onClick={() => navigate(tab.path)}
-                          className="flex items-center space-x-2"
-                        >
-                          <Icon className="h-4 w-4" />
-                          {tab.label && <span>{tab.label}</span>}
-                        </Button>
-                      )
-                    })}
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant={location.pathname === '/profile' ? 'default' : 'ghost'}
-                      size="sm"
-                      onClick={() => navigate('/profile')}
-                      className="flex items-center space-x-2"
-                      title="Profile"
-                    >
-                      <User className="h-4 w-4" />
-                    </Button>
-                    {tabs.filter(tab => tab.id === 'settings').map((tab) => {
-                      const Icon = tab.icon
-                      return (
-                        <Button
-                          key={tab.id}
-                          variant={activeTab === tab.id ? 'default' : 'ghost'}
-                          size="sm"
-                          onClick={() => navigate(tab.path)}
-                          className="flex items-center space-x-2"
-                        >
-                          <Icon className="h-4 w-4" />
-                          {tab.label && <span>{tab.label}</span>}
-                        </Button>
-                      )
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Mobile header */}
-            <div className="md:hidden border-b bg-card px-3 py-1.5 flex items-center h-12">
-              <h1 className="text-base font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                LAMA
-              </h1>
-            </div>
-
-            {/* Content */}
-            <div className="flex-1 overflow-hidden" style={{ paddingBottom: window.innerWidth < 768 ? 'calc(env(safe-area-inset-bottom) + 64px)' : '0' }}>
+            {/* Main Content Area - views render their own AppHeader */}
+            <div className={`flex-1 min-h-0 min-w-0 overflow-hidden ${isMobile ? 'pb-14' : ''}`}>
               {renderContent()}
             </div>
 
-            {/* Mobile tab bar */}
-            <MobileTabBar
-              tabs={tabs}
+            {/* Status Bar - desktop only, uses StatusBar component from lama.ui */}
+            <div className="shrink-0 hidden md:block">
+              <StatusBar
+                version="LAMA Browser v1.0.0"
+                responseLength={{
+                  value: responseLengthPercent,
+                  onChange: setResponseLengthPercent
+                }}
+                proposals={{
+                  value: proposalSensitivity,
+                  onChange: setProposalSensitivity
+                }}
+                hideOnMobile={true}
+              />
+            </div>
+
+            {/* Mobile bottom navigation */}
+            <MobileBottomNav
+              tabs={navTabs}
               activeTab={activeTab}
-              onTabChange={(tab) => {
-                const tabDef = tabs.find(t => t.id === tab)
-                if (tabDef) navigate(tabDef.path)
+              onTabChange={(tabId) => {
+                if (tabPaths[tabId]) navigate(tabPaths[tabId])
               }}
             />
-
-            {/* Status bar */}
-            <div className="hidden md:block border-t bg-card px-6 py-2">
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <div className="flex items-center space-x-4">
-                  <span>LAMA Browser v1.0.0</span>
-                  <span>·</span>
-                  <span>Storage: IndexedDB (ONE.core)</span>
-                  <span>·</span>
-                  <span>Platform: Browser Direct</span>
-                </div>
-                <div className="flex items-center space-x-4">
-                  {isAuthenticated && (
-                    <>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs text-muted-foreground">Response:</span>
-                        <input
-                          type="range"
-                          min="0.1"
-                          max="1"
-                          step="0.05"
-                          value={responseLengthPercent}
-                          onChange={(e) => setResponseLengthPercent(parseFloat(e.target.value))}
-                          className="w-24 h-1 bg-muted rounded-lg appearance-none cursor-pointer"
-                          title="AI response length: 20% = shorter responses, 100% = full length"
-                        />
-                        <span className="font-mono min-w-[3ch]">{(responseLengthPercent * 100).toFixed(0)}%</span>
-                      </div>
-                      <span>·</span>
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs text-muted-foreground">Proposals:</span>
-                        <input
-                          type="range"
-                          min="0"
-                          max="1"
-                          step="0.05"
-                          value={proposalSensitivity}
-                          onChange={(e) => setProposalSensitivity(parseFloat(e.target.value))}
-                          className="w-24 h-1 bg-muted rounded-lg appearance-none cursor-pointer"
-                          title="Minimum match threshold: 10% = show most proposals, 90% = only very similar"
-                        />
-                        <span className="font-mono min-w-[3ch]">{(proposalSensitivity * 100).toFixed(0)}%</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
           </div>
+          </NavigateHomeProvider>
         )}
         </BridgeProvider>
       </PlansProvider>
