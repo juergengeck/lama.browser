@@ -29,6 +29,10 @@ import { AvatarPreferenceRecipe } from '../recipes/AvatarPreferenceRecipe';
 // Assembly recipes
 import { AssemblyCoreRecipes } from '@assembly/core';
 
+// Instance tracking
+import { InstancePlan } from '@lama/core/plans/InstancePlan.js';
+import { storeVersionedObject } from '@refinio/one.core/lib/storage-versioned-objects.js';
+
 // Trust.core recipes
 import { AllRecipes as TrustCoreRecipes, AllReverseMaps as TrustCoreReverseMaps } from '@trust/core/recipes';
 
@@ -72,6 +76,7 @@ export default class Model {
     public onConnectionsChanged = new OEvent<() => void>();
     public initialized: boolean = false;
     public ownerId: string | null = null;
+    public instanceId: string | null = null;
 
     private moduleRegistry: ModuleRegistry;
     private modules: Map<string, any> = new Map();
@@ -168,10 +173,38 @@ export default class Model {
         try {
             console.log('[Model] ===== Initializing all modules via ModuleRegistry =====');
 
+            // Create StoryFactory and auto-supply to all modules that demand it
+            // Must be done BEFORE initAll() so JournalModule receives it
+            console.log('[Model] Setting up StoryFactory...');
+            this.moduleRegistry.setStorageFunction(storeVersionedObject);
+
             // Use ModuleRegistry for automatic dependency-ordered initialization
             // CoreModule will initialize PlanObjectManager when OneCore Instance is ready
-            // NOTE: CoreModule sets ownerId after leuteModel.init() so other modules can use it
+            // NOTE: CoreModule sets ownerId and instanceId after leuteModel.init()
             await this.moduleRegistry.initAll();
+
+            // Create retroactive Assemblies for Instance and Owner (bootstrap problem)
+            // Instance and Owner were created before StoryFactory existed
+            try {
+                const storyFactory = this.moduleRegistry.getStoryFactory();
+                if (storyFactory && this.ownerId && this.instanceId) {
+                    const instancePlan = new InstancePlan({
+                        storyFactory,
+                        ownerId: this.ownerId as any,
+                        instanceId: this.instanceId as any,
+                        instanceName: this.one.currentlyLoggedInInstanceName || 'lama-browser'
+                    });
+                    await instancePlan.init();
+                    await instancePlan.recordInstanceCreation();
+                    console.log('[Model] ✅ Instance and Owner assemblies created in journal');
+                } else {
+                    console.warn('[Model] Cannot record instance creation - missing StoryFactory or IDs');
+                    console.warn('[Model] ownerId:', !!this.ownerId, 'instanceId:', !!this.instanceId);
+                }
+            } catch (error) {
+                console.error('[Model] Failed to record instance creation:', error);
+                // Non-critical - continue without instance assembly
+            }
 
             // Initialize topic analysis (creates TopicAnalysisModel, ProposalsPlan, etc.)
             console.log('[Model] Initializing topic analysis...');
