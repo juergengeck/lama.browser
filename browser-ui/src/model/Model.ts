@@ -37,12 +37,7 @@ import { storeVersionedObject } from '@refinio/one.core/lib/storage-versioned-ob
 import { AllRecipes as TrustCoreRecipes, AllReverseMaps as TrustCoreReverseMaps } from '@trust/core/recipes';
 
 // Cube.core recipes
-import {
-    CubeObjectRecipe,
-    DimensionRecipe,
-    DimensionValueRecipe,
-    QueryResultRecipe
-} from '@cube/core';
+import { CubeCoreRecipes } from '@cube/core';
 
 // Module system
 import { ModuleRegistry } from '@refinio/api/plan-system';
@@ -139,10 +134,7 @@ export default class Model {
                 // Trust.core recipes
                 ...TrustCoreRecipes,
                 // Cube.core recipes
-                CubeObjectRecipe,
-                DimensionRecipe,
-                DimensionValueRecipe,
-                QueryResultRecipe
+                ...CubeCoreRecipes
             ],
             reverseMaps: new Map([
                 ...ReverseMapsStable,
