@@ -161,6 +161,23 @@ export function useMessages({
     content: string,
     attachments?: any[]
   ): Promise<Message> => {
+    // Create optimistic message immediately so user sees their input
+    const optimisticId = `optimistic-${Date.now()}`
+    const optimisticMessage: Message = {
+      $type$: 'Message',
+      id: optimisticId,
+      topic: topicId,
+      author: model.ownerId,
+      sender: model.ownerId,
+      senderName: 'You',
+      content,
+      timestamp: Date.now(),
+      attachments
+    }
+
+    // Add optimistic message immediately
+    setMessages(prev => [...prev, optimisticMessage])
+
     try {
       // Send message via ChatPlan - AIMessageListener will trigger AI response automatically
       const response = await model.chatPlan.sendMessage({
@@ -170,14 +187,19 @@ export function useMessages({
       })
 
       if (!response.success || !response.data) {
+        // Remove optimistic message on failure
+        setMessages(prev => prev.filter(m => m.id !== optimisticId))
         throw new Error(response.error || 'Failed to send message')
       }
 
-      // Don't optimistically add - channel listener will handle it
-      // This prevents duplicate messages (one from optimistic add, one from channel update)
+      // Replace optimistic message with real one
+      const realMessage = response.data as Message
+      setMessages(prev => prev.map(m => m.id === optimisticId ? realMessage : m))
 
-      return response.data as Message
+      return realMessage
     } catch (err) {
+      // Remove optimistic message on error
+      setMessages(prev => prev.filter(m => m.id !== optimisticId))
       console.error('[useMessages] Failed to send message:', err)
       throw err
     }

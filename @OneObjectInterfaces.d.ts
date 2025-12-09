@@ -66,4 +66,11 @@ declare module '@OneObjectInterfaces' {
         maxProposals: number; // 1-50 - maximum number of proposals to return
         updatedAt: number; // Unix timestamp of last update
     }
+
+    export interface DimensionState {
+        $type$: 'DimensionState';
+        dimensionName: string; // Dimension name (e.g., 'assembly')
+        state: string; // Serialized state JSON from dimension.serialize()
+        updated: number; // Unix timestamp of when this state was saved
+    }
 }

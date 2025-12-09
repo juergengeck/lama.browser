@@ -20,6 +20,7 @@ export interface ProposalConfig {
   recencyWeight: number;
   recencyWindow: number;
   minJaccard: number;
+  minSimilarity?: number; // Semantic similarity threshold (0.0-1.0)
   maxProposals: number;
   updated: number;
 }

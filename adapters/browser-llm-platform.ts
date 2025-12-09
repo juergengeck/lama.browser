@@ -54,7 +54,13 @@ export class BrowserLLMPlatform implements LLMPlatform {
       ? content
       : content.response;
 
-    if (status === 'streaming') {
+    if (status === 'responding') {
+      // AI is about to respond - emit progress event for thinking indicator
+      emitAIEvent(AIEventNames.PROGRESS, {
+        topicId,
+        progress: 0,
+      });
+    } else if (status === 'streaming') {
       emitAIEvent(AIEventNames.MESSAGE_STREAM, {
         topicId,
         messageId,

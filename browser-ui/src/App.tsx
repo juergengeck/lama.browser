@@ -11,7 +11,7 @@ import type { NavTab } from '@lama/ui'
 import { SettingsView } from '@/components/SettingsView'
 import { PurchaseView } from '@/components/PurchaseView'
 import { VerificationView } from '@/components/VerificationView'
-import type { LAMAPlans } from '@lama/ui'
+import type { LAMAPlansContext } from '@lama/ui'
 import { InvitationAcceptance } from '@/components/InvitationAcceptance'
 import { MODEL_OPTIONS } from '@/constants/model-options'
 import { MessageSquare, BookOpen, Users, Settings, Loader2, Smartphone, Brain } from 'lucide-react'
@@ -36,10 +36,41 @@ import {
 } from '@lama/ui'
 
 /**
- * Convert Model instance to LAMAPlans interface
+ * Stub LocalModelsPlan for browser
+ * Browser Whisper requires transformers.js in WebWorker - not yet implemented
  */
-function modelToPlans(model: Model): LAMAPlans {
+const browserLocalModelsPlan = {
+  async whisperIsReady() {
+    // Browser Whisper not yet implemented (requires WebWorker + transformers.js)
+    return { success: true, data: false }
+  },
+
+  async whisperTranscribe(_params: { audio: number[]; language?: string }) {
+    return {
+      success: false,
+      error: 'Browser Whisper transcription not yet implemented. Use Electron for voice input.'
+    }
+  },
+
+  async getStatus(_modelId: string) {
+    return { status: 'unloaded' as const }
+  },
+
+  async loadModel(_modelId: string) {
+    return { success: false, error: 'Browser local models not yet implemented' }
+  },
+
+  async unloadModel(_modelId: string) {
+    return { success: false, error: 'Browser local models not yet implemented' }
+  }
+}
+
+/**
+ * Convert Model instance to LAMAPlansContext interface
+ */
+function modelToPlans(model: Model): LAMAPlansContext {
   return {
+    ownerId: model.ownerId,
     ai: model.aiPlan,
     aiAssistant: model.aiAssistantPlan,
     topicAnalysis: model.topicAnalysisPlan,
@@ -57,6 +88,7 @@ function modelToPlans(model: Model): LAMAPlans {
     connection: model.connectionPlan,
     memory: model.memoryPlan,
     cube: model.cubePlan,
+    localModels: browserLocalModelsPlan,
   }
 }
 
@@ -575,17 +607,18 @@ function AppContent({ model }: AppContentProps) {
             </div>
 
             {/* Status Bar - desktop only, uses StatusBar component from lama.ui */}
+            {/* Sliders only shown in chat view (matches lama.cube behavior) */}
             <div className="shrink-0 hidden md:block">
               <StatusBar
                 version="LAMA Browser v1.0.0"
-                responseLength={{
+                responseLength={activeTab === 'chats' ? {
                   value: responseLengthPercent,
                   onChange: setResponseLengthPercent
-                }}
-                proposals={{
+                } : undefined}
+                proposals={activeTab === 'chats' ? {
                   value: proposalSensitivity,
                   onChange: setProposalSensitivity
-                }}
+                } : undefined}
                 hideOnMobile={true}
               />
             </div>

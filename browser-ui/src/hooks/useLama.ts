@@ -168,12 +168,12 @@ export function useLamaPeers() {
         setLoading(true)
         const result = await model.contactsPlan.getContacts()
 
-        if (!result.success || !result.data) {
+        if (!result.success || !result.contacts) {
           setPeers([])
           return
         }
 
-        const peerList = result.data.map((contact: any) => ({
+        const peerList = result.contacts.map((contact: any) => ({
           id: contact.id || contact.personId,
           name: contact.name || 'Unknown',
           connected: contact.status === 'connected'

@@ -7,14 +7,17 @@
 
 import { getModel } from '@/model'
 import type { SHA256IdHash } from '@refinio/one.core/lib/util/type-checks.js'
+import { AIEventNames, addAIEventListener, type AIMessageStreamData, type AIMessageCompleteData, type AIProgressData } from '@/events/AIEventTypes'
 
 export interface Message {
   id: string
   senderId: string
+  senderName?: string
   content: string
   timestamp: Date
   encrypted: boolean
   isAI: boolean
+  isOwn?: boolean
   attachments?: any[]
   topicId: string
 }
@@ -27,6 +30,65 @@ export interface Peer {
 
 class LamaBridge {
   private eventHandlers = new Map<string, Set<Function>>()
+  private windowListenerCleanups: (() => void)[] = []
+
+  constructor() {
+    // Set up window event listeners to forward AI events to bridge listeners
+    this.setupAIEventForwarding()
+  }
+
+  /**
+   * Forward AI platform events (window CustomEvents) to bridge event listeners
+   *
+   * Platform events → Bridge events:
+   * - ai:progress → message:thinking (AI is processing)
+   * - ai:messageStream → message:stream (streaming content)
+   * - ai:messageComplete → message:updated (response complete)
+   */
+  private setupAIEventForwarding(): void {
+    // Forward ai:progress → message:thinking
+    this.windowListenerCleanups.push(
+      addAIEventListener(AIEventNames.PROGRESS, (event) => {
+        const data = event.detail as AIProgressData
+        console.log('[LamaBridge] Forwarding ai:progress → message:thinking', data.topicId)
+        this.emit('message:thinking', {
+          conversationId: data.topicId,
+          status: 'thinking'
+        })
+      })
+    )
+
+    // Forward ai:messageStream → message:stream
+    this.windowListenerCleanups.push(
+      addAIEventListener(AIEventNames.MESSAGE_STREAM, (event) => {
+        const data = event.detail as AIMessageStreamData
+        this.emit('message:stream', {
+          conversationId: data.topicId,
+          messageId: data.messageId,
+          content: data.partial,
+          modelId: data.modelId,
+          modelName: data.modelName
+        })
+      })
+    )
+
+    // Forward ai:messageComplete → message:updated
+    this.windowListenerCleanups.push(
+      addAIEventListener(AIEventNames.MESSAGE_COMPLETE, (event) => {
+        const data = event.detail as AIMessageCompleteData
+        console.log('[LamaBridge] Forwarding ai:messageComplete → message:updated', data.topicId)
+        this.emit('message:updated', {
+          conversationId: data.topicId,
+          messageId: data.messageId,
+          content: data.response,
+          modelId: data.modelId,
+          modelName: data.modelName
+        })
+      })
+    )
+
+    console.log('[LamaBridge] AI event forwarding set up')
+  }
 
   on(event: string, handler: Function) {
     if (!this.eventHandlers.has(event)) {
@@ -54,10 +116,12 @@ class LamaBridge {
     return result.messages.map((msg: any) => ({
       id: msg.id || msg.hash,
       senderId: msg.sender || msg.senderId,
+      senderName: msg.senderName,
       content: msg.text || msg.content,
       timestamp: new Date(msg.timestamp || msg.createdAt),
       encrypted: false,
       isAI: msg.isAI || false,  // Use isAI from ChatPlan (AI detection happens server-side)
+      isOwn: msg.isOwn,  // Server-computed flag for current user's messages
       attachments: msg.attachments,
       topicId: conversationId
     }))
@@ -87,11 +151,11 @@ class LamaBridge {
     const model = getModel()
     const result = await model.contactsPlan.getContacts()
 
-    if (!result.success || !result.data) {
+    if (!result.success || !result.contacts) {
       return []
     }
 
-    return result.data.map((contact: any) => ({
+    return result.contacts.map((contact: any) => ({
       id: contact.id || contact.personId,
       name: contact.name || 'Unknown',
       connected: true
@@ -186,7 +250,7 @@ class LamaBridge {
 
   async switchTopicModel(topicId: string, newModelId: string): Promise<void> {
     const model = getModel()
-    await model.aiAssistantPlan.topicManager.setTopicModel(topicId, newModelId)
+    await model.aiAssistantPlan.switchTopicModel(topicId, newModelId)
   }
 
   async getSubjects(topicId: string): Promise<{ success: boolean; data?: { subjects: any[] }; error?: string }> {

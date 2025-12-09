@@ -19,7 +19,9 @@ import {
   XCircle,
   Plus,
   Copy,
-  User
+  User,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react'
 import { useModel } from '@/model'
 import { usePlans } from '@lama/ui'
@@ -60,6 +62,20 @@ export default function InstancesView() {
   const [loading, setLoading] = useState(true)
   const [copiedInvite, setCopiedInvite] = useState(false)
   const [inviteType, setInviteType] = useState<'device' | 'contact'>('device')
+
+  // Collapsible section state
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    localInstances: true,
+    myDevices: true,
+    contacts: true
+  })
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }))
+  }
 
   useEffect(() => {
     loadInstances()
@@ -207,8 +223,18 @@ export default function InstancesView() {
     <div className="space-y-4">
       {/* Local Instances */}
       <div>
-        <h3 className="text-sm font-medium mb-2">Local Instances</h3>
-        <Card>
+        <button
+          onClick={() => toggleSection('localInstances')}
+          className="flex items-center gap-1 text-sm font-medium mb-2 hover:text-foreground/80 transition-colors"
+        >
+          {expandedSections.localInstances ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronRight className="h-4 w-4" />
+          )}
+          Local Instances
+        </button>
+        {expandedSections.localInstances && <Card>
           <CardContent className="p-0">
             {/* Browser Instance */}
             {browserInstance && (
@@ -284,31 +310,39 @@ export default function InstancesView() {
               </div>
             )}
           </CardContent>
-        </Card>
+        </Card>}
       </div>
 
       <Separator />
 
       {/* My Devices (Internet of Me) */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium">
-            My Devices ({myDevices.length})
-          </h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <button
+            onClick={() => toggleSection('myDevices')}
+            className="flex items-center gap-1 text-sm font-medium hover:text-foreground/80 transition-colors min-w-0"
+          >
+            {expandedSections.myDevices ? (
+              <ChevronDown className="h-4 w-4 flex-shrink-0" />
+            ) : (
+              <ChevronRight className="h-4 w-4 flex-shrink-0" />
+            )}
+            <span className="truncate">My Devices ({myDevices.length})</span>
+          </button>
           <Button
             size="sm"
             onClick={() => {
               setInviteType('device')
               handleCreateInvitation()
             }}
-            className="gap-2"
+            className="gap-2 flex-shrink-0"
           >
             <Plus className="h-3 w-3" />
             Add Device
           </Button>
         </div>
 
-        {myDevices.length === 0 ? (
+        {expandedSections.myDevices && (myDevices.length === 0 ? (
           <Card>
             <CardContent className="p-6 text-center">
               <p className="text-muted-foreground">
@@ -365,17 +399,25 @@ export default function InstancesView() {
               ))}
             </CardContent>
           </Card>
-        )}
+        ))}
       </div>
 
       <Separator />
 
       {/* Contacts */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-medium">
-            Contacts ({contacts.length})
-          </h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <button
+            onClick={() => toggleSection('contacts')}
+            className="flex items-center gap-1 text-sm font-medium hover:text-foreground/80 transition-colors min-w-0"
+          >
+            {expandedSections.contacts ? (
+              <ChevronDown className="h-4 w-4 flex-shrink-0" />
+            ) : (
+              <ChevronRight className="h-4 w-4 flex-shrink-0" />
+            )}
+            <span className="truncate">Contacts ({contacts.length})</span>
+          </button>
           {(() => {
             console.log('[InstancesView] Rendering Add Contact button, copiedInvite:', copiedInvite)
             return (
@@ -386,7 +428,7 @@ export default function InstancesView() {
                   setInviteType('contact')
                   handleCreateInvitation()
                 }}
-                className="gap-2"
+                className="gap-2 flex-shrink-0"
               >
                 {copiedInvite ? (
                   <>
@@ -404,7 +446,7 @@ export default function InstancesView() {
           })()}
         </div>
 
-        {contacts.length === 0 ? (
+        {expandedSections.contacts && (contacts.length === 0 ? (
           <Card>
             <CardContent className="p-6 text-center">
               <p className="text-muted-foreground">
@@ -460,7 +502,7 @@ export default function InstancesView() {
               ))}
             </CardContent>
           </Card>
-        )}
+        ))}
       </div>
     </div>
   )

@@ -51,8 +51,12 @@ import {
     MemoryModule,
     DeviceModule,
     JournalModule,
+    MCPModule,
     type LLMConfigAdapter
 } from '@lama/core/modules';
+
+// ExportPlan from lama.core (platform-agnostic, uses one.core implode)
+import { ExportPlan } from '@lama/core/plans/ExportPlan.js';
 
 // Browser-specific adapters
 import { BrowserLLMPlatform } from '../../../adapters/browser-llm-platform';
@@ -98,6 +102,10 @@ export default class Model {
         this.moduleRegistry.supply('OllamaValidator', browserOllamaValidator);
         this.moduleRegistry.supply('LLMConfigManager', browserConfigManager);
 
+        // Supply ExportPlan from lama.core (platform-agnostic, uses one.core implode)
+        const exportPlan = new ExportPlan();
+        this.moduleRegistry.supply('ExportPlan', exportPlan);
+
         // Create and register modules
         this.modules.set('core', new CoreModule(commServerUrl));
         this.modules.set('trust', new TrustModule());
@@ -111,6 +119,7 @@ export default class Model {
         this.modules.set('device', new DeviceModule());
         this.modules.set('memory', new MemoryModule());
         this.modules.set('journal', new JournalModule());
+        this.modules.set('mcp', new MCPModule());
 
         // Register all modules with the registry
         for (const [name, module] of this.modules) {
@@ -297,6 +306,11 @@ export default class Model {
     get storyFactory() { return this.modules.get('journal').storyFactory; }
     get assemblyPlan() { return this.modules.get('journal').assemblyPlan; }
     get assemblyListener() { return this.modules.get('journal').assemblyListener; }
+
+    // MCPModule services (remote MCP via chat)
+    get mcpModule() { return this.modules.get('mcp'); }
+    get mcpDemandManager() { return this.modules.get('mcp').demandManager; }
+    get mcpRemoteClient() { return this.modules.get('mcp').remoteClient; }
 
     // Additional services (to be moved to appropriate modules in future iterations)
     get cubeStorage() { return this.modules.get('ai').cubeStorage; }

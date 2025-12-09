@@ -15,13 +15,25 @@
 import type { SHA256IdHash, SHA256Hash } from '@refinio/one.core/lib/util/type-checks.js';
 import type { Person } from '@refinio/one.core/lib/recipes.js';
 import type { Story, Assembly, Plan } from '@assembly/core';
+import type { DimensionState, DimensionStateReference } from '@cube/core';
 
 declare module '@OneObjectInterfaces' {
+    // ============================================================================
+    // UNVERSIONED OBJECT INTERFACES
+    // ============================================================================
+
+    export interface OneUnversionedObjectInterfaces {
+        // Dimension State Persistence (cube.core)
+        DimensionState: DimensionState;
+    }
+
     // ============================================================================
     // VERSIONED OBJECT INTERFACES
     // ============================================================================
 
     export interface OneVersionedObjectInterfaces {
+        // Dimension State Persistence (cube.core)
+        DimensionStateReference: DimensionStateReference;
         // Topic Analysis (lama.core/one.ai)
         Subject: Subject;
         Keyword: Keyword;
@@ -65,6 +77,9 @@ declare module '@OneObjectInterfaces' {
     // ============================================================================
 
     export interface OneIdObjectInterfaces {
+        // Dimension State Persistence (cube.core)
+        DimensionStateReference: Pick<DimensionStateReference, '$type$' | 'dimensionName'>;
+
         AI: Pick<AI, '$type$' | 'aiId'>;
         LLM: Pick<LLM, '$type$' | 'name' | 'server'>;
         GlobalLLMSettings: Pick<GlobalLLMSettings, '$type$' | 'name'>;
@@ -348,6 +363,7 @@ declare module '@OneObjectInterfaces' {
         recencyWeight: number; // 0.0 to 1.0 - weight for recency
         recencyWindow: number; // milliseconds - time window for recency boost
         minJaccard: number; // 0.0 to 1.0 - minimum Jaccard similarity threshold
+        minSimilarity?: number; // 0.0 to 1.0 - semantic similarity threshold (optional)
         maxProposals: number; // 1-50 - maximum proposals to return
         updatedAt: number; // Unix timestamp
     }

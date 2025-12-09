@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@lama/core": "file:../lama.core",
-    "@refinio/refinio-api": "file:../refinio.api"
+    "@refinio/api": "file:../refinio.api"
   },
   "devDependencies": {
     "vitest": "^1.0.0",
