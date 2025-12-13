@@ -248,9 +248,9 @@ class LamaBridge {
     return await model.aiAssistantPlan.getResponseLength()
   }
 
-  async switchTopicModel(topicId: string, newModelId: string): Promise<void> {
+  async switchAIModel(aiPersonId: string, modelId: string): Promise<void> {
     const model = getModel()
-    await model.aiAssistantPlan.switchTopicModel(topicId, newModelId)
+    await model.aiAssistantPlan.switchAIModel(aiPersonId as any, modelId)
   }
 
   async getSubjects(topicId: string): Promise<{ success: boolean; data?: { subjects: any[] }; error?: string }> {
