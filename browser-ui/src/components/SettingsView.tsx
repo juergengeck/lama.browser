@@ -1027,13 +1027,21 @@ export function SettingsView({ onLogout, onNavigate, appMenuItems = [], trafficL
                             `
                             document.body.appendChild(alertDiv)
 
-                            // Shutdown the model first
+                            // Shutdown ONE.core first - this closes IndexedDB connections
                             try {
-                              console.log('[SettingsView] Shutting down model...')
-                              await model.shutdown()
-                              console.log('[SettingsView] Model shutdown complete')
+                              console.log('[SettingsView] Closing ONE.core instance...')
+                              // logoutAndErase() properly closes IndexedDB connections
+                              // before we can delete the databases
+                              await model.one.logoutAndErase()
+                              console.log('[SettingsView] ONE.core instance closed')
                             } catch (e) {
-                              console.error('[SettingsView] Error shutting down model:', e)
+                              console.error('[SettingsView] Error closing ONE.core:', e)
+                              // Try shutdown as fallback
+                              try {
+                                await model.shutdown()
+                              } catch (e2) {
+                                console.error('[SettingsView] Fallback shutdown also failed:', e2)
+                              }
                             }
 
                             // Update progress
@@ -1052,10 +1060,26 @@ export function SettingsView({ onLogout, onNavigate, appMenuItems = [], trafficL
                             if ('indexedDB' in window) {
                               try {
                                 const databases = await indexedDB.databases()
+                                console.log(`[SettingsView] Found ${databases.length} IndexedDB databases to delete`)
                                 for (const db of databases) {
                                   if (db.name) {
-                                    await indexedDB.deleteDatabase(db.name)
-                                    console.log(`[SettingsView] Deleted IndexedDB database: ${db.name}`)
+                                    // deleteDatabase returns IDBRequest, wrap in Promise
+                                    await new Promise<void>((resolve, reject) => {
+                                      const request = indexedDB.deleteDatabase(db.name!)
+                                      request.onsuccess = () => {
+                                        console.log(`[SettingsView] Deleted IndexedDB database: ${db.name}`)
+                                        resolve()
+                                      }
+                                      request.onerror = () => {
+                                        console.error(`[SettingsView] Failed to delete ${db.name}:`, request.error)
+                                        reject(request.error)
+                                      }
+                                      request.onblocked = () => {
+                                        console.warn(`[SettingsView] Delete blocked for ${db.name} - connections still open`)
+                                        // Still resolve after warning - reload will handle it
+                                        resolve()
+                                      }
+                                    })
                                   }
                                 }
                               } catch (e) {

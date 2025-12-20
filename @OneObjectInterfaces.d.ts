@@ -11,6 +11,7 @@ declare module '@OneObjectInterfaces' {
         GlobalLLMSettings: GlobalLLMSettings;
         Keyword: Keyword;
         ProposalConfig: ProposalConfig;
+        UserSettings: UserSettings;
     }
 
     // Add our custom ID object types
@@ -72,5 +73,99 @@ declare module '@OneObjectInterfaces' {
         dimensionName: string; // Dimension name (e.g., 'assembly')
         state: string; // Serialized state JSON from dimension.serialize()
         updated: number; // Unix timestamp of when this state was saved
+    }
+
+    // UserSettings - Unified user settings (aligned with @settings/core)
+    export interface UserSettings {
+        $type$: 'UserSettings';
+
+        // Metadata
+        userEmail: string; // ID field - user identifier
+        instanceId?: string; // Optional instance identifier for multi-device support
+        updatedAt: number;
+
+        // Core categories (required)
+        ai: {
+            defaultModelId?: string;
+            temperature: number;
+            maxTokens: number;
+            defaultProvider: string;
+            autoSelectBestModel: boolean;
+            preferredModelIds: string[];
+            systemPrompt?: string;
+            streamResponses: boolean;
+            autoSummarize: boolean;
+            enableMCP: boolean;
+            apiKeys?: Map<string, string>;
+        };
+        ui: {
+            theme: 'dark' | 'light';
+            notifications: boolean;
+            wordCloud: {
+                maxWordsPerSubject: number;
+                relatedWordThreshold: number;
+                minWordFrequency: number;
+                showSummaryKeywords: boolean;
+                fontScaleMin: number;
+                fontScaleMax: number;
+                colorScheme: string;
+                layoutDensity: string;
+            };
+        };
+        proposals: {
+            matchWeight: number;
+            recencyWeight: number;
+            recencyWindow: number;
+            minJaccard: number;
+            maxProposals: number;
+        };
+
+        // Additional categories (optional - not all platforms use these)
+        device?: {
+            discoveryEnabled: boolean;
+            discoveryPort: number;
+            autoConnect: boolean;
+            addOnlyConnectedDevices: boolean;
+            showOfflineDevices: boolean;
+            discoveryTimeout: number;
+        };
+        network?: {
+            commServerUrl: string;
+            autoReconnect: boolean;
+            connectionTimeout: number;
+            enableWebSocket: boolean;
+            enableQUIC: boolean;
+            enableBluetooth: boolean;
+        };
+        privacy?: {
+            encryptStorage: boolean;
+            requirePINOnStartup: boolean;
+            autoLockTimeout: number;
+            sendAnalytics: boolean;
+            sendCrashReports: boolean;
+        };
+        chat?: {
+            enterToSend: boolean;
+            showReadReceipts: boolean;
+            groupMessagesBy: 'none' | 'hour' | 'day';
+            maxHistoryDays: number;
+            autoDownloadMedia: boolean;
+            maxMediaSize: number;
+        };
+
+        // Platform-specific (optional)
+        electron?: {
+            trayEnabled: boolean;
+            autoLaunch: boolean;
+            hardwareAcceleration: boolean;
+        };
+        ios?: {
+            haptics: boolean;
+            backgroundRefresh: boolean;
+            vibrationEnabled: boolean;
+        };
+        browser?: {
+            offlineMode: boolean;
+        };
     }
 }

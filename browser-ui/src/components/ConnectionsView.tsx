@@ -10,10 +10,10 @@ import { ScrollArea } from '@lama/ui'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@lama/ui'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@lama/ui'
 import { Alert, AlertDescription } from '@lama/ui'
-import { 
+import {
   Users, UserPlus, Link, QrCode, Copy, Check, Circle,
   RefreshCw, Wifi, WifiOff, Shield, X, AlertTriangle,
-  Loader2, ExternalLink, Network
+  Loader2, ExternalLink, Network, Smartphone
 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 
@@ -31,9 +31,10 @@ interface Connection {
 interface PairingInvitation {
   url: string
   token: string
-  publicKey: string
-  expiresAt: Date
+  mode: 'IoM' | 'IoP'
 }
+
+type InvitationMode = 'IoM' | 'IoP'
 
 interface ConnectionsViewProps {
   onNavigateToChat?: (topicId: string, contactName: string) => void
@@ -47,6 +48,8 @@ export function ConnectionsView({ onNavigateToChat }: ConnectionsViewProps = {})
   const [currentInvitation, setCurrentInvitation] = useState<PairingInvitation | null>(null)
   const [showInviteDialog, setShowInviteDialog] = useState(false)
   const [showAcceptDialog, setShowAcceptDialog] = useState(false)
+  const [showModeDialog, setShowModeDialog] = useState(false)
+  const [selectedMode, setSelectedMode] = useState<InvitationMode>('IoP')
   const [invitationUrl, setInvitationUrl] = useState('')
   const [copied, setCopied] = useState(false)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -180,32 +183,36 @@ export function ConnectionsView({ onNavigateToChat }: ConnectionsViewProps = {})
     }
   }
 
-  const createInvitation = async () => {
+  // Show mode selection dialog before creating invitation
+  const handleCreateInviteClick = () => {
+    setShowModeDialog(true)
+  }
+
+  // Create invitation with selected mode
+  const createInvitation = async (mode: InvitationMode) => {
+    setShowModeDialog(false)
     setIsCreatingInvitation(true)
     setError(null)
-    
-    try {
-      // User authentication is handled by Node.js instance
-      
-      console.log('[ConnectionsView] Creating pairing invitation...')
 
-      // Create invitation using platform-agnostic connection plan
-      const result = await connection.createPairingInvitation({})
+    try {
+      console.log(`[ConnectionsView] Creating ${mode} pairing invitation...`)
+
+      // Create invitation using platform-agnostic connection plan with mode
+      const result = await connection.createPairingInvitation({ mode })
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to create invitation')
       }
 
-      console.log('[ConnectionsView] Invitation created:', result.data)
-      
+      console.log('[ConnectionsView] Invitation created:', result.invitation)
+
       // Use the invitation data from connection plan
       const invitation: PairingInvitation = {
-        url: result.data.url,
-        token: result.data.token,
-        publicKey: result.data.publicKey,
-        expiresAt: new Date(result.data.expiresAt)
+        url: result.invitation!.url,
+        token: result.invitation!.token,
+        mode: result.invitation!.mode
       }
-      
+
       setCurrentInvitation(invitation)
       setShowInviteDialog(true)
     } catch (error) {
@@ -230,13 +237,16 @@ export function ConnectionsView({ onNavigateToChat }: ConnectionsViewProps = {})
       setError('Please enter an invitation URL')
       return
     }
-    
+
     setIsRefreshing(true)
     setError(null)
-    
+
     try {
+      console.log('[ConnectionsView] Accepting invitation URL:', invitationUrl)
+
       // Accept invitation using platform-agnostic connection plan
-      const result = await connection.acceptPairingInvitation({ url: invitationUrl })
+      // ConnectionPlan expects { invitationUrl: string }
+      const result = await connection.acceptPairingInvitation({ invitationUrl })
 
       if (result.success) {
         console.log('[ConnectionsView] Invitation accepted successfully')
@@ -338,7 +348,7 @@ export function ConnectionsView({ onNavigateToChat }: ConnectionsViewProps = {})
               </Button>
               <Button
                 size="sm"
-                onClick={createInvitation}
+                onClick={handleCreateInviteClick}
                 disabled={isCreatingInvitation}
               >
                 {isCreatingInvitation ? (
@@ -436,9 +446,8 @@ export function ConnectionsView({ onNavigateToChat }: ConnectionsViewProps = {})
               {/* Connection Details */}
               <div className="text-xs text-muted-foreground space-y-1">
                 <div>Domain: {getLamaDomain()}</div>
-                <div>Token: {currentInvitation.token.substring(0, 16)}...</div>
-                <div>Public Key: {currentInvitation.publicKey.substring(0, 16)}...</div>
-                <div>Expires: {currentInvitation.expiresAt.toLocaleTimeString()}</div>
+                <div>Mode: {currentInvitation.mode === 'IoM' ? 'Device Pairing (IoM)' : 'Partner Connection (IoP)'}</div>
+                <div>Token: {currentInvitation.token.substring(0, 20)}...</div>
               </div>
               
               {/* Instructions */}
@@ -456,6 +465,54 @@ export function ConnectionsView({ onNavigateToChat }: ConnectionsViewProps = {})
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowInviteDialog(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mode Selection Dialog */}
+      <Dialog open={showModeDialog} onOpenChange={setShowModeDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Select Invitation Type</DialogTitle>
+            <DialogDescription>
+              Choose how you want to connect
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <Button
+              variant="outline"
+              className="w-full h-auto p-4 flex flex-col items-start gap-1"
+              onClick={() => createInvitation('IoP')}
+            >
+              <div className="flex items-center gap-2">
+                <UserPlus className="h-5 w-5 text-blue-600" />
+                <span className="font-medium">Partner Connection (IoP)</span>
+              </div>
+              <span className="text-xs text-muted-foreground text-left">
+                Connect with another person to start chatting
+              </span>
+            </Button>
+
+            <Button
+              variant="outline"
+              className="w-full h-auto p-4 flex flex-col items-start gap-1"
+              onClick={() => createInvitation('IoM')}
+            >
+              <div className="flex items-center gap-2">
+                <Smartphone className="h-5 w-5 text-green-600" />
+                <span className="font-medium">Device Pairing (IoM)</span>
+              </div>
+              <span className="text-xs text-muted-foreground text-left">
+                Connect your own devices to sync data
+              </span>
+            </Button>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowModeDialog(false)}>
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>

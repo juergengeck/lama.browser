@@ -8,6 +8,24 @@
 import { getModel } from '@/model'
 import type { SHA256IdHash } from '@refinio/one.core/lib/util/type-checks.js'
 import { AIEventNames, addAIEventListener, type AIMessageStreamData, type AIMessageCompleteData, type AIProgressData } from '@/events/AIEventTypes'
+import { AICreationService, CreationContextCollector, type CreationContextProvider } from '@lama/core/services'
+
+/**
+ * Browser implementation of CreationContextProvider
+ * Uses browser APIs to gather context for AI creation
+ */
+class BrowserCreationContextProvider implements CreationContextProvider {
+  async getDeviceName(): Promise<string> {
+    // Browser doesn't have access to hostname, use a sensible default
+    // Try to get a unique-ish identifier from user agent or just use 'browser'
+    const platform = navigator.platform || 'browser'
+    return platform.split(' ')[0].toLowerCase().replace(/[^a-z0-9-]/g, '-') || 'browser'
+  }
+
+  getLocale(): string {
+    return Intl.DateTimeFormat().resolvedOptions().locale
+  }
+}
 
 export interface Message {
   id: string
@@ -32,9 +50,34 @@ class LamaBridge {
   private eventHandlers = new Map<string, Set<Function>>()
   private windowListenerCleanups: (() => void)[] = []
 
+  private channelUpdateUnsubscribe: (() => void) | null = null
+
   constructor() {
     // Set up window event listeners to forward AI events to bridge listeners
     this.setupAIEventForwarding()
+  }
+
+  /**
+   * Set up channel update forwarding from channelManager
+   * Call this after model is initialized
+   */
+  setupChannelUpdateForwarding(): void {
+    if (this.channelUpdateUnsubscribe) return // Already set up
+
+    const model = getModel()
+    if (!model.channelManager) {
+      console.warn('[LamaBridge] channelManager not available yet')
+      return
+    }
+
+    this.channelUpdateUnsubscribe = model.channelManager.onUpdated((
+      _channelInfoIdHash: any,
+      channelId: string
+    ) => {
+      this.emit('channel:updated', { channelId })
+    })
+
+    console.log('[LamaBridge] Channel update forwarding set up')
   }
 
   /**
@@ -135,13 +178,15 @@ class LamaBridge {
       attachments
     })
 
-    if (result.success && result.data?.messageId) {
+    // ChatPlan returns data.id, not data.messageId
+    const messageId = result.data?.messageId || result.data?.id
+    if (result.success && messageId) {
       // Emit event for listeners
       this.emit('chat:newMessages', {
         conversationId: topicId,
         messages: await this.getMessages(topicId)
       })
-      return result.data.messageId
+      return messageId
     }
 
     throw new Error(result.error?.message || 'Failed to send message')
@@ -214,8 +259,26 @@ class LamaBridge {
     return 'identity-' + Date.now()
   }
 
-  async setDefaultModel(modelId: string): Promise<void> {
+  /**
+   * Set the default AI model and create AI Person with AI creation identity
+   * @param modelId - The model ID to set as default
+   * @param displayName - Optional display name from AI creation
+   * @param email - Optional email from AI creation
+   */
+  async setDefaultModel(modelId: string, displayName?: string, email?: string): Promise<void> {
     const model = getModel()
+
+    // If displayName and email are provided, call aiAssistantPlan.setDefaultModel
+    // which creates the AI Person with proper identity and default chats
+    if (displayName && email) {
+      console.log('[LamaBridge] setDefaultModel with AI creation identity:', modelId, displayName, email)
+      await model.aiAssistantPlan.setDefaultModel(modelId, displayName, email)
+      return
+    }
+
+    // Fallback: just configure LLM without AI Person creation
+    // (This path should only be used for model-only configuration)
+    console.log('[LamaBridge] setDefaultModel (config only):', modelId)
     const result = await model.llmConfigPlan.setConfig({
       modelType: 'local',
       modelName: modelId,
@@ -265,6 +328,83 @@ class LamaBridge {
       return result.models.map((m: any) => ({ id: m.id || m.name, name: m.name }))
     }
     return []
+  }
+
+  /**
+   * Generate AI name using the specified model
+   * This creates a unique identity for the AI assistant
+   * @param modelId - The model ID to use for name generation
+   */
+  async generateAIName(modelId: string): Promise<{
+    success: boolean
+    name?: string
+    email?: string
+    error?: string
+  }> {
+    if (!modelId) {
+      return {
+        success: false,
+        error: 'modelId is required - cannot generate name without selecting a model'
+      }
+    }
+
+    // Local models that run via Web Worker (not Ollama)
+    const LOCAL_MODELS = ['granite-4.0-350m', 'granite-3.3-2b-instruct', 'phi-3.5-mini-instruct']
+    const isLocalModel = LOCAL_MODELS.includes(modelId)
+
+    try {
+      const model = getModel()
+
+      // Collect context (device, locale, time)
+      const contextProvider = new BrowserCreationContextProvider()
+      const contextCollector = new CreationContextCollector(contextProvider)
+      const context = await contextCollector.collect()
+
+      // Create service with appropriate chat function based on model type
+      const creationService = new AICreationService(async (messages, reqModelId) => {
+        const chatMessages = messages.map(m => ({ role: m.role as 'system' | 'user' | 'assistant', content: m.content }))
+
+        if (isLocalModel) {
+          // Local models: Use chatLocalDirect which bypasses storage lookup
+          // This is specifically for first-run scenarios where model isn't yet registered
+          console.log('[LamaBridge] Using chatLocalDirect for local model:', reqModelId)
+          return await model.llmManager.chatLocalDirect(
+            reqModelId,
+            chatMessages,
+            { temperature: 0.7, maxTokens: 256 }
+          )
+        } else {
+          // Cloud/Ollama models: Use standard chat (requires model in storage)
+          const response = await model.llmManager.chat(
+            chatMessages,
+            reqModelId,
+            { disableTools: true }
+          )
+
+          if (typeof response === 'string') {
+            return response
+          } else if (response && typeof response === 'object' && 'content' in response) {
+            return (response as any).content || ''
+          }
+          return JSON.stringify(response)
+        }
+      })
+
+      // Generate name using the user's selected model
+      const result = await creationService.generateName(context, modelId)
+
+      return {
+        success: true,
+        name: result.name,
+        email: result.email
+      }
+    } catch (error) {
+      console.error('[LamaBridge] generateAIName failed:', error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }
+    }
   }
 }
 

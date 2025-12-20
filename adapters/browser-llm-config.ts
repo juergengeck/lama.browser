@@ -41,7 +41,25 @@ export const browserOllamaValidator = {
     serviceName: string = 'Ollama'
   ): Promise<TestConnectionResponse> {
     try {
-      console.log(`[Browser] Testing ${serviceName} connection to:`, server);
+      // Validate server URL
+      if (!server) {
+        return {
+          success: false,
+          error: 'No server URL provided',
+          errorCode: 'INVALID_URL'
+        };
+      }
+
+      // Ensure server has protocol
+      let serverUrl = server;
+      if (!serverUrl.startsWith('http://') && !serverUrl.startsWith('https://')) {
+        serverUrl = `http://${serverUrl}`;
+      }
+
+      // Remove trailing slash
+      serverUrl = serverUrl.replace(/\/$/, '');
+
+      console.log(`[Browser] Testing ${serviceName} connection to:`, serverUrl);
 
       const headers: Record<string, string> = {};
 
@@ -50,7 +68,7 @@ export const browserOllamaValidator = {
       }
 
       // Test connection by fetching version info
-      const response = await fetch(`${server}/api/version`, {
+      const response = await fetch(`${serverUrl}/api/version`, {
         method: 'GET',
         headers: Object.keys(headers).length > 0 ? headers : undefined,
         signal: AbortSignal.timeout(5000) // 5 second timeout
@@ -105,7 +123,22 @@ export const browserOllamaValidator = {
 
   async fetchOllamaModels(server: string, authToken?: string): Promise<any[]> {
     try {
-      console.log('[Browser] Fetching Ollama models from:', server);
+      // Validate server URL
+      if (!server) {
+        console.warn('[Browser] No server URL provided for Ollama models fetch');
+        return [];
+      }
+
+      // Ensure server has protocol
+      let serverUrl = server;
+      if (!serverUrl.startsWith('http://') && !serverUrl.startsWith('https://')) {
+        serverUrl = `http://${serverUrl}`;
+      }
+
+      // Remove trailing slash
+      serverUrl = serverUrl.replace(/\/$/, '');
+
+      console.log('[Browser] Fetching Ollama models from:', serverUrl);
 
       const headers: Record<string, string> = {};
 
@@ -113,7 +146,7 @@ export const browserOllamaValidator = {
         headers['Authorization'] = `Bearer ${authToken}`;
       }
 
-      const response = await fetch(`${server}/api/tags`, {
+      const response = await fetch(`${serverUrl}/api/tags`, {
         method: 'GET',
         headers: Object.keys(headers).length > 0 ? headers : undefined,
         signal: AbortSignal.timeout(5000)
@@ -121,6 +154,13 @@ export const browserOllamaValidator = {
 
       if (!response.ok) {
         console.error('[Browser] Failed to fetch models:', response.status, response.statusText);
+        return [];
+      }
+
+      // Check content type before parsing
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        console.error('[Browser] Unexpected content type from Ollama:', contentType);
         return [];
       }
 

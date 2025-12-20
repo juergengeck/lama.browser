@@ -1,6 +1,6 @@
 {
   "name": "@lama/browser",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "main": "browser-ui/src/modules/index.ts",
   "scripts": {
@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "@lama/core": "file:../lama.core",
-    "@refinio/api": "file:../refinio.api"
+    "@refinio/api": "file:../refinio.api",
+    "@settings/core": "file:../settings.core"
   },
   "devDependencies": {
     "vitest": "^1.0.0",

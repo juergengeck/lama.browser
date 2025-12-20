@@ -3,14 +3,16 @@
  * Uses lama.ui routing abstraction with BrowserHistoryAdapter
  */
 
-import { useState, useEffect } from 'react'
-import { ContactsView, LoginDeploy, ModelOnboarding, PlansProvider, BridgeProvider, ProfileEditor, ChatLayout, AssemblyJournalView, MemoryView, DevicesView, MobileBottomNav, StatusBar, NavigateHomeProvider } from '@lama/ui'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { ContactsView, LoginDeploy, ModelOnboarding, PlansProvider, BridgeProvider, ProfileEditor, ChatLayout, AssemblyJournalView, MemoryView, DevicesView, MobileBottomNav, MOBILE_NAV_HEIGHT, StatusBar, NavigateHomeProvider } from '@lama/ui'
+import { SettingsProvider, OneCoreSettingsStorage } from '@settings/core'
 import type { AssemblyQueryOptions, AssemblyWithStory } from '@assembly/core'
 import type { DevicePlatformAdapter } from '@lama/ui'
 import type { NavTab } from '@lama/ui'
 import { SettingsView } from '@/components/SettingsView'
 import { PurchaseView } from '@/components/PurchaseView'
 import { VerificationView } from '@/components/VerificationView'
+import { ConnectionsView } from '@/components/ConnectionsView'
 import type { LAMAPlansContext } from '@lama/ui'
 import { InvitationAcceptance } from '@/components/InvitationAcceptance'
 import { MODEL_OPTIONS } from '@/constants/model-options'
@@ -22,6 +24,10 @@ import { ModelProvider } from '@/model/ModelContext'
 import { FaviconBadgeManager } from '@/components/FaviconBadgeManager'
 import { lamaBridge } from '@/bridge/lama-bridge'
 import { browserOllamaValidator } from '../../adapters/browser-llm-config'
+
+// TTS Worker - use Vite's ?worker&url syntax for proper bundling
+// This bundles the worker and all its dependencies (including @huggingface/transformers)
+import ttsWorkerUrl from './workers/tts.worker.ts?worker&url'
 
 // Routing imports (re-exported from lama.core/ui/routing via lama.ui)
 import {
@@ -92,6 +98,8 @@ function modelToPlans(model: Model): LAMAPlansContext {
   }
 }
 
+import { browserSyncMonitor, initSyncMonitor } from '@/services/browser-sync-monitor'
+
 /**
  * Create browser-specific DevicePlatformAdapter
  * Browser doesn't support UDP discovery (Node.js only)
@@ -110,7 +118,9 @@ function createBrowserDeviceAdapter(model: Model): DevicePlatformAdapter {
             network: false,
             storage: true,
             llm: true
-          }
+          },
+          // Include sync stats for traffic light visualization
+          syncStats: browserSyncMonitor.getStats()
         }
       }
     },
@@ -144,9 +154,10 @@ function createBrowserDeviceAdapter(model: Model): DevicePlatformAdapter {
         return { success: false, error: (error as Error).message }
       }
     },
-    async createInvitation() {
+    async createInvitation(mode?: 'IoM' | 'IoP') {
       try {
-        const result = await model.connectionPlan.createInvitation()
+        // ConnectionPlan uses createPairingInvitation() with mode
+        const result = await model.connectionPlan.createPairingInvitation({ mode: mode || 'IoP' })
         return {
           success: result.success,
           invitation: result.invitation,
@@ -158,7 +169,8 @@ function createBrowserDeviceAdapter(model: Model): DevicePlatformAdapter {
     },
     async acceptInvitation(invitationUrl: string) {
       try {
-        const result = await model.connectionPlan.acceptInvitation({ invitationUrl })
+        // ConnectionPlan uses acceptPairingInvitation()
+        const result = await model.connectionPlan.acceptPairingInvitation({ invitationUrl })
         return {
           success: result.success,
           message: result.message,
@@ -198,9 +210,10 @@ function AppContent({ model }: AppContentProps) {
   const [pendingInvitation, setPendingInvitation] = useState<string | null>(
     sessionStorage.getPendingInvitation()
   )
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [modelInitialized, setModelInitialized] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  // Initialize auth state from model (main.tsx may have already logged in)
+  const [isAuthenticated, setIsAuthenticated] = useState(() => model.initialized)
+  const [modelInitialized, setModelInitialized] = useState(() => model.initialized)
+  const [isLoading, setIsLoading] = useState(() => !model.initialized)
   const [isTabVisible, setIsTabVisible] = useState(!document.hidden)
 
   // Proposal sensitivity slider state (default 0.1 = 10% minimum match)
@@ -215,6 +228,21 @@ function AppContent({ model }: AppContentProps) {
   // Toolbar controls from active view
   const [toolbarControls, setToolbarControls] = useState<React.ReactNode>(null)
 
+  // Background model download state (preemptively download Granite)
+  // Use refs for values that polling closures need to read (avoids stale closure problem)
+  const bgDownloadProgressRef = useRef<number>(0)
+  const bgDownloadCompleteRef = useRef(false)
+  const bgDownloadStarted = useRef(false)
+
+  // Settings storage - created once model is initialized
+  // Uses OneCoreSettingsStorage directly with browser ONE.core functions
+  const settingsStorage = useMemo(() => {
+    if (!modelInitialized || !model.initialized) return null
+
+    const userEmail = model.one.currentlyLoggedInEmail || 'anonymous@lama.one'
+    return new OneCoreSettingsStorage({ userEmail })
+  }, [model, modelInitialized])
+
   // Derive active tab from current route
   const activeTab = location.pathname.startsWith('/chat/')
     ? 'chats'
@@ -223,23 +251,40 @@ function AppContent({ model }: AppContentProps) {
   // Derive selected conversation from route params
   const selectedConversationId = params.conversationId
 
-  // Check for invitation in URL on mount
+  // Check for invitation in URL - reacts to location changes without page reload
+  // Debug: log every location change to verify hashchange detection
   useEffect(() => {
     const currentUrl = window.location.href
-    console.log('[App] Checking for invitation URL:', currentUrl)
+    console.log('[App] 🔍 Location changed - checking for invite')
+    console.log('[App] 🔍 location.pathname:', location.pathname)
+    console.log('[App] 🔍 location.hash:', location.hash)
+    console.log('[App] 🔍 window.location.href:', currentUrl)
 
     if (isValidInvitationUrl(currentUrl)) {
-      console.log('[App] ✅ Valid invitation detected')
+      console.log('[App] ✅ Valid invitation detected in URL')
       setPendingInvitation(currentUrl)
       sessionStorage.setPendingInvitation(currentUrl)
 
-      // Clear URL hash to prevent re-processing
-      window.history.replaceState({}, document.title, window.location.pathname)
+      // Clear URL hash but preserve path+query to enable hash-only changes without reload
+      // This follows the one.leute pattern: subsequent invites only change the hash
+      console.log('[App] 🔍 Clearing hash, keeping:', window.location.pathname + window.location.search)
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.search)
+    } else {
+      console.log('[App] 🔍 Not a valid invitation URL')
     }
-  }, [])
+  }, [location])
 
-  // Check authentication state
+  // Check authentication state (skip if already initialized from main.tsx)
   useEffect(() => {
+    // If model is already initialized, we're already authenticated
+    if (model.initialized) {
+      console.log('[App] Model already initialized, skipping auth check')
+      setIsAuthenticated(true)
+      setModelInitialized(true)
+      setIsLoading(false)
+      return
+    }
+
     const checkAuthState = async () => {
       try {
         const isRegistered = await model.one.isRegistered()
@@ -286,6 +331,12 @@ function AppContent({ model }: AppContentProps) {
       setModelInitialized(true)
       setIsLoading(false)
 
+      // Initialize sync monitor to track CHUM activity
+      initSyncMonitor(model)
+
+      // Set up channel update forwarding for real-time message updates
+      lamaBridge.setupChannelUpdateForwarding()
+
       if (pendingInvitation) {
         console.log('[App] Processing pending invitation')
       }
@@ -306,12 +357,16 @@ function AppContent({ model }: AppContentProps) {
     }
   }, [isAuthenticated, modelInitialized, model])
 
-  // Check for default model
+  // Check for default model (must match lama.cube: checks AIAssistantPlan, not LLMConfigPlan)
   useEffect(() => {
     if (isAuthenticated && modelInitialized) {
-      model.llmConfigPlan.getConfig({})
-        .then(response => {
-          setHasDefaultModel(response.success && response.config !== null)
+      console.log('[App] Checking for default model...')
+      model.aiAssistantPlan.getDefaultModel()
+        .then((result: any) => {
+          console.log('[App] Default model response:', result)
+          const hasModel = !!result
+          console.log('[App] Setting hasDefaultModel to:', hasModel)
+          setHasDefaultModel(hasModel)
         })
         .catch(() => setHasDefaultModel(false))
     }
@@ -340,6 +395,22 @@ function AppContent({ model }: AppContentProps) {
   useEffect(() => {
     setToolbarControls(null)
   }, [location.pathname])
+
+  // Preemptively download Granite model in background when onboarding shows
+  useEffect(() => {
+    const shouldDownload = isAuthenticated && modelInitialized && hasDefaultModel === false && !pendingInvitation
+    if (shouldDownload && !bgDownloadStarted.current && model.llmPlatform?.loadLocalModel) {
+      bgDownloadStarted.current = true
+      model.llmPlatform.loadLocalModel('granite-4.0-350m', (percent: number) => {
+        bgDownloadProgressRef.current = percent
+      }).then(() => {
+        bgDownloadCompleteRef.current = true
+        bgDownloadProgressRef.current = 100
+      }).catch(() => {
+        bgDownloadStarted.current = false
+      })
+    }
+  }, [isAuthenticated, modelInitialized, hasDefaultModel, pendingInvitation, model.llmPlatform])
 
   // Update proposal config when sensitivity changes
   useEffect(() => {
@@ -383,13 +454,19 @@ function AppContent({ model }: AppContentProps) {
 
   // Login function
   const login = async (instanceName: string, password: string) => {
+    console.log('[App] 📥 login() called with instanceName:', instanceName)
+    const email = `${instanceName}@lama.local`
+    console.log('[App] 📤 Calling model.one.loginOrRegister with:', { email, instanceName })
     setIsLoading(true)
     try {
       await model.one.loginOrRegister(
-        `${instanceName}@lama.local`,
+        email,
         password,
         instanceName
       )
+      console.log('[App] ✅ loginOrRegister completed')
+      // Store credentials for auto-login on page reload (one.leute pattern)
+      sessionStorage.setCredentials({ email, instanceName, secret: password })
     } catch (error) {
       console.error('[App] Login failed:', error)
       throw error
@@ -403,6 +480,9 @@ function AppContent({ model }: AppContentProps) {
     setIsLoading(true)
     try {
       await model.one.logout()
+      // Clear stored credentials on logout
+      sessionStorage.clearCredentials()
+      console.log('[App] Logged out')
     } catch (error) {
       console.error('[App] Logout failed:', error)
       throw error
@@ -429,26 +509,28 @@ function AppContent({ model }: AppContentProps) {
     )
   }
 
-  // Login screen
+  // Login screen - with invitation context if pending
   if (!isAuthenticated) {
     return (
-      <LoginDeploy
-        onLogin={login}
-        logo={
-          <>
-            <img src="/assets/icons/lama_f_w.svg" alt="LAMA" className="h-12 hidden dark:block" />
-            <img src="/assets/icons/lama_f_b.svg" alt="LAMA" className="h-12 block dark:hidden" />
-          </>
-        }
-        testOllamaConnection={async (baseUrl: string) => {
-          try {
-            const result = await browserOllamaValidator.testOllamaConnection(baseUrl)
-            return { success: result.success }
-          } catch (error) {
-            return { success: false }
+      <div className="min-h-screen bg-background">
+        <LoginDeploy
+          onLogin={login}
+          logo={
+            <>
+              <img src="/assets/icons/lama_f_w.svg" alt="LAMA" className="h-12 hidden dark:block" />
+              <img src="/assets/icons/lama_f_b.svg" alt="LAMA" className="h-12 block dark:hidden" />
+            </>
           }
-        }}
-      />
+          testOllamaConnection={async (baseUrl: string) => {
+            try {
+              const result = await browserOllamaValidator.testOllamaConnection(baseUrl)
+              return { success: result.success }
+            } catch (error) {
+              return { success: false }
+            }
+          }}
+        />
+      </div>
     )
   }
 
@@ -461,7 +543,81 @@ function AppContent({ model }: AppContentProps) {
         aiPlan={model.aiPlan}
         modelOptions={MODEL_OPTIONS}
         allowSkip={true}
-        onComplete={() => setHasDefaultModel(true)}
+        downloads={{
+          checkModelExists: async (modelId: string) => {
+            // Check if background download completed for this model
+            if (modelId === 'granite-4.0-350m' && bgDownloadCompleteRef.current) {
+              return true
+            }
+            return false
+          },
+          downloadModel: async ({ modelId, onProgress }) => {
+            // If it's the pre-downloaded model and already complete, return immediately
+            if (modelId === 'granite-4.0-350m' && bgDownloadCompleteRef.current) {
+              onProgress?.({ modelId, percentage: 100, downloaded: 0, total: 0 })
+              return
+            }
+
+            // If it's the pre-downloading model, hook into existing progress
+            if (modelId === 'granite-4.0-350m' && bgDownloadStarted.current) {
+              // Poll refs until complete (refs avoid stale closure problem)
+              return new Promise<void>((resolve) => {
+                const checkProgress = () => {
+                  if (bgDownloadCompleteRef.current) {
+                    onProgress?.({ modelId, percentage: 100, downloaded: 0, total: 0 })
+                    resolve()
+                  } else {
+                    onProgress?.({ modelId, percentage: bgDownloadProgressRef.current, downloaded: 0, total: 0 })
+                    setTimeout(checkProgress, 100)
+                  }
+                }
+                checkProgress()
+              })
+            }
+
+            // For other models, download normally
+            if (model.llmPlatform?.loadLocalModel) {
+              await model.llmPlatform.loadLocalModel(modelId, (percent: number) => {
+                onProgress?.({ modelId, percentage: percent, downloaded: 0, total: 0 })
+              })
+            }
+          },
+          cancelDownload: async (_modelId: string) => {
+            // Not supported for browser models
+          }
+        }}
+        onComplete={async (modelId) => {
+          console.log('[App] ModelOnboarding completed with modelId:', modelId)
+
+          // Skip AI Person creation if no model was selected (skip case)
+          if (!modelId) {
+            console.log('[App] No model selected, skipping AI Person creation')
+            setHasDefaultModel(true)
+            return
+          }
+
+          // Create AI identity and default chats BEFORE showing main UI
+          // This ensures topics are fetched AFTER AI is created
+          try {
+            const response = await lamaBridge.generateBirthName(modelId)
+            if (response.success && response.name && response.email) {
+              console.log('[App] AI identity generated:', response.name, response.email)
+              // Set the default model WITH the generated name and email
+              // This creates the AI Person in ONE.core with proper aiId
+              await lamaBridge.setDefaultModel(modelId, response.name, response.email)
+              console.log('[App] AI Person created with name:', response.name, 'for model:', modelId)
+            } else {
+              console.error('[App] Failed to generate AI identity:', response.error)
+              // Still proceed but without AI Person - user can retry later
+            }
+          } catch (error) {
+            console.error('[App] Error generating AI identity:', error)
+            // Still proceed but without AI Person - user can retry later
+          }
+
+          // Now show main UI - topics will be fetched with correct AI info
+          setHasDefaultModel(true)
+        }}
       />
     )
   }
@@ -530,12 +686,12 @@ function AppContent({ model }: AppContentProps) {
     }
 
     if (location.pathname.startsWith('/chat/')) {
-      return <ChatLayout selectedConversationId={selectedConversationId} {...headerProps} />
+      return <ChatLayout selectedConversationId={selectedConversationId} {...headerProps} ttsWorkerUrl={ttsWorkerUrl} />
     }
 
     switch (location.pathname) {
       case '/chats':
-        return <ChatLayout selectedConversationId={selectedConversationId} {...headerProps} />
+        return <ChatLayout selectedConversationId={selectedConversationId} {...headerProps} ttsWorkerUrl={ttsWorkerUrl} />
       case '/journal':
         return <AssemblyJournalView
           queryAssemblies={async (options: AssemblyQueryOptions): Promise<AssemblyWithStory[]> => {
@@ -560,6 +716,8 @@ function AppContent({ model }: AppContentProps) {
           adapter={createBrowserDeviceAdapter(model)}
           {...headerProps}
         />
+      case '/connections':
+        return <ConnectionsView />
       case '/purchase':
         return <PurchaseView onPurchaseComplete={() => navigate('/chats')} />
       case '/settings':
@@ -572,14 +730,23 @@ function AppContent({ model }: AppContentProps) {
           // View another user's profile
           return <ProfileEditor open={true} onOpenChange={() => {}} fullPage={true} contactId={params.personId} onClose={() => navigate('/contacts')} />
         }
-        return <ChatLayout {...headerProps} />
+        return <ChatLayout {...headerProps} ttsWorkerUrl={ttsWorkerUrl} />
     }
+  }
+
+  // Wrap children with SettingsProvider only when storage is ready
+  const withSettingsProvider = (children: React.ReactNode) => {
+    if (settingsStorage) {
+      return <SettingsProvider storage={settingsStorage}>{children}</SettingsProvider>
+    }
+    return <>{children}</>
   }
 
   return (
     <ModelProvider model={model}>
       <PlansProvider plans={modelToPlans(model)}>
         <BridgeProvider bridge={lamaBridge}>
+          {withSettingsProvider(<>
           <FaviconBadgeManager
             isTabVisible={isTabVisible}
             selectedConversationId={selectedConversationId}
@@ -595,14 +762,19 @@ function AppContent({ model }: AppContentProps) {
               console.log('[App] Invitation complete:', success)
               setPendingInvitation(null)
               sessionStorage.setPendingInvitation(null)
-              navigate('/chats', { replace: true })
+              // Don't navigate away - stay on invite path so subsequent invites
+              // only change hash (no page reload). one.leute pattern.
             }}
           />
         ) : (
           <NavigateHomeProvider onNavigateHome={() => navigate('/chats')}>
           <div className="flex flex-col h-screen bg-background text-foreground">
             {/* Main Content Area - views render their own AppHeader */}
-            <div className={`flex-1 min-h-0 min-w-0 overflow-hidden ${isMobile ? 'pb-14' : ''}`}>
+            {/* On mobile, add padding-bottom to account for fixed MobileBottomNav plus safe area */}
+            <div
+              className="flex-1 min-h-0 min-w-0 overflow-hidden"
+              style={isMobile ? { paddingBottom: `calc(${MOBILE_NAV_HEIGHT} + env(safe-area-inset-bottom, 0px))` } : undefined}
+            >
               {renderContent()}
             </div>
 
@@ -634,6 +806,7 @@ function AppContent({ model }: AppContentProps) {
           </div>
           </NavigateHomeProvider>
         )}
+          </>)}
         </BridgeProvider>
       </PlansProvider>
     </ModelProvider>

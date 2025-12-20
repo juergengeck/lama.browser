@@ -3,6 +3,12 @@
  * Main thread ONE.core platform (following one.leute pattern)
  */
 
+// ============================================================================
+// WARMUP: Pre-import dependencies that workers use to prevent Vite reload
+// This forces Vite to optimize these before workers discover them
+// ============================================================================
+import '@huggingface/transformers';
+
 // Initialize API logger for test automation (dev mode only)
 import './services/api-logger';
 
@@ -40,14 +46,37 @@ import './index.css'
 
 // Model initialization (following one.leute pattern)
 import Model, { setGlobalModel } from '@/model/Model.js'
+import { sessionStorage } from '@/services/session-storage'
+
+/**
+ * Initialize browser storage and request persistent storage.
+ * Following one.leute pattern - this MUST happen before any storage operations.
+ */
+async function initializeStorage(): Promise<void> {
+  try {
+    // Request persistent storage to prevent browser eviction
+    const isPersisted = await navigator.storage.persist();
+    if (isPersisted) {
+      console.log('[LAMA] ✅ Storage persisted successfully');
+    } else {
+      console.warn('[LAMA] ⚠️ Storage persistence not granted - data may be evicted');
+    }
+  } catch (error) {
+    console.error('[LAMA] Failed to request persistent storage:', error);
+    // Don't throw - storage can still work without persistence guarantee
+  }
+}
 
 /**
  * Start LAMA Browser application
- * CRITICAL: Do NOT call any storage methods before login
- * Storage is owner-specific and only available after login
+ * CRITICAL: Initialize storage BEFORE any storage operations
  */
 async function startLama(): Promise<void> {
   console.log('[LAMA] Starting application...');
+
+  // CRITICAL: Initialize storage FIRST (following one.leute pattern)
+  // This ensures IndexedDB is ready before we check credentials
+  await initializeStorage();
 
   // Read comm server URL from environment or use default
   const COMM_SERVER_URL = import.meta.env.VITE_COMM_SERVER_URL || 'wss://comm10.dev.refinio.one';
@@ -61,6 +90,23 @@ async function startLama(): Promise<void> {
   console.log('[LAMA] Creating Model...');
   const model = new Model(COMM_SERVER_URL, WEB_URL);
   setGlobalModel(model);
+
+  // Auto-login if credentials are stored (one.leute pattern for seamless reload)
+  const storedCredentials = sessionStorage.getCredentials();
+  if (storedCredentials) {
+    console.log('[LAMA] Found stored credentials, attempting auto-login...');
+    try {
+      await model.one.loginOrRegister(
+        storedCredentials.email,
+        storedCredentials.secret,
+        storedCredentials.instanceName
+      );
+      console.log('[LAMA] Auto-login successful');
+    } catch (error) {
+      console.error('[LAMA] Auto-login failed, clearing credentials:', error);
+      sessionStorage.clearCredentials();
+    }
+  }
 
   // Expose model on window for debugging (dev mode only)
   if (import.meta.env.DEV) {
@@ -83,18 +129,6 @@ async function startLama(): Promise<void> {
     console.error('[LAMA] 🔍 Filename:', event.filename);
     console.error('[LAMA] 🔍 This error might trigger a page reload');
   });
-
-  // Auto-login if user is already registered (following one.leute pattern)
-  // This MUST happen BEFORE rendering React to avoid race conditions
-  if (await model.one.isRegistered()) {
-    console.log('[LAMA] ✅ User already registered, auto-logging in...');
-    await model.one.login().catch(err => {
-      console.error('[LAMA] ⚠️ Auto-login failed:', err);
-      // Don't throw - allow UI to show login screen on failure
-    });
-  } else {
-    console.log('[LAMA] ⚠️ User not registered, will show login screen');
-  }
 
   // Render UI - login screen will handle authentication
   const rootElement = document.getElementById('root');

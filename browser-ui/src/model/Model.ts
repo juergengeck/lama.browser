@@ -97,8 +97,11 @@ export default class Model {
         // Supply Model instance as "OneCore" for modules that need it
         this.moduleRegistry.supply('OneCore', this);
 
+        // Create single BrowserLLMPlatform instance to be shared
+        const llmPlatform = new BrowserLLMPlatform();
+
         // Supply browser-specific adapters before module registration
-        this.moduleRegistry.supply('LLMPlatform', new BrowserLLMPlatform());
+        this.moduleRegistry.supply('LLMPlatform', llmPlatform);
         this.moduleRegistry.supply('OllamaValidator', browserOllamaValidator);
         this.moduleRegistry.supply('LLMConfigManager', browserConfigManager);
 
@@ -112,7 +115,7 @@ export default class Model {
         this.modules.set('chat', new ChatModule());
         this.modules.set('analysis', new AnalysisModule());
         this.modules.set('ai', new AIModule(
-            new BrowserLLMPlatform(),
+            llmPlatform, // Use shared instance
             { ollamaValidator: browserOllamaValidator }
         ));
         this.modules.set('connection', new ConnectionModule(commServerUrl, webUrl));
@@ -213,6 +216,25 @@ export default class Model {
             await aiModule.initTopicAnalysis();
             console.log('[Model] ✅ Topic analysis initialized');
 
+            // Discover and register local models from BrowserLLMPlatform
+            console.log('[Model] Discovering local models...');
+            const platform = aiModule.llmManager.platform;
+            if (platform?.getAvailableLocalModels) {
+                const localModels = await platform.getAvailableLocalModels();
+                if (localModels.length > 0) {
+                    await aiModule.llmManager.discoverLocalModels(localModels.map(m => ({
+                        id: m.id,
+                        name: m.name,
+                        familyName: m.name.split(' ')[0], // "Granite", "Phi"
+                        type: 'text-generation' as const,
+                        contextLength: 4096,
+                        status: 'available' as const,
+                        sizeBytes: m.size
+                    })));
+                    console.log(`[Model] ✅ Registered ${localModels.length} local models`);
+                }
+            }
+
             // Mark as initialized
             this.initialized = true;
 
@@ -258,6 +280,7 @@ export default class Model {
     get settings() { return this.modules.get('core').settings; }
 
     // AIModule services
+    get llmPlatform() { return this.llmManager?.platform as BrowserLLMPlatform | undefined; }
     get aiPlan() { return this.modules.get('ai').aiPlan; }
     get aiAssistantPlan() { return this.modules.get('ai').aiAssistantPlan; }
     get topicAnalysisPlan() { return this.modules.get('ai').topicAnalysisPlan; }

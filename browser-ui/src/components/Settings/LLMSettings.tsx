@@ -643,7 +643,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
 
             <div>
               <Label htmlFor={`prompt-${llm.id}`} className="text-sm font-medium">
-                System Prompt
+                System Prompt (Base Template)
               </Label>
               <Textarea
                 id={`prompt-${llm.id}`}
@@ -653,7 +653,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
                 placeholder="Enter system prompt for this LLM..."
               />
               <p className="text-xs text-muted-foreground mt-1">
-                This prompt will be sent to the LLM at the start of each conversation to define its behavior.
+                This is the base template. At runtime, the AI Prompt Builder adds context like the AI's name, current date, and conversation history.
               </p>
             </div>
 

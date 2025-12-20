@@ -37,13 +37,23 @@ export default defineConfig({
       { find: '@trust/core', replacement: path.resolve(__dirname, '../../trust.core') },
       { find: '@assembly/core', replacement: path.resolve(__dirname, '../../assembly.core') },
       { find: /^@memory\/core\/(.*)$/, replacement: path.resolve(__dirname, '../../memory.core/dist/memory.core/src/$1') },
+      { find: /^@local\/core\/(.*)$/, replacement: path.resolve(__dirname, '../../local.core/src/$1') },
+      { find: '@local/core', replacement: path.resolve(__dirname, '../../local.core/src') },
 
       // CRITICAL: Use the ONE.core packages directly - NO duplication
       { find: '@refinio/one.core', replacement: path.resolve(__dirname, '../../one.core') },
       { find: '@refinio/one.models', replacement: path.resolve(__dirname, '../../one.models') },
 
       // Stub out Node.js modules for browser builds
-      { find: '@anthropic-ai/sdk', replacement: path.resolve(__dirname, './src/stubs/claude-stub.ts') }
+      { find: '@anthropic-ai/sdk', replacement: path.resolve(__dirname, './src/stubs/claude-stub.ts') },
+
+      // lamejs CJS modules have circular dependencies that break ESM bundling
+      // Use the pre-bundled version which self-contains all dependencies
+      { find: 'lamejs', replacement: path.resolve(__dirname, '../../lama.ui/src/lib/lamejs-shim.ts') },
+
+      // CRITICAL: Use the webpack-built transformers.js dist directly
+      // The v4 alpha from GitHub needs webpack build - esbuild pre-bundling breaks Chatterbox registration
+      { find: '@huggingface/transformers', replacement: path.resolve(__dirname, './node_modules/@huggingface/transformers/dist/transformers.js') }
     ],
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
     // CRITICAL: Dedupe ONE.core to ensure single recipe registry instance
@@ -53,6 +63,13 @@ export default defineConfig({
     global: 'globalThis',
   },
   optimizeDeps: {
+    // CRITICAL: Include worker files in entries so Vite scans them for dependencies
+    // at startup, not when the worker is first loaded (which triggers reload)
+    entries: [
+      './index.html',
+      './src/workers/local-llm.worker.ts',
+      './src/workers/tts.worker.ts'
+    ],
     include: [
       'react',
       'react-dom',
@@ -66,9 +83,10 @@ export default defineConfig({
       '@refinio/one.core/lib/system/browser/storage-crypto'
     ],
     exclude: [
-      'electron'
-      // NOTE: Removed one.core/one.models from exclude to allow optimization and deduplication
-      // They need to be optimized to ensure single module instance across the app
+      'electron',
+      // CRITICAL: Exclude transformers.js from esbuild pre-bundling
+      // We alias it to the webpack-built dist which has proper Chatterbox registration
+      '@huggingface/transformers'
     ],
     esbuildOptions: {
       define: {
@@ -76,13 +94,18 @@ export default defineConfig({
       }
     },
     // Force dedupe of ONE.core to prevent multiple instances
-    force: true
+    // NOTE: force: true was removed - it causes re-optimization on every restart
+    // and triggers page reloads when worker dependencies are discovered
+    force: false
   },
   worker: {
-    format: 'es'
-    // CRITICAL: Do NOT use inlineDynamicImports or separate rollupOptions
-    // This would create a separate bundle with duplicate one.core instances
-    // Vite's worker plugin with ?worker syntax ensures proper module sharing
+    format: 'es',
+    rollupOptions: {
+      output: {
+        // Ensure transformers.js is fully inlined in the worker bundle
+        inlineDynamicImports: true
+      }
+    }
   },
   build: {
     target: 'esnext',
@@ -117,7 +140,8 @@ export default defineConfig({
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
-      'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' ws: http: https: wss://comm.refinio.net wss://comm10.dev.refinio.one wss://*.refinio.net wss://*.refinio.one https://*.refinio.net https://*.refinio.one https://huggingface.co https://*.huggingface.co; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"
+      // CSP: blob: in script-src required for ONNX Runtime WebGPU backend
+      'Content-Security-Policy': "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; connect-src 'self' ws: http: https: wss://comm.refinio.net wss://comm10.dev.refinio.one wss://*.refinio.net wss://*.refinio.one https://*.refinio.net https://*.refinio.one https://huggingface.co https://*.huggingface.co https://cdn-lfs.hf.co https://cdn-lfs-us-1.hf.co; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:;"
     }
   }
 })

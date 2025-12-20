@@ -14,6 +14,12 @@ interface SessionState {
     theme?: 'light' | 'dark' | 'system'
     sidebarCollapsed?: boolean
   }
+  // Credentials for auto-login on reload (MultiUser pattern)
+  credentials?: {
+    email: string
+    instanceName: string
+    secret: string  // Stored for session continuity - cleared on logout
+  }
 }
 
 const SESSION_STORAGE_KEY = 'lama-session-state'
@@ -161,6 +167,32 @@ class SessionStorage {
    */
   getPendingInvitation(): string | undefined {
     return this.getState()?.pendingInvitation
+  }
+
+  /**
+   * Store credentials for auto-login on reload (MultiUser pattern)
+   * Following one.leute's SingleUserNoAuth pattern but for MultiUser
+   */
+  setCredentials(credentials: { email: string; instanceName: string; secret: string }): void {
+    this.updateState({ credentials })
+    console.log('[SessionStorage] Credentials stored for auto-login')
+  }
+
+  /**
+   * Get stored credentials for auto-login
+   */
+  getCredentials(): { email: string; instanceName: string; secret: string } | undefined {
+    return this.getState()?.credentials
+  }
+
+  /**
+   * Clear stored credentials (on logout)
+   */
+  clearCredentials(): void {
+    const currentState = this.getState() || {}
+    const { credentials, ...rest } = currentState
+    this.setState(rest)
+    console.log('[SessionStorage] Credentials cleared')
   }
 
   /**

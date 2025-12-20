@@ -16,14 +16,14 @@ export function LoginScreen({ onLogin, onRegister }: LoginScreenProps) {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  
+
   // Force prefill credentials on mount
   useEffect(() => {
     setName('test')
     setPassword('test')
     console.log('LoginScreen: Force setting credentials to test/test')
   }, [])
-  
+
   // Debug logging
   console.log('LoginScreen rendered with:', { name, password, mode })
 

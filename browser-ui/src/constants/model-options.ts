@@ -2,13 +2,48 @@
  * Model options for lama.browser
  *
  * This defines the list of available models shown in ModelOnboarding.
- * Browser platform only supports cloud API models (with API keys).
- * No downloadable models since browser can't run local LLMs.
+ * Includes both cloud API models (with API keys) and local on-device models
+ * that run via transformers.js/ONNX in a Web Worker.
  */
 
 import type { ModelOption } from '@lama/ui'
 
 export const MODEL_OPTIONS: ModelOption[] = [
+  // ======================
+  // Local On-Device Models (Privacy Focused)
+  // ======================
+  {
+    id: 'granite-4.0-350m',
+    name: 'Granite 4.0 Nano',
+    size: '~700MB',
+    description: 'Fast, lightweight model for on-device inference. Runs entirely in your browser.',
+    requiresDownload: true,
+    apiKey: false,
+    provider: 'local'
+  },
+  {
+    id: 'granite-3.3-2b-instruct',
+    name: 'Granite 3.3 2B',
+    size: '~2GB',
+    description: 'Balanced performance and quality. Runs entirely in your browser.',
+    requiresDownload: true,
+    apiKey: false,
+    provider: 'local'
+  },
+  {
+    id: 'phi-3.5-mini-instruct',
+    name: 'Phi 3.5 Mini',
+    size: '~2.5GB',
+    description: 'Microsoft\'s compact model. Runs entirely in your browser.',
+    requiresDownload: true,
+    apiKey: false,
+    provider: 'local'
+  },
+
+  // ======================
+  // Cloud API Models
+  // ======================
+
   // Anthropic Models (2025)
   {
     id: 'claude-opus-4-5-20251101',

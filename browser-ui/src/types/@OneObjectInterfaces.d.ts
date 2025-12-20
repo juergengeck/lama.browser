@@ -192,7 +192,7 @@ declare module '@OneObjectInterfaces' {
         aiId: string; // ID property
         displayName: string;
         personId: SHA256IdHash<Person>; // AI's Person identity
-        llmProfileId: SHA256IdHash<Profile>; // Delegates to this LLM Profile (not Person)
+        llmId?: SHA256IdHash<LLM>; // Optional reference to LLM object (undefined = use app default)
         modelId: string;
         owner: SHA256IdHash<Person> | SHA256IdHash<Instance>;
         created: number;
