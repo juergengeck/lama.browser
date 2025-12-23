@@ -1,87 +1,31 @@
 /**
- * Type-safe AI event system
+ * Type-safe AI event system for Browser
  *
- * Centralizes all AI event names and provides TypeScript types for event data.
- * Replaces string literals scattered throughout the codebase.
+ * Uses centralized event registry from @lama/core/events as source of truth.
+ * Provides platform-specific event emission via CustomEvent/window.dispatchEvent.
  */
 
-/**
- * AI event names (centralized constants)
- */
-export const AIEventNames = {
-  PROGRESS: 'ai:progress',
-  MESSAGE_STREAM: 'ai:messageStream',
-  MESSAGE_COMPLETE: 'ai:messageComplete',
-  ERROR: 'ai:error',
-  ANALYSIS_UPDATE: 'ai:analysisUpdate',
-} as const;
+import { Events, EventPayloads, EventName } from '@lama/core/events';
 
-/**
- * Type for all AI event names
- */
-export type AIEventName = typeof AIEventNames[keyof typeof AIEventNames];
-
-/**
- * AI event data types
- */
-export interface AIProgressData {
-  topicId: string;
-  progress: number;
-}
-
-export interface AIMessageStreamData {
-  topicId: string;
-  messageId: string;
-  partial: string;
-  modelId?: string;
-  modelName?: string;
-}
-
-export interface AIMessageCompleteData {
-  topicId: string;
-  messageId: string;
-  response: string;
-  modelId?: string;
-  modelName?: string;
-}
-
-export interface AIErrorData {
-  topicId: string;
-  error: Error | string;
-}
-
-export interface AIAnalysisUpdateData {
-  topicId: string;
-  type: 'subjects' | 'keywords' | 'both';
-}
-
-/**
- * Map of event names to their data types
- */
-export interface AIEventDataMap {
-  [AIEventNames.PROGRESS]: AIProgressData;
-  [AIEventNames.MESSAGE_STREAM]: AIMessageStreamData;
-  [AIEventNames.MESSAGE_COMPLETE]: AIMessageCompleteData;
-  [AIEventNames.ERROR]: AIErrorData;
-  [AIEventNames.ANALYSIS_UPDATE]: AIAnalysisUpdateData;
-}
+// Re-export for convenience
+export { Events, EventPayloads, EventName };
 
 /**
  * Type-safe AI event
  */
-export type AIEvent<K extends AIEventName = AIEventName> = CustomEvent<AIEventDataMap[K]>;
+export type AIEvent<K extends EventName = EventName> = CustomEvent<EventPayloads[K]>;
 
 /**
  * Type-safe event listener
  */
-export type AIEventListener<K extends AIEventName> = (event: AIEvent<K>) => void;
+export type AIEventListener<K extends EventName> = (event: AIEvent<K>) => void;
 
 /**
- * Emit a type-safe AI event
+ * Emit a type-safe AI event via CustomEvent
  */
-export function emitAIEvent<K extends AIEventName>(
+export function emitAIEvent<K extends EventName>(
   eventName: K,
-  data: AIEventDataMap[K]
+  data: EventPayloads[K]
 ): void {
   const event = new CustomEvent(eventName, { detail: data });
   window.dispatchEvent(event);
@@ -90,15 +34,13 @@ export function emitAIEvent<K extends AIEventName>(
 /**
  * Add a type-safe AI event listener
  */
-export function addAIEventListener<K extends AIEventName>(
+export function addAIEventListener<K extends EventName>(
   eventName: K,
   listener: AIEventListener<K>
 ): () => void {
-  // Cast to EventListener for window.addEventListener compatibility
   const wrappedListener = listener as EventListener;
   window.addEventListener(eventName, wrappedListener);
 
-  // Return cleanup function
   return () => {
     window.removeEventListener(eventName, wrappedListener);
   };
@@ -107,7 +49,7 @@ export function addAIEventListener<K extends AIEventName>(
 /**
  * Remove a type-safe AI event listener
  */
-export function removeAIEventListener<K extends AIEventName>(
+export function removeAIEventListener<K extends EventName>(
   eventName: K,
   listener: AIEventListener<K>
 ): void {

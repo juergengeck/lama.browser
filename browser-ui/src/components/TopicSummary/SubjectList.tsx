@@ -10,7 +10,7 @@ import { Button } from '@lama/ui';
 import { usePlans } from '@lama/ui';
 import { Merge, Archive, MessageSquare, Clock } from 'lucide-react';
 import type { Subject, GetSubjectsResponse } from '../../types/topic-analysis.js';
-import { addAIEventListener, AIEventNames } from '../../events/AIEventTypes.js';
+import { addAIEventListener, Events } from '../../events/AIEventTypes.js';
 
 interface SubjectListProps {
   topicId: string;
@@ -42,11 +42,11 @@ export const SubjectList: React.FC<SubjectListProps> = ({
   useEffect(() => {
     if (!topicId) return;
 
-    // Listen to type-safe AI analysis update events
-    const cleanup = addAIEventListener(AIEventNames.ANALYSIS_UPDATE, (event) => {
+    // Listen to type-safe subjects updated events
+    const cleanup = addAIEventListener(Events.SUBJECTS_UPDATED, (event) => {
       const data = event.detail;
       if (data.topicId === topicId) {
-        console.log('[SubjectList] Analysis updated event received for topic:', topicId, 'type:', data.type);
+        console.log('[SubjectList] Subjects updated event received for topic:', topicId);
         // Re-fetch subjects
         loadSubjects();
       }

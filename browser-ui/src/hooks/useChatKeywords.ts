@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { getModel } from '../model';
 import { usePlans } from '@lama/ui';
+import { addAIEventListener, Events } from '../events/AIEventTypes';
 
 interface Message {
   id?: string;
@@ -34,17 +35,15 @@ export function useChatKeywords(topicId: string, messages: Message[] = []) {
   // Track previous keyword count for change detection
   const prevKeywordCountRef = useRef(0);
 
-  // Listen for analysis update events from Model (type-safe AI events)
+  // Listen for keywords update events from Model (type-safe AI events)
   useEffect(() => {
     if (!topicId) return;
 
-    const { addAIEventListener, AIEventNames } = require('../events/AIEventTypes');
-
-    const cleanup = addAIEventListener(AIEventNames.ANALYSIS_UPDATE, (event) => {
+    const cleanup = addAIEventListener(Events.KEYWORDS_UPDATED, (event) => {
       const data = event.detail;
-      console.log(`[useChatKeywords-${topicId}] 🔔 Received ANALYSIS_UPDATE event for: "${data.topicId}", type: ${data.type}`);
+      console.log(`[useChatKeywords-${topicId}] 🔔 Received KEYWORDS_UPDATED event for: "${data.topicId}"`);
 
-      if (data.topicId === topicId && (data.type === 'keywords' || data.type === 'both')) {
+      if (data.topicId === topicId) {
         console.log(`[useChatKeywords-${topicId}] ✅ Fetching updated keywords`);
         // Re-fetch keywords immediately (platform-agnostic)
         const fetchKeywords = async () => {

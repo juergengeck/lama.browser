@@ -5,12 +5,13 @@
  * This adapter bridges lama.core's platform-agnostic LLM operations with
  * worker postMessage API to communicate with the main thread.
  *
- * Uses type-safe event system for all AI events.
+ * Uses centralized event registry from @lama/core/events.
  * Manages local-llm.worker.ts for on-device text generation.
  */
 
 import type { LLMPlatform, ChatMessage, LocalChatOptions } from '@lama/core/services/llm-platform.js';
-import { emitAIEvent, AIEventNames } from '../browser-ui/src/events/AIEventTypes.js';
+import { Events } from '@lama/core/events';
+import { emitAIEvent } from '../browser-ui/src/events/AIEventTypes.js';
 import type { GraniteToolDefinition, ToolCall } from '@mcp/core';
 
 // Re-export types for convenience
@@ -302,7 +303,7 @@ export class BrowserLLMPlatform implements LLMPlatform {
    */
   emitProgress(topicId: string, progress: number): void {
     if (typeof window !== 'undefined') {
-      emitAIEvent(AIEventNames.PROGRESS, {
+      emitAIEvent(Events.AI_RESPONDING, {
         topicId,
         progress,
       });
@@ -314,9 +315,9 @@ export class BrowserLLMPlatform implements LLMPlatform {
    */
   emitError(topicId: string, error: Error): void {
     if (typeof window !== 'undefined') {
-      emitAIEvent(AIEventNames.ERROR, {
+      emitAIEvent(Events.AI_ERROR, {
         topicId,
-        error,
+        error: error.message,
       });
     }
   }
@@ -335,29 +336,29 @@ export class BrowserLLMPlatform implements LLMPlatform {
     if (typeof window === 'undefined') return;
 
     // Normalize content to string format (extract response)
-    const normalized = typeof content === 'string'
+    const text = typeof content === 'string'
       ? content
       : content.response;
 
     if (status === 'responding') {
-      // AI is about to respond - emit progress event for thinking indicator
-      emitAIEvent(AIEventNames.PROGRESS, {
+      emitAIEvent(Events.AI_RESPONDING, {
         topicId,
         progress: 0,
       });
     } else if (status === 'streaming') {
-      emitAIEvent(AIEventNames.MESSAGE_STREAM, {
+      emitAIEvent(Events.LLM_STREAM, {
         topicId,
         messageId,
-        partial: normalized,
+        content: text,
         modelId,
         modelName,
       });
     } else if (status === 'complete' || status === 'error') {
-      emitAIEvent(AIEventNames.MESSAGE_COMPLETE, {
+      emitAIEvent(Events.LLM_COMPLETE, {
         topicId,
         messageId,
-        response: normalized,
+        content: text,
+        status: status === 'error' ? 'error' : 'success',
         modelId,
         modelName,
       });
@@ -370,36 +371,30 @@ export class BrowserLLMPlatform implements LLMPlatform {
    */
   emitAnalysisUpdate(topicId: string, updateType: 'subjects' | 'keywords' | 'both'): void {
     if (typeof window !== 'undefined') {
-      emitAIEvent(AIEventNames.ANALYSIS_UPDATE, {
-        topicId,
-        type: updateType,
-      });
+      if (updateType === 'keywords' || updateType === 'both') {
+        emitAIEvent(Events.KEYWORDS_UPDATED, { topicId });
+      }
+      if (updateType === 'subjects' || updateType === 'both') {
+        emitAIEvent(Events.SUBJECTS_UPDATED, { topicId });
+      }
     }
   }
 
   /**
    * Emit thinking stream update (for models with extended thinking like DeepSeek R1)
-   * Browser implementation logs to console for debugging
    */
   emitThinkingUpdate(topicId: string, messageId: string, thinkingContent: string): void {
     if (typeof window !== 'undefined') {
-      // Reduced logging - only log completion, not every chunk
-      // console.log(`[BrowserLLMPlatform] 🧠 Thinking update for ${topicId}/${messageId}: ${thinkingContent.length} chars`);
-      // Future: Could emit a custom event for UI visualization of thinking process
-      // emitAIEvent(AIEventNames.THINKING_UPDATE, { topicId, messageId, thinkingContent });
+      emitAIEvent(Events.LLM_THINKING, { topicId, messageId, content: thinkingContent });
     }
   }
 
   /**
    * Emit thinking status update during AI response generation
-   * Browser implementation logs to console for debugging
    */
   emitThinkingStatus(topicId: string, status: string): void {
     if (typeof window !== 'undefined') {
-      // Reduced logging - only log significant status changes
-      // console.log(`[BrowserLLMPlatform] 🤔 Thinking status for ${topicId}: ${status}`);
-      // Future: Could emit a custom event for UI status indicators
-      // emitAIEvent(AIEventNames.THINKING_STATUS, { topicId, status });
+      emitAIEvent(Events.LLM_STATUS, { topicId, status });
     }
   }
 

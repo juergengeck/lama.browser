@@ -7,7 +7,7 @@
 
 import { getModel } from '@/model'
 import type { SHA256IdHash } from '@refinio/one.core/lib/util/type-checks.js'
-import { AIEventNames, addAIEventListener, type AIMessageStreamData, type AIMessageCompleteData, type AIProgressData } from '@/events/AIEventTypes'
+import { Events, EventPayloads, addAIEventListener } from '@/events/AIEventTypes'
 import { AICreationService, CreationContextCollector, type CreationContextProvider } from '@lama/core/services'
 
 /**
@@ -74,6 +74,7 @@ class LamaBridge {
       _channelInfoIdHash: any,
       channelId: string
     ) => {
+      console.log('[LamaBridge] 📡 channelManager.onUpdated fired:', channelId?.substring(0, 20) + '...')
       this.emit('channel:updated', { channelId })
     })
 
@@ -84,16 +85,16 @@ class LamaBridge {
    * Forward AI platform events (window CustomEvents) to bridge event listeners
    *
    * Platform events → Bridge events:
-   * - ai:progress → message:thinking (AI is processing)
-   * - ai:messageStream → message:stream (streaming content)
-   * - ai:messageComplete → message:updated (response complete)
+   * - ai:responding → message:thinking (AI is processing)
+   * - llm:stream → message:stream (streaming content)
+   * - llm:complete → message:updated (response complete)
    */
   private setupAIEventForwarding(): void {
-    // Forward ai:progress → message:thinking
+    // Forward ai:responding → message:thinking
     this.windowListenerCleanups.push(
-      addAIEventListener(AIEventNames.PROGRESS, (event) => {
-        const data = event.detail as AIProgressData
-        console.log('[LamaBridge] Forwarding ai:progress → message:thinking', data.topicId)
+      addAIEventListener(Events.AI_RESPONDING, (event) => {
+        const data = event.detail
+        console.log('[LamaBridge] Forwarding ai:responding → message:thinking', data.topicId)
         this.emit('message:thinking', {
           conversationId: data.topicId,
           status: 'thinking'
@@ -101,29 +102,29 @@ class LamaBridge {
       })
     )
 
-    // Forward ai:messageStream → message:stream
+    // Forward llm:stream → message:stream
     this.windowListenerCleanups.push(
-      addAIEventListener(AIEventNames.MESSAGE_STREAM, (event) => {
-        const data = event.detail as AIMessageStreamData
+      addAIEventListener(Events.LLM_STREAM, (event) => {
+        const data = event.detail
         this.emit('message:stream', {
           conversationId: data.topicId,
           messageId: data.messageId,
-          content: data.partial,
+          content: data.content,
           modelId: data.modelId,
           modelName: data.modelName
         })
       })
     )
 
-    // Forward ai:messageComplete → message:updated
+    // Forward llm:complete → message:updated
     this.windowListenerCleanups.push(
-      addAIEventListener(AIEventNames.MESSAGE_COMPLETE, (event) => {
-        const data = event.detail as AIMessageCompleteData
-        console.log('[LamaBridge] Forwarding ai:messageComplete → message:updated', data.topicId)
+      addAIEventListener(Events.LLM_COMPLETE, (event) => {
+        const data = event.detail
+        console.log('[LamaBridge] Forwarding llm:complete → message:updated', data.topicId)
         this.emit('message:updated', {
           conversationId: data.topicId,
           messageId: data.messageId,
-          content: data.response,
+          content: data.content,
           modelId: data.modelId,
           modelName: data.modelName
         })
@@ -151,6 +152,12 @@ class LamaBridge {
   async getMessages(conversationId: string): Promise<Message[]> {
     const model = getModel()
     const result = await model.chatPlan.getMessages({ conversationId })
+
+    console.log('[LamaBridge.getMessages] Raw result:', {
+      success: result.success,
+      messageCount: result.messages?.length || 0,
+      messages: result.messages?.map((m: any) => ({ sender: m.senderName?.substring(0, 8), text: m.text?.substring(0, 20) }))
+    })
 
     if (!result.success || !result.messages) {
       return []
@@ -334,13 +341,17 @@ class LamaBridge {
    * Generate AI name using the specified model
    * This creates a unique identity for the AI assistant
    * @param modelId - The model ID to use for name generation
+   * @param _provider - Unused (LLM object's provider field is used from storage)
    */
-  async generateAIName(modelId: string): Promise<{
+  async generateAIName(modelId: string, _provider?: string): Promise<{
     success: boolean
     name?: string
     email?: string
     error?: string
   }> {
+    const startTime = performance.now()
+    console.log('[LamaBridge] generateAIName START - model:', modelId)
+
     if (!modelId) {
       return {
         success: false,
@@ -348,38 +359,50 @@ class LamaBridge {
       }
     }
 
-    // Local models that run via Web Worker (not Ollama)
-    const LOCAL_MODELS = ['granite-4.0-350m', 'granite-3.3-2b-instruct', 'phi-3.5-mini-instruct']
-    const isLocalModel = LOCAL_MODELS.includes(modelId)
+    // On-device inference models that run via Web Worker (not through ONE.core storage)
+    const ON_DEVICE_MODELS = ['granite-4.0-350m', 'granite-3.3-2b-instruct', 'phi-3.5-mini-instruct']
+    const isOnDeviceModel = ON_DEVICE_MODELS.includes(modelId)
+    console.log('[LamaBridge] isOnDeviceModel:', isOnDeviceModel)
 
     try {
       const model = getModel()
 
       // Collect context (device, locale, time)
+      console.log('[LamaBridge] Collecting context...')
+      const contextStart = performance.now()
       const contextProvider = new BrowserCreationContextProvider()
       const contextCollector = new CreationContextCollector(contextProvider)
       const context = await contextCollector.collect()
+      console.log('[LamaBridge] Context collected in', (performance.now() - contextStart).toFixed(0), 'ms')
 
-      // Create service with appropriate chat function based on model type
+      // Create service with appropriate chat function
+      // On-device models bypass storage; all others use storage (provider from LLM object)
       const creationService = new AICreationService(async (messages, reqModelId) => {
         const chatMessages = messages.map(m => ({ role: m.role as 'system' | 'user' | 'assistant', content: m.content }))
 
-        if (isLocalModel) {
-          // Local models: Use chatLocalDirect which bypasses storage lookup
-          // This is specifically for first-run scenarios where model isn't yet registered
-          console.log('[LamaBridge] Using chatLocalDirect for local model:', reqModelId)
-          return await model.llmManager.chatLocalDirect(
+        console.log('[LamaBridge] LLM call START for model:', reqModelId)
+        const llmStart = performance.now()
+
+        if (isOnDeviceModel) {
+          // On-device models: Use chatLocalDirect (Web Worker inference, no storage)
+          console.log('[LamaBridge] Using chatLocalDirect for on-device model:', reqModelId)
+          const result = await model.llmManager.chatLocalDirect(
             reqModelId,
             chatMessages,
             { temperature: 0.7, maxTokens: 256 }
           )
+          console.log('[LamaBridge] chatLocalDirect completed in', (performance.now() - llmStart).toFixed(0), 'ms')
+          return result
         } else {
-          // Cloud/Ollama models: Use standard chat (requires model in storage)
+          // All other models: Use chat() which reads LLM object from storage
+          // Provider is determined from the stored LLM object's provider field
+          console.log('[LamaBridge] Using chat() for storage-backed model:', reqModelId)
           const response = await model.llmManager.chat(
             chatMessages,
             reqModelId,
             { disableTools: true }
           )
+          console.log('[LamaBridge] chat() completed in', (performance.now() - llmStart).toFixed(0), 'ms')
 
           if (typeof response === 'string') {
             return response
@@ -391,7 +414,11 @@ class LamaBridge {
       })
 
       // Generate name using the user's selected model
+      console.log('[LamaBridge] Calling creationService.generateName...')
+      const genStart = performance.now()
       const result = await creationService.generateName(context, modelId)
+      console.log('[LamaBridge] generateName completed in', (performance.now() - genStart).toFixed(0), 'ms')
+      console.log('[LamaBridge] generateAIName TOTAL time:', (performance.now() - startTime).toFixed(0), 'ms')
 
       return {
         success: true,
@@ -399,7 +426,7 @@ class LamaBridge {
         email: result.email
       }
     } catch (error) {
-      console.error('[LamaBridge] generateAIName failed:', error)
+      console.error('[LamaBridge] generateAIName FAILED after', (performance.now() - startTime).toFixed(0), 'ms:', error)
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'

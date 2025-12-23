@@ -7,7 +7,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { Subject } from '../types/topic-analysis';
 import { getModel } from '../model';
 import { usePlans } from '@lama/ui';
-import { addAIEventListener, AIEventNames } from '../events/AIEventTypes';
+import { addAIEventListener, Events } from '../events/AIEventTypes';
 
 export function useChatSubjects(topicId: string) {
   // Use Plans for platform-agnostic operations
@@ -28,8 +28,8 @@ export function useChatSubjects(topicId: string) {
   useEffect(() => {
     if (!topicId) return;
 
-    // Listen to type-safe AI analysis update events
-    const cleanup = addAIEventListener(AIEventNames.ANALYSIS_UPDATE, (event) => {
+    // Listen to type-safe subjects updated events
+    const cleanup = addAIEventListener(Events.SUBJECTS_UPDATED, (event) => {
       const data = event.detail;
       if (data.topicId === topicId) {
         // Re-fetch subjects immediately
