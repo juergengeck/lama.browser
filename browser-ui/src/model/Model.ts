@@ -31,13 +31,17 @@ import { AssemblyCoreRecipes } from '@assembly/core';
 
 // Instance tracking
 import { InstancePlan } from '@lama/core/plans/InstancePlan.js';
-import { storeVersionedObject } from '@refinio/one.core/lib/storage-versioned-objects.js';
+import { storeVersionedObject, getIdObject } from '@refinio/one.core/lib/storage-versioned-objects.js';
+import { getInstanceIdHash, getInstanceOwnerIdHash } from '@refinio/one.core/lib/instance.js';
 
 // Trust.core recipes
 import { AllRecipes as TrustCoreRecipes, AllReverseMaps as TrustCoreReverseMaps } from '@trust/core/recipes';
 
 // Cube.core recipes
 import { CubeCoreRecipes } from '@cube/core';
+
+// Settings.core recipes (for IoM-compatible settings)
+import { SettingsRecipes } from '@settings/core';
 
 // Module system
 import { ModuleRegistry } from '@refinio/api/plan-system';
@@ -58,6 +62,12 @@ import {
 // ExportPlan from lama.core (platform-agnostic, uses one.core implode)
 import { ExportPlan } from '@lama/core/plans/ExportPlan.js';
 
+// IngestionPlan for document ingestion (PDF, etc.)
+import { IngestionPlan } from '@memory/core/plans/IngestionPlan.js';
+
+// BLOB storage for attachments
+import { storeArrayBufferAsBlob } from '@refinio/one.core/lib/storage-blob.js';
+
 // Browser-specific adapters
 import { BrowserLLMPlatform } from '../../../adapters/browser-llm-platform';
 import { browserOllamaValidator, browserConfigManager } from '../../../adapters/browser-llm-config';
@@ -76,12 +86,30 @@ export default class Model {
     public initialized: boolean = false;
     public ownerId: string | null = null;
     public instanceId: string | null = null;
+    private _instanceName: string = 'default';
 
     private moduleRegistry: ModuleRegistry;
     private modules: Map<string, any> = new Map();
 
     // MultiUser instance (ONE.core authentication and storage)
     public one: MultiUser;
+
+    // Document ingestion plan
+    public ingestionPlan: IngestionPlan | null = null;
+
+    /**
+     * Instance name getter for AISettingsManager compatibility
+     * Returns the logged-in instance name (captured from onLogin callback)
+     */
+    public get instanceName(): string {
+        return this._instanceName;
+    }
+
+    /**
+     * Get an object by its ID hash.
+     * Exposed for ChatPlan to resolve topic.channel references.
+     */
+    public getIdObject = getIdObject;
 
     constructor(
         private commServerUrl: string,
@@ -146,7 +174,9 @@ export default class Model {
                 // Trust.core recipes
                 ...TrustCoreRecipes,
                 // Cube.core recipes
-                ...CubeCoreRecipes
+                ...CubeCoreRecipes,
+                // Settings.core recipes (for IoM-compatible settings)
+                ...SettingsRecipes
             ],
             reverseMaps: new Map([
                 ...ReverseMapsStable,
@@ -169,9 +199,15 @@ export default class Model {
         console.log('[Model] Model construction complete - modules registered');
     }
 
-    async init(_instanceName?: string, _secret?: string): Promise<void> {
+    async init(instanceName?: string, _secret?: string): Promise<void> {
         if (this.initialized) {
             throw new Error('Model already initialized');
+        }
+
+        // Capture instance name from onLogin callback
+        if (instanceName) {
+            this._instanceName = instanceName;
+            console.log('[Model] Instance name set to:', instanceName);
         }
 
         try {
@@ -184,8 +220,13 @@ export default class Model {
 
             // Use ModuleRegistry for automatic dependency-ordered initialization
             // CoreModule will initialize PlanObjectManager when OneCore Instance is ready
-            // NOTE: CoreModule sets ownerId and instanceId after leuteModel.init()
             await this.moduleRegistry.initAll();
+
+            // Set ownerId and instanceId from ONE.core after login
+            // These are available after CoreModule initializes leuteModel
+            this.ownerId = getInstanceOwnerIdHash() as string | null;
+            this.instanceId = getInstanceIdHash() as string | null;
+            console.log('[Model] Owner ID:', this.ownerId?.substring(0, 8));
 
             // Create retroactive Assemblies for Instance and Owner (bootstrap problem)
             // Instance and Owner were created before StoryFactory existed
@@ -242,6 +283,16 @@ export default class Model {
             console.log('[Model] Scanning existing conversations for AI topics...');
             const registeredCount = await this.aiAssistantPlan.scanExistingConversations();
             console.log(`[Model] ✅ Registered ${registeredCount} AI topics`);
+
+            // Initialize ingestion plan after AI is ready
+            console.log('[Model] Initializing ingestion plan...');
+            this.ingestionPlan = new IngestionPlan({
+                topicModel: this.topicModel,
+                leuteModel: this.leuteModel,
+                aiAssistantPlan: this.aiAssistantPlan,
+                aiPlan: this.aiPlan
+            });
+            console.log('[Model] ✅ Ingestion plan initialized');
 
             // CRITICAL: Start AI message listener after all initialization
             console.log('[Model] Starting AI message listener...');
