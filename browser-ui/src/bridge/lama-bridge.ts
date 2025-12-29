@@ -70,12 +70,29 @@ class LamaBridge {
       return
     }
 
-    this.channelUpdateUnsubscribe = model.channelManager.onUpdated((
-      _channelInfoIdHash: any,
+    this.channelUpdateUnsubscribe = model.channelManager.onUpdated(async (
+      channelInfoIdHash: any,
       channelId: string
     ) => {
-      console.log('[LamaBridge] 📡 channelManager.onUpdated fired:', channelId?.substring(0, 20) + '...')
-      this.emit('channel:updated', { channelId })
+      // Find topic by matching channel ID hash (Topic.channel === channelInfoIdHash)
+      // This is the same pattern used by AIMessageListener
+      let topicId: string | undefined
+      try {
+        const allTopics = await model.topicModel.topics.all()
+        const topic = allTopics.find((t: any) => t.channel === channelInfoIdHash)
+        if (topic) {
+          topicId = topic.id
+        }
+      } catch (err) {
+        // Silently ignore - topic lookup is best-effort
+      }
+
+      console.log('[LamaBridge] 📡 channelManager.onUpdated fired:', {
+        channelInfoIdHash: channelInfoIdHash?.substring?.(0, 12) + '...',
+        topicId: topicId?.substring(0, 20) + '...'
+      })
+
+      this.emit('channel:updated', { channelId, topicId })
     })
 
     console.log('[LamaBridge] Channel update forwarding set up')
@@ -83,55 +100,43 @@ class LamaBridge {
 
   /**
    * Forward AI platform events (window CustomEvents) to bridge event listeners
-   *
-   * Platform events → Bridge events:
-   * - ai:responding → message:thinking (AI is processing)
-   * - llm:stream → message:stream (streaming content)
-   * - llm:complete → message:updated (response complete)
+   * Events are forwarded with their original names from the Events registry
    */
   private setupAIEventForwarding(): void {
-    // Forward ai:responding → message:thinking
+    // AI_RESPONDING: AI has started processing
     this.windowListenerCleanups.push(
       addAIEventListener(Events.AI_RESPONDING, (event) => {
-        const data = event.detail
-        console.log('[LamaBridge] Forwarding ai:responding → message:thinking', data.topicId)
-        this.emit('message:thinking', {
-          conversationId: data.topicId,
-          status: 'thinking'
-        })
+        this.emit(Events.AI_RESPONDING, event.detail)
       })
     )
 
-    // Forward llm:stream → message:stream
+    // LLM_STATUS: Intermediate status updates during thinking
+    this.windowListenerCleanups.push(
+      addAIEventListener(Events.LLM_STATUS, (event) => {
+        this.emit(Events.LLM_STATUS, event.detail)
+      })
+    )
+
+    // LLM_THINKING: Reasoning/thinking content stream
+    this.windowListenerCleanups.push(
+      addAIEventListener(Events.LLM_THINKING, (event) => {
+        this.emit(Events.LLM_THINKING, event.detail)
+      })
+    )
+
+    // LLM_STREAM: Response content streaming
     this.windowListenerCleanups.push(
       addAIEventListener(Events.LLM_STREAM, (event) => {
-        const data = event.detail
-        this.emit('message:stream', {
-          conversationId: data.topicId,
-          messageId: data.messageId,
-          content: data.content,
-          modelId: data.modelId,
-          modelName: data.modelName
-        })
+        this.emit(Events.LLM_STREAM, event.detail)
       })
     )
 
-    // Forward llm:complete → message:updated
+    // LLM_COMPLETE: Response finished
     this.windowListenerCleanups.push(
       addAIEventListener(Events.LLM_COMPLETE, (event) => {
-        const data = event.detail
-        console.log('[LamaBridge] Forwarding llm:complete → message:updated', data.topicId)
-        this.emit('message:updated', {
-          conversationId: data.topicId,
-          messageId: data.messageId,
-          content: data.content,
-          modelId: data.modelId,
-          modelName: data.modelName
-        })
+        this.emit(Events.LLM_COMPLETE, event.detail)
       })
     )
-
-    console.log('[LamaBridge] AI event forwarding set up')
   }
 
   on(event: string, handler: Function) {
@@ -321,6 +326,11 @@ class LamaBridge {
   async switchAIModel(aiPersonId: string, modelId: string): Promise<void> {
     const model = getModel()
     await model.aiAssistantPlan.switchAIModel(aiPersonId as any, modelId)
+  }
+
+  async getAIPersonForTopic(topicId: string): Promise<string | null> {
+    const model = getModel()
+    return model.aiAssistantPlan.getAIPersonForTopic(topicId)
   }
 
   async getSubjects(topicId: string): Promise<{ success: boolean; data?: { subjects: any[] }; error?: string }> {
