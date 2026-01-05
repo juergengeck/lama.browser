@@ -4,7 +4,7 @@
  * React hook for managing messages in a topic using usePlans()
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useModel } from '@/model/index.js'
 import { usePlans } from '@lama/ui'
 
@@ -205,49 +205,67 @@ export function useMessages({
     }
   }, [topicId, model])
 
+  // Store refreshMessages in a ref to avoid re-subscriptions when it changes
+  // This is critical because refreshMessages depends on 'chat' from usePlans()
+  // which may change on every render, causing constant unsubscribe/resubscribe
+  const refreshMessagesRef = useRef(refreshMessages)
+  refreshMessagesRef.current = refreshMessages
+
   // Load messages on mount or when topicId changes
   useEffect(() => {
     refreshMessages()
   }, [refreshMessages])
 
-  // Listen to channel updates for this topic
+  // Listen to topic message updates from CoreModule (via Model)
+  // CoreModule has a single channel listener that emits topic-specific events
+  // IMPORTANT: Uses refreshMessagesRef to avoid dependency on refreshMessages
+  // which would cause constant re-subscriptions due to usePlans() instability
   useEffect(() => {
-    if (!model.initialized) return
+    if (!model.initialized) {
+      console.log(`[useMessages] ⏳ Skipping subscription - model not initialized yet`)
+      return
+    }
 
-    console.log(`[useMessages] Setting up channel listener for topic ${topicId}`)
+    console.log(`[useMessages] 📡 Subscribing to message updates for topic ${topicId}`)
+    console.log(`[useMessages] model.onTopicUpdated type:`, typeof model.onTopicUpdated)
+    console.log(`[useMessages] model.onTopicUpdated listenerCount:`, model.onTopicUpdated?.listenerCount?.() ?? 'N/A')
 
-    // Subscribe to channel updates for this topic
-    const unsubscribe = model.channelManager.onUpdated(async (
-      channelInfoIdHash,
-      channelId,
-      channelOwner,
-      timeOfEarliestChange,
-      data
-    ) => {
-      // Check if this update is for our topic
-      if (channelId === topicId) {
-        // Refresh messages to get the latest (will merge with existing)
-        await refreshMessages()
+    const unsubscribe = model.onTopicUpdated((updatedTopicId: string) => {
+      console.log(`[useMessages] 📬 onTopicUpdated callback received: ${updatedTopicId.substring(0, 16)}`)
+      // Only respond to updates for our topic
+      if (updatedTopicId !== topicId) {
+        console.log(`[useMessages] ⏭️ Skipping - not our topic. Expected: ${topicId.substring(0, 16)}, got: ${updatedTopicId.substring(0, 16)}`)
+        return
+      }
 
+      console.log(`[useMessages] 🔔 Message update for current topic: ${topicId}`)
+
+      // Refresh messages to get the latest (will merge with existing)
+      // Use ref to get current refreshMessages without dependency
+      refreshMessagesRef.current().then(() => {
         // Trigger topic analysis after messages are updated
         // Analysis extracts subjects/keywords and indexes them in cube.core
         if (model.topicAnalysisPlan) {
-          try {
-            console.log(`[useMessages] 🔍 Triggering topic analysis for ${topicId}`)
-            await model.topicAnalysisPlan.analyzeMessages({ topicId })
+          console.log(`[useMessages] 🔍 Triggering topic analysis for ${topicId}`)
+          model.topicAnalysisPlan.analyzeMessages({ topicId }).then(() => {
             console.log(`[useMessages] ✅ Topic analysis complete`)
-          } catch (error) {
+          }).catch((error: Error) => {
             console.error(`[useMessages] ❌ Topic analysis failed:`, error)
             // Don't throw - analysis failure shouldn't break message display
-          }
+          })
         }
-      }
+      }).catch((error: Error) => {
+        console.error(`[useMessages] Error refreshing messages:`, error)
+      })
     })
 
+    console.log(`[useMessages] ✅ Subscribed, listenerCount now:`, model.onTopicUpdated?.listenerCount?.() ?? 'N/A')
+
     return () => {
+      console.log(`[useMessages] 🔌 Unsubscribing from topic ${topicId}`)
       unsubscribe()
     }
-  }, [model.initialized, model.channelManager, topicId, refreshMessages])
+  }, [model.initialized, model.onTopicUpdated, topicId])
 
   // Auto-refresh if enabled
   useEffect(() => {

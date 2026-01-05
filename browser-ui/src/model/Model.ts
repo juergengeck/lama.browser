@@ -299,6 +299,9 @@ export default class Model {
             await aiModule.startMessageListener(this.ownerId);
             console.log('[Model] ✅ AI message listener started');
 
+            // Note: Channel update listener is now in CoreModule (onTopicUpdated event)
+            // UI components subscribe to coreModule.onTopicUpdated via this.onTopicUpdated getter
+
             console.log('[Model] ✅ All modules initialized');
             this.onOneModelsReady.emit();
         } catch (e) {
@@ -313,6 +316,7 @@ export default class Model {
         console.log('[Model] Shutting down all modules...');
 
         // Use ModuleRegistry for automatic reverse-order shutdown
+        // Note: Channel update listener cleanup is handled by CoreModule
         await this.moduleRegistry.shutdownAll();
 
         this.initialized = false;
@@ -326,9 +330,11 @@ export default class Model {
     get leuteModel() { return this.modules.get('core').leuteModel; }
     get channelManager() { return this.modules.get('core').channelManager; }
     get topicModel() { return this.modules.get('core').topicModel; }
-    get connections() { return this.modules.get('core').connections; }
+    get connections() { return this.modules.get('connection').connectionsModel; }
     get connectionsModel() { return this.connections; } // Alias for compatibility
     get settings() { return this.modules.get('core').settings; }
+    /** Topic update events from CoreModule - emits topicId when messages change */
+    get onTopicUpdated() { return this.modules.get('core').onTopicUpdated; }
 
     // AIModule services
     get llmPlatform() { return this.llmManager?.platform as BrowserLLMPlatform | undefined; }

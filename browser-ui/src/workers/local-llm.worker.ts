@@ -5,6 +5,9 @@
  * Runs in a Web Worker to avoid blocking the UI thread.
  *
  * Tool calling support via @mcp/core/local-browser
+ *
+ * WebGPU status should be sent from main thread via 'webgpu-status' message
+ * before loading models. If not received, falls back to local detection.
  */
 
 import { pipeline, env, TextStreamer } from '@huggingface/transformers';
@@ -37,12 +40,19 @@ const TEXT_GEN_MODELS: Record<string, { huggingFaceRepo: string; contextLength: 
 // Worker state
 let generator: TextGenerationPipeline | null = null;
 let loadedModelId: string | null = null;
-let deviceType: 'webgpu' | 'wasm' = 'wasm';
+let deviceType: 'webgpu' | 'wasm' = 'webgpu'; // Default to WebGPU, fall back if unavailable
+let webgpuStatusReceived = false;
 
 /**
- * Check if WebGPU is available
+ * Check if WebGPU is available (fallback if status not received from main thread)
  */
 async function checkWebGPU(): Promise<boolean> {
+  // If we already received status from main thread, trust that
+  if (webgpuStatusReceived) {
+    return deviceType === 'webgpu';
+  }
+
+  // Fallback: check locally (slower path)
   if (!navigator.gpu) {
     return false;
   }
@@ -54,6 +64,15 @@ async function checkWebGPU(): Promise<boolean> {
   }
 }
 
+/**
+ * Handle WebGPU status from main thread
+ */
+function handleWebGPUStatus(message: { available?: boolean; device?: 'webgpu' | 'wasm' }): void {
+  webgpuStatusReceived = true;
+  deviceType = message.device || (message.available ? 'webgpu' : 'wasm');
+  console.log(`[LocalLLMWorker] WebGPU status received from main thread: ${deviceType}`);
+}
+
 interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool_response';
   content: string;
@@ -62,7 +81,7 @@ interface ChatMessage {
 // ToolDefinition and ToolCall types imported from @mcp/core
 
 interface WorkerMessage {
-  type: 'load' | 'chat' | 'unload' | 'status';
+  type: 'load' | 'chat' | 'unload' | 'status' | 'webgpu-status';
   id: string;
   modelId?: string;
   messages?: ChatMessage[];
@@ -72,6 +91,9 @@ interface WorkerMessage {
     maxTokens?: number;
     stream?: boolean;
   };
+  // For webgpu-status message
+  available?: boolean;
+  device?: 'webgpu' | 'wasm';
 }
 
 interface WorkerResponse {
@@ -400,6 +422,11 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 
   try {
     switch (type) {
+      case 'webgpu-status':
+        // Handle WebGPU status from main thread (no response needed)
+        handleWebGPUStatus(event.data);
+        return;
+
       case 'load':
         if (!modelId) throw new Error('modelId required for load');
         await loadModel(id, modelId);

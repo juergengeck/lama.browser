@@ -58,8 +58,9 @@ export function useMemory() {
 
       // Get all conversations/topics
       const conversationsResponse = await chat.getConversations({})
+      // Note: response.data is the array directly, not response.data.conversations
       const conversations = conversationsResponse.success
-        ? (conversationsResponse.data?.conversations || [])
+        ? (conversationsResponse.data || [])
         : []
 
       console.log('[useMemory] Found', conversations.length, 'topics to scan')

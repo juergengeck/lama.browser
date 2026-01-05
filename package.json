@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@chat/core": "file:../chat.core",
     "@lama/core": "file:../lama.core",
     "@refinio/api": "file:../refinio.api",
     "@settings/core": "file:../settings.core"

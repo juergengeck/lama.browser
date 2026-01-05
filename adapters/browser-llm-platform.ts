@@ -13,6 +13,7 @@ import type { LLMPlatform, ChatMessage, LocalChatOptions } from '@lama/core/serv
 import { Events } from '@lama/core/events';
 import { emitAIEvent } from '../browser-ui/src/events/AIEventTypes.js';
 import type { GraniteToolDefinition, ToolCall } from '@mcp/core';
+import { isWebGPUInitialized, getPreferredDevice, getWebGPUStatus } from '@local/core';
 
 // Re-export types for convenience
 export type { GraniteToolDefinition, ToolCall };
@@ -78,6 +79,17 @@ export class BrowserLLMPlatform implements LLMPlatform {
         new URL('../browser-ui/src/workers/local-llm.worker.ts', import.meta.url),
         { type: 'module' }
       );
+
+      // Send WebGPU status to worker if we already initialized it
+      if (isWebGPUInitialized()) {
+        const status = getWebGPUStatus();
+        this.worker.postMessage({
+          type: 'webgpu-status',
+          available: status.available,
+          device: getPreferredDevice(),
+          capability: status,
+        });
+      }
 
       this.worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
         this.handleWorkerMessage(event.data);

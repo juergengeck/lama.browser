@@ -14,14 +14,39 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 BUILD_DIR="browser-ui/dist"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PACKAGES_DIR="$(dirname "$SCRIPT_DIR")"
 
 echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║   LAMA Browser Build Script           ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
 echo ""
 
-# Step 1: Build
-echo -e "${BLUE}[1/3]${NC} 🔨 Building LAMA Browser..."
+# Step 1: Rebuild dependencies
+echo -e "${BLUE}[1/4]${NC} 🔄 Rebuilding dependencies..."
+
+# Rebuild lama.core (critical - contains business logic)
+echo -e "  Building lama.core..."
+if (cd "$PACKAGES_DIR/lama.core" && npm run build); then
+    echo -e "  ${GREEN}✓ lama.core${NC}"
+else
+    echo -e "  ${RED}✗ lama.core build failed${NC}"
+    exit 1
+fi
+
+# Rebuild chat.core
+echo -e "  Building chat.core..."
+if (cd "$PACKAGES_DIR/chat.core" && npm run build 2>/dev/null); then
+    echo -e "  ${GREEN}✓ chat.core${NC}"
+else
+    echo -e "  ${YELLOW}⚠ chat.core (skipped or failed)${NC}"
+fi
+
+echo -e "${GREEN}✓ Dependencies rebuilt${NC}"
+echo ""
+
+# Step 2: Build lama.browser
+echo -e "${BLUE}[2/4]${NC} 🔨 Building LAMA Browser..."
 if npm run build; then
     echo -e "${GREEN}✓ Build successful${NC}"
 else
@@ -30,8 +55,8 @@ else
 fi
 echo ""
 
-# Step 2: Verify build
-echo -e "${BLUE}[2/3]${NC} 🔍 Verifying build output..."
+# Step 3: Verify build
+echo -e "${BLUE}[3/4]${NC} 🔍 Verifying build output..."
 if [ ! -f "$BUILD_DIR/index.html" ]; then
     echo -e "${RED}✗ Build verification failed: index.html not found${NC}"
     exit 1
@@ -39,8 +64,8 @@ fi
 echo -e "${GREEN}✓ Build verified${NC}"
 echo ""
 
-# Step 3: Create packages
-echo -e "${BLUE}[3/3]${NC} 📦 Creating deployment packages..."
+# Step 4: Create packages
+echo -e "${BLUE}[4/4]${NC} 📦 Creating deployment packages..."
 mkdir -p deploy
 rm -rf deploy/lama.browser deploy/lama-browser.tar.gz deploy/lama-browser.zip
 cp -r browser-ui/dist deploy/lama.browser

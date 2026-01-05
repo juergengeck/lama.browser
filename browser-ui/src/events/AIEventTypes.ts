@@ -5,10 +5,12 @@
  * Provides platform-specific event emission via CustomEvent/window.dispatchEvent.
  */
 
-import { Events, EventPayloads, EventName } from '@lama/core/events';
+import { Events } from '@lama/core/events';
+import type { EventPayloads, EventName } from '@lama/core/events';
 
 // Re-export for convenience
-export { Events, EventPayloads, EventName };
+export { Events };
+export type { EventPayloads, EventName };
 
 /**
  * Type-safe AI event

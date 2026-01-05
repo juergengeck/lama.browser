@@ -26,6 +26,16 @@ import '@refinio/one.core/lib/system/browser/storage-base.js';
 import '@refinio/one.core/lib/system/browser/storage-base-delete-file.js';
 import '@refinio/one.core/lib/system/browser/storage-streams.js';
 
+// ONE.core MessageBus logging (CHUM sync, connections, etc.)
+// Enable via: localStorage.setItem('ONE_DEBUG', 'true') or ?ONE_DEBUG=true in URL
+import { startLogger } from '@refinio/one.core/lib/logger.js';
+const debugEnabled = localStorage.getItem('ONE_DEBUG') === 'true' ||
+                     new URLSearchParams(window.location.search).has('ONE_DEBUG');
+if (debugEnabled) {
+  startLogger();
+  console.log('[main.tsx] ONE.core MessageBus logging enabled');
+}
+
 // DIAGNOSTIC: Check versionedObjects after platform load
 import { DEBUG_versionedObjects as versionedObjects } from '@refinio/one.core/lib/object-recipes.js';
 if (!(versionedObjects as any).__INSTANCE_ID) {

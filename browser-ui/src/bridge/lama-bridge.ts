@@ -51,6 +51,7 @@ class LamaBridge {
   private windowListenerCleanups: (() => void)[] = []
 
   private channelUpdateUnsubscribe: (() => void) | null = null
+  private newTopicUnsubscribe: (() => void) | null = null
 
   constructor() {
     // Set up window event listeners to forward AI events to bridge listeners
@@ -95,7 +96,29 @@ class LamaBridge {
       this.emit('channel:updated', { channelId, topicId })
     })
 
-    console.log('[LamaBridge] Channel update forwarding set up')
+    console.log('[LamaBridge] Channel update forwarding set up, channelManager.onUpdated listenerCount:', model.channelManager.onUpdated.listenerCount?.() ?? 'N/A')
+  }
+
+  /**
+   * Set up new topic event forwarding from topicModel
+   * Call this after model is initialized
+   * Emits 'newTopic' event when topics are received via CHUM sync
+   */
+  setupNewTopicForwarding(): void {
+    if (this.newTopicUnsubscribe) return // Already set up
+
+    const model = getModel()
+    if (!model.topicModel?.onNewTopicEvent) {
+      console.warn('[LamaBridge] topicModel.onNewTopicEvent not available yet')
+      return
+    }
+
+    this.newTopicUnsubscribe = model.topicModel.onNewTopicEvent.listen(() => {
+      console.log('[LamaBridge] 📡 topicModel.onNewTopicEvent fired - emitting newTopic')
+      this.emit('newTopic', {})
+    })
+
+    console.log('[LamaBridge] New topic forwarding set up')
   }
 
   /**
@@ -144,6 +167,7 @@ class LamaBridge {
       this.eventHandlers.set(event, new Set())
     }
     this.eventHandlers.get(event)!.add(handler)
+    console.log(`[LamaBridge] on('${event}') registered, now ${this.eventHandlers.get(event)!.size} handlers`)
   }
 
   off(event: string, handler: Function) {
@@ -151,7 +175,9 @@ class LamaBridge {
   }
 
   private emit(event: string, data: any) {
-    this.eventHandlers.get(event)?.forEach(handler => handler(data))
+    const handlers = this.eventHandlers.get(event)
+    console.log(`[LamaBridge] emit('${event}') → ${handlers?.size ?? 0} handlers`)
+    handlers?.forEach(handler => handler(data))
   }
 
   async getMessages(conversationId: string): Promise<Message[]> {

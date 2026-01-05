@@ -4,8 +4,10 @@
  */
 
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { ContactsView, LoginDeploy, ModelOnboarding, PlansProvider, BridgeProvider, ProfileEditor, ChatLayout, AssemblyJournalView, MemoryView, DevicesView, MobileBottomNav, MOBILE_NAV_HEIGHT, StatusBar, NavigateHomeProvider } from '@lama/ui'
-import { SettingsProvider, OneCoreSettingsStorage } from '@settings/core'
+import { ContactsView, LoginDeploy, ModelOnboarding, PlansProvider, BridgeProvider, ProfileEditor, ChatLayout, AssemblyJournalView, MemoryView, DevicesView, MobileBottomNav, MOBILE_NAV_HEIGHT, StatusBar, NavigateHomeProvider, AICreationLoader } from '@lama/ui'
+import { SettingsProvider, InstanceSettingsStorage } from '@settings/core'
+import type { SHA256IdHash } from '@refinio/one.core/lib/util/type-checks.js'
+import type { Instance } from '@refinio/one.core/lib/recipes.js'
 import type { AssemblyQueryOptions, AssemblyWithStory } from '@assembly/core'
 import type { DevicePlatformAdapter } from '@lama/ui'
 import type { NavTab } from '@lama/ui'
@@ -24,6 +26,7 @@ import { ModelProvider } from '@/model/ModelContext'
 import { FaviconBadgeManager } from '@/components/FaviconBadgeManager'
 import { lamaBridge } from '@/bridge/lama-bridge'
 import { browserOllamaValidator } from '../../adapters/browser-llm-config'
+import { checkGPUCapability } from '@/utils/gpu-detection'
 
 // TTS Worker - use Vite's ?worker&url syntax for proper bundling
 // This bundles the worker and all its dependencies (including @huggingface/transformers)
@@ -95,6 +98,7 @@ function modelToPlans(model: Model): LAMAPlansContext {
     memory: model.memoryPlan,
     cube: model.cubePlan,
     localModels: browserLocalModelsPlan,
+    ingestion: model.ingestionPlan || undefined,
   }
 }
 
@@ -207,6 +211,7 @@ function AppContent({ model }: AppContentProps) {
 
   const [hasTopics, setHasTopics] = useState<boolean | null>(null)
   const [hasDefaultModel, setHasDefaultModel] = useState<boolean | null>(null)
+  const [isCreatingAI, setIsCreatingAI] = useState(false)
   const [pendingInvitation, setPendingInvitation] = useState<string | null>(
     sessionStorage.getPendingInvitation()
   )
@@ -235,13 +240,18 @@ function AppContent({ model }: AppContentProps) {
   const bgDownloadStarted = useRef(false)
 
   // Settings storage - created once model is initialized
-  // Uses OneCoreSettingsStorage directly with browser ONE.core functions
+  // Uses InstanceSettingsStorage for IoM-compatible versioned objects
   const settingsStorage = useMemo(() => {
-    if (!modelInitialized || !model.initialized) return null
+    if (!modelInitialized || !model.initialized || !model.instanceId) return null
 
-    const userEmail = model.one.currentlyLoggedInEmail || 'anonymous@lama.one'
-    return new OneCoreSettingsStorage({ userEmail })
-  }, [model, modelInitialized])
+    return new InstanceSettingsStorage({
+      instanceIdHash: model.instanceId as SHA256IdHash<Instance>
+    })
+  }, [model, modelInitialized, model.instanceId])
+
+  // Memoize plans context to prevent unnecessary re-renders of all PlansProvider consumers
+  // CRITICAL: This must be before all early returns to satisfy React's rules of hooks
+  const plansContext = useMemo(() => modelToPlans(model), [model, model.ownerId])
 
   // Derive active tab from current route
   const activeTab = location.pathname.startsWith('/chat/')
@@ -337,9 +347,19 @@ function AppContent({ model }: AppContentProps) {
       // Set up channel update forwarding for real-time message updates
       lamaBridge.setupChannelUpdateForwarding()
 
+      // Set up new topic forwarding for CHUM sync (topics received from peers)
+      lamaBridge.setupNewTopicForwarding()
+
       if (pendingInvitation) {
         console.log('[App] Processing pending invitation')
       }
+    }
+
+    // If model is already initialized (e.g., auto-login completed before App mounted),
+    // call handleModelsReady immediately
+    if (model.initialized) {
+      console.log('[App] Model already initialized, calling handleModelsReady immediately')
+      handleModelsReady()
     }
 
     const disconnect = model.onOneModelsReady(handleModelsReady)
@@ -534,6 +554,11 @@ function AppContent({ model }: AppContentProps) {
     )
   }
 
+  // Show loading while creating AI identity (LLM inference for name generation)
+  if (isCreatingAI) {
+    return <AICreationLoader />
+  }
+
   // Model onboarding (only show after Model.init() completes and recipes are registered)
   const shouldShowOnboarding = isAuthenticated && modelInitialized && hasDefaultModel === false && !pendingInvitation
   if (shouldShowOnboarding) {
@@ -543,6 +568,7 @@ function AppContent({ model }: AppContentProps) {
         aiPlan={model.aiPlan}
         modelOptions={MODEL_OPTIONS}
         allowSkip={true}
+        checkGPUCapability={checkGPUCapability}
         downloads={{
           checkModelExists: async (modelId: string) => {
             // Check if background download completed for this model
@@ -586,11 +612,11 @@ function AppContent({ model }: AppContentProps) {
             // Not supported for browser models
           }
         }}
-        onComplete={async (modelId) => {
-          console.log('[App] ModelOnboarding completed with modelId:', modelId)
+        onComplete={async (model) => {
+          console.log('[App] ModelOnboarding completed with model:', model)
 
           // Skip AI Person creation if no model was selected (skip case)
-          if (!modelId) {
+          if (!model.id) {
             console.log('[App] No model selected, skipping AI Person creation')
             setHasDefaultModel(true)
             return
@@ -598,14 +624,15 @@ function AppContent({ model }: AppContentProps) {
 
           // Create AI identity and default chats BEFORE showing main UI
           // This ensures topics are fetched AFTER AI is created
+          setIsCreatingAI(true)
           try {
-            const response = await lamaBridge.generateBirthName(modelId)
+            const response = await lamaBridge.generateAIName(model.id, model.provider)
             if (response.success && response.name && response.email) {
               console.log('[App] AI identity generated:', response.name, response.email)
               // Set the default model WITH the generated name and email
               // This creates the AI Person in ONE.core with proper aiId
-              await lamaBridge.setDefaultModel(modelId, response.name, response.email)
-              console.log('[App] AI Person created with name:', response.name, 'for model:', modelId)
+              await lamaBridge.setDefaultModel(model.id, response.name, response.email)
+              console.log('[App] AI Person created with name:', response.name, 'for model:', model.id)
             } else {
               console.error('[App] Failed to generate AI identity:', response.error)
               // Still proceed but without AI Person - user can retry later
@@ -613,6 +640,8 @@ function AppContent({ model }: AppContentProps) {
           } catch (error) {
             console.error('[App] Error generating AI identity:', error)
             // Still proceed but without AI Person - user can retry later
+          } finally {
+            setIsCreatingAI(false)
           }
 
           // Now show main UI - topics will be fetched with correct AI info
@@ -721,10 +750,10 @@ function AppContent({ model }: AppContentProps) {
       case '/purchase':
         return <PurchaseView onPurchaseComplete={() => navigate('/chats')} />
       case '/settings':
-        return <SettingsView onLogout={logout} onNavigate={handleNavigate} {...headerProps} />
+        return <SettingsView onLogout={logout} onNavigate={handleNavigate} {...headerProps} ttsWorkerUrl={ttsWorkerUrl} />
       default:
         if (location.pathname.startsWith('/settings/')) {
-          return <SettingsView onLogout={logout} onNavigate={handleNavigate} {...headerProps} />
+          return <SettingsView onLogout={logout} onNavigate={handleNavigate} {...headerProps} ttsWorkerUrl={ttsWorkerUrl} />
         }
         if (location.pathname.startsWith('/contact/')) {
           // View another user's profile
@@ -744,7 +773,7 @@ function AppContent({ model }: AppContentProps) {
 
   return (
     <ModelProvider model={model}>
-      <PlansProvider plans={modelToPlans(model)}>
+      <PlansProvider plans={plansContext}>
         <BridgeProvider bridge={lamaBridge}>
           {withSettingsProvider(<>
           <FaviconBadgeManager

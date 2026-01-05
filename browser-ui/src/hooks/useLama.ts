@@ -81,7 +81,11 @@ export function useLamaMessages(conversationId: string) {
     loadMessages()
   }, [conversationId, model.initialized]) // Reload when conversation changes or model initializes
 
-  // Listen for new messages via custom events
+  // Store loadMessages in a ref so subscription callback doesn't need it as dependency
+  const loadMessagesRef = useRef(loadMessages)
+  loadMessagesRef.current = loadMessages
+
+  // Listen for new messages via custom events (local sends)
   useEffect(() => {
     const handleNewMessages = () => {
       console.log('[useLamaMessages] 📨 New message event received')
@@ -93,6 +97,38 @@ export function useLamaMessages(conversationId: string) {
       window.removeEventListener('chat:newMessages', handleNewMessages)
     }
   }, [loadMessages])
+
+  // Listen for topic updates from CoreModule (CHUM sync from remote peers)
+  // This is the CRITICAL subscription for real-time message updates
+  useEffect(() => {
+    if (!model.initialized) {
+      console.log('[useLamaMessages] ⏳ Skipping onTopicUpdated subscription - model not initialized')
+      return
+    }
+
+    console.log(`[useLamaMessages] 📡 Subscribing to onTopicUpdated for conversation: ${conversationId.substring(0, 16)}`)
+    console.log(`[useLamaMessages] 📢 Current listener count: ${model.onTopicUpdated?.listenerCount?.() ?? 'N/A'}`)
+
+    const unsubscribe = model.onTopicUpdated((updatedTopicId: string) => {
+      console.log(`[useLamaMessages] 📬 onTopicUpdated fired for: ${updatedTopicId.substring(0, 16)}`)
+
+      // Only respond to updates for our conversation
+      if (updatedTopicId !== conversationId) {
+        console.log(`[useLamaMessages] ⏭️ Skipping - not our conversation`)
+        return
+      }
+
+      console.log(`[useLamaMessages] 🔔 Reloading messages for our conversation`)
+      loadMessagesRef.current()
+    })
+
+    console.log(`[useLamaMessages] ✅ Subscribed, listener count now: ${model.onTopicUpdated?.listenerCount?.() ?? 'N/A'}`)
+
+    return () => {
+      console.log(`[useLamaMessages] 🔌 Unsubscribing from onTopicUpdated`)
+      unsubscribe()
+    }
+  }, [model.initialized, model.onTopicUpdated, conversationId])
 
   const sendMessage = useCallback(async (topicId: string, content: string, attachments?: any[]) => {
     if (!model.initialized) {

@@ -47,6 +47,7 @@ import {
   LLMSettings,
   ProposalSettings
 } from './Settings'
+import { LocalModelsSection } from '@lama/ui'
 import { useModel } from '@/model/ModelContext'
 import { usePlans } from '@lama/ui'
 
@@ -69,6 +70,8 @@ interface SettingsViewProps {
     active?: boolean
   }>
   trafficLightSpace?: boolean
+  /** URL to the TTS worker script for local models */
+  ttsWorkerUrl?: URL | string
 }
 
 interface ModelInfo {
@@ -94,7 +97,7 @@ interface SystemObject {
   metadata?: Record<string, any>
 }
 
-export function SettingsView({ onLogout, onNavigate, appMenuItems = [], trafficLightSpace = false }: SettingsViewProps) {
+export function SettingsView({ onLogout, onNavigate, appMenuItems = [], trafficLightSpace = false, ttsWorkerUrl }: SettingsViewProps) {
   const model = useModel()
   const plans = usePlans()
   const [models, setModels] = useState<ModelInfo[]>([])
@@ -933,6 +936,12 @@ export function SettingsView({ onLogout, onNavigate, appMenuItems = [], trafficL
             llmConfig={plans.llmConfig}
             chat={plans.chat}
             aiAssistant={plans.aiAssistant}
+          />
+
+          {/* Local Models (On-Device) */}
+          <LocalModelsSection
+            ttsWorkerUrl={ttsWorkerUrl}
+            defaultCollapsed={false}
           />
 
           {/* Proposal Configuration */}

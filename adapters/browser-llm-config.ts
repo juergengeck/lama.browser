@@ -14,6 +14,23 @@ import {
 } from '@refinio/one.core/lib/crypto/encryption.js';
 
 /**
+ * Detect if running in Safari browser
+ */
+function isSafari(): boolean {
+  const ua = navigator.userAgent;
+  return ua.includes('Safari') && !ua.includes('Chrome') && !ua.includes('Chromium');
+}
+
+/**
+ * Detect if this is a mixed content scenario (HTTPS page → HTTP request)
+ */
+function isMixedContent(url: string): boolean {
+  const isSecurePage = window.location.protocol === 'https:';
+  const isInsecureRequest = url.startsWith('http://');
+  return isSecurePage && isInsecureRequest;
+}
+
+/**
  * Detect if error is CORS-related
  */
 function isCorsError(error: any): boolean {
@@ -31,6 +48,21 @@ function isCorsError(error: any): boolean {
 }
 
 /**
+ * Detect Safari's mixed content blocking
+ * Safari blocks HTTPS→HTTP requests with "Load failed" error
+ */
+function isSafariMixedContentBlock(error: any, url: string): boolean {
+  if (!isSafari()) return false;
+  if (!isMixedContent(url)) return false;
+
+  // Safari's mixed content error shows as "Load failed"
+  if (error instanceof TypeError && error.message === 'Load failed') {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Browser implementation for Ollama-compatible API connection testing using fetch()
  * Works with Ollama, LM Studio, and other Ollama-compatible servers
  */
@@ -40,26 +72,32 @@ export const browserOllamaValidator = {
     authToken?: string,
     serviceName: string = 'Ollama'
   ): Promise<TestConnectionResponse> {
+    // Validate server URL
+    if (!server) {
+      return {
+        success: false,
+        error: 'No server URL provided',
+        errorCode: 'INVALID_URL'
+      };
+    }
+
+    // Ensure server has protocol - declare outside try so it's accessible in catch
+    let serverUrl = server;
+    if (!serverUrl.startsWith('http://') && !serverUrl.startsWith('https://')) {
+      serverUrl = `http://${serverUrl}`;
+    }
+
+    // Remove trailing slash
+    serverUrl = serverUrl.replace(/\/$/, '');
+
     try {
-      // Validate server URL
-      if (!server) {
-        return {
-          success: false,
-          error: 'No server URL provided',
-          errorCode: 'INVALID_URL'
-        };
-      }
-
-      // Ensure server has protocol
-      let serverUrl = server;
-      if (!serverUrl.startsWith('http://') && !serverUrl.startsWith('https://')) {
-        serverUrl = `http://${serverUrl}`;
-      }
-
-      // Remove trailing slash
-      serverUrl = serverUrl.replace(/\/$/, '');
 
       console.log(`[Browser] Testing ${serviceName} connection to:`, serverUrl);
+
+      // Early warning for Safari mixed content scenario
+      if (isSafari() && isMixedContent(serverUrl)) {
+        console.warn('[Browser] Safari detected with mixed content scenario - connection will likely fail');
+      }
 
       const headers: Record<string, string> = {};
 
@@ -100,6 +138,17 @@ export const browserOllamaValidator = {
           success: false,
           error: 'Connection timeout - is Ollama running?',
           errorCode: 'TIMEOUT'
+        };
+      }
+
+      // Detect Safari mixed content blocking (HTTPS page → HTTP localhost)
+      if (isSafariMixedContentBlock(error, serverUrl)) {
+        return {
+          success: false,
+          error: 'Safari blocks HTTP requests from HTTPS pages. Options: (1) Use Chrome/Firefox, (2) Set up a local HTTPS proxy, or (3) Use an HTTPS tunnel like ngrok.',
+          errorCode: 'MIXED_CONTENT',
+          needsSetup: true,
+          isSafariMixedContent: true
         };
       }
 
