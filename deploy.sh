@@ -22,24 +22,42 @@ echo -e "${BLUE}║   LAMA Browser Build Script           ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
 echo ""
 
-# Step 1: Rebuild dependencies
+# Step 1: Rebuild dependencies (in dependency order)
 echo -e "${BLUE}[1/4]${NC} 🔄 Rebuilding dependencies..."
 
-# Rebuild lama.core (critical - contains business logic)
+# Rebuild one.core (foundation - CHUM sync, storage)
+echo -e "  Building one.core..."
+if (cd "$PACKAGES_DIR/one.core" && npm run build 2>&1 | tail -3); then
+    echo -e "  ${GREEN}✓ one.core${NC}"
+else
+    echo -e "  ${RED}✗ one.core build failed${NC}"
+    exit 1
+fi
+
+# Rebuild one.models (depends on one.core)
+echo -e "  Building one.models (src only)..."
+if (cd "$PACKAGES_DIR/one.models" && npm run build:src 2>&1 | tail -3); then
+    echo -e "  ${GREEN}✓ one.models${NC}"
+else
+    echo -e "  ${RED}✗ one.models build failed${NC}"
+    exit 1
+fi
+
+# Rebuild chat.core (depends on one.models)
+echo -e "  Building chat.core..."
+if (cd "$PACKAGES_DIR/chat.core" && npm run build 2>&1 | tail -3); then
+    echo -e "  ${GREEN}✓ chat.core${NC}"
+else
+    echo -e "  ${YELLOW}⚠ chat.core (skipped or failed)${NC}"
+fi
+
+# Rebuild lama.core (depends on chat.core)
 echo -e "  Building lama.core..."
-if (cd "$PACKAGES_DIR/lama.core" && npm run build); then
+if (cd "$PACKAGES_DIR/lama.core" && npm run build 2>&1 | tail -3); then
     echo -e "  ${GREEN}✓ lama.core${NC}"
 else
     echo -e "  ${RED}✗ lama.core build failed${NC}"
     exit 1
-fi
-
-# Rebuild chat.core
-echo -e "  Building chat.core..."
-if (cd "$PACKAGES_DIR/chat.core" && npm run build 2>/dev/null); then
-    echo -e "  ${GREEN}✓ chat.core${NC}"
-else
-    echo -e "  ${YELLOW}⚠ chat.core (skipped or failed)${NC}"
 fi
 
 echo -e "${GREEN}✓ Dependencies rebuilt${NC}"
