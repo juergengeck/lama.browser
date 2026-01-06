@@ -125,6 +125,9 @@ const channelHandlers: Record<string, (model: any, ...args: any[]) => Promise<an
   'chat:getConversations': async (model, request) => {
     return await model.chatPlan.getConversations(request || {});
   },
+  'chat:createConversation': async (model, request) => {
+    return await model.chatPlan.createConversation(request);
+  },
 
   // Contacts
   'contacts:list': async (model) => {
