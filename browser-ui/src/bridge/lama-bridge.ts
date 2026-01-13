@@ -60,7 +60,8 @@ class LamaBridge {
 
   /**
    * Set up channel update forwarding from channelManager
-   * Call this after model is initialized
+   * SIMPLIFIED: Just emit channel:updated, no topic matching
+   * UI components handle their own refresh logic
    */
   setupChannelUpdateForwarding(): void {
     if (this.channelUpdateUnsubscribe) return // Already set up
@@ -71,32 +72,12 @@ class LamaBridge {
       return
     }
 
-    this.channelUpdateUnsubscribe = model.channelManager.onUpdated(async (
-      channelInfoIdHash: any,
-      channelId: string
-    ) => {
-      // Find topic by matching channel ID hash (Topic.channel === channelInfoIdHash)
-      // This is the same pattern used by AIMessageListener
-      let topicId: string | undefined
-      try {
-        const allTopics = await model.topicModel.topics.all()
-        const topic = allTopics.find((t: any) => t.channel === channelInfoIdHash)
-        if (topic) {
-          topicId = topic.id
-        }
-      } catch (err) {
-        // Silently ignore - topic lookup is best-effort
-      }
-
-      console.log('[LamaBridge] 📡 channelManager.onUpdated fired:', {
-        channelInfoIdHash: channelInfoIdHash?.substring?.(0, 12) + '...',
-        topicId: topicId?.substring(0, 20) + '...'
-      })
-
-      this.emit('channel:updated', { channelId, topicId })
+    this.channelUpdateUnsubscribe = model.channelManager.onUpdated(async () => {
+      console.log('[LamaBridge] 📡 Channel updated - emitting channel:updated')
+      this.emit('channel:updated', {})
     })
 
-    console.log('[LamaBridge] Channel update forwarding set up, channelManager.onUpdated listenerCount:', model.channelManager.onUpdated.listenerCount?.() ?? 'N/A')
+    console.log('[LamaBridge] Channel update forwarding set up')
   }
 
   /**

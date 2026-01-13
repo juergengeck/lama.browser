@@ -167,33 +167,46 @@ export function useUnreadMessages(): UseUnreadMessagesReturn {
 
     const updateUnreadCount = async (
       channelInfoIdHash: any,
-      channelId: string,
+      _channelId: string,  // NOT used - this is channel identifier, not topic ID
       channelOwner: any,
       timeOfEarliestChange: number,
       data: any
     ) => {
       try {
+        // CRITICAL: channelId from onUpdated is NOT a topic ID!
+        // We must find the Topic that references this channel via Topic.channel === channelInfoIdHash
+        const allTopics = await model.topicModel.topics.all()
+        const topic = allTopics.find((t: any) => t.channel === channelInfoIdHash)
+
+        if (!topic) {
+          // No topic found for this channel - skip (might be a system channel)
+          return
+        }
+
+        // Calculate topic ID hash for use as conversation identifier
+        const conversationId = await calculateIdHashOfObj(topic)
+
         // Check if user is actively viewing this conversation
-        const status = await getReadStatus(channelId)
+        const status = await getReadStatus(conversationId)
         if (status) {
           const isActivelyViewing = (Date.now() - status.lastReadTimestamp) < 2000
           if (isActivelyViewing) {
             // Keep unread count at 0 for actively viewed conversations
             setUnreadByConversation(prev => ({
               ...prev,
-              [channelId]: 0
+              [conversationId]: 0
             }))
             return
           }
         }
 
         // Recalculate unread count
-        const unreadCount = await calculateUnreadCount(channelId)
+        const unreadCount = await calculateUnreadCount(conversationId)
 
         // Update local state
         setUnreadByConversation(prev => ({
           ...prev,
-          [channelId]: unreadCount
+          [conversationId]: unreadCount
         }))
       } catch (e) {
         console.error('[useUnreadMessages] Failed to update unread count:', e)
