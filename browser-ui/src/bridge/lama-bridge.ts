@@ -364,6 +364,7 @@ class LamaBridge {
     success: boolean
     name?: string
     email?: string
+    creationContext?: { device: string; locale: string; time: number; app: string; creationStory?: string }
     error?: string
   }> {
     const startTime = performance.now()
@@ -440,7 +441,8 @@ class LamaBridge {
       return {
         success: true,
         name: result.name,
-        email: result.email
+        email: result.email,
+        creationContext: result.creationContext
       }
     } catch (error) {
       console.error('[LamaBridge] generateAIName FAILED after', (performance.now() - startTime).toFixed(0), 'ms:', error)
