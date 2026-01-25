@@ -707,13 +707,16 @@ function AppContent({ model }: AppContentProps) {
       trafficLightSpace: false
     }
 
+    // glue.one logo for chat header
+    const glueOneLogo = <img src="/assets/icons/glueone.svg" alt="glue.one" className="h-6" />
+
     if (location.pathname.startsWith('/chat/')) {
-      return <ChatLayout selectedConversationId={selectedConversationId} {...headerProps} ttsWorkerUrl={ttsWorkerUrl} />
+      return <ChatLayout selectedConversationId={selectedConversationId} {...headerProps} ttsWorkerUrl={ttsWorkerUrl} logo={glueOneLogo} />
     }
 
     switch (location.pathname) {
       case '/chats':
-        return <ChatLayout selectedConversationId={selectedConversationId} {...headerProps} ttsWorkerUrl={ttsWorkerUrl} />
+        return <ChatLayout selectedConversationId={selectedConversationId} {...headerProps} ttsWorkerUrl={ttsWorkerUrl} logo={glueOneLogo} />
       case '/journal':
         return <AssemblyJournalView
           queryAssemblies={async (options: AssemblyQueryOptions): Promise<AssemblyWithStory[]> => {
@@ -747,7 +750,7 @@ function AppContent({ model }: AppContentProps) {
           // View another user's profile
           return <ProfileEditor open={true} onOpenChange={() => {}} fullPage={true} contactId={params.personId} onClose={() => navigate('/contacts')} />
         }
-        return <ChatLayout {...headerProps} ttsWorkerUrl={ttsWorkerUrl} />
+        return <ChatLayout {...headerProps} ttsWorkerUrl={ttsWorkerUrl} logo={glueOneLogo} />
     }
   }
 
