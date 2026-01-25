@@ -6,11 +6,11 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Card, CardContent } from '@lama/ui'
-import { Progress } from '@lama/ui'
-import { Badge } from '@lama/ui'
+import { Card, CardContent } from '@refinio/lama.ui'
+import { Progress } from '@refinio/lama.ui'
+import { Badge } from '@refinio/lama.ui'
 import { RefreshCw, CheckCircle, X } from 'lucide-react'
-import { Button } from '@lama/ui'
+import { Button } from '@refinio/lama.ui'
 
 export interface SyncProgressInfo {
   active: boolean

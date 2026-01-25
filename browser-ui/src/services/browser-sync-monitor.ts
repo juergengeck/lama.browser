@@ -8,7 +8,7 @@
  * - Failed operations
  */
 
-import type { SyncStats } from '@lama/ui'
+import type { SyncStats } from '@refinio/lama.ui'
 
 /**
  * Singleton sync monitor for browser

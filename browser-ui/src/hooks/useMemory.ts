@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useModel } from '@/model/ModelContext'
-import { usePlans } from '@lama/ui'
+import { usePlans } from '@refinio/lama.ui'
 
 export interface MemorySubject {
   id: string

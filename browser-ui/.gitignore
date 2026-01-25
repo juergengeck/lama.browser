@@ -4,7 +4,7 @@ node_modules/
 .pnp.js
 
 # Production builds
-dist/
+# dist/ - KEPT IN GIT for Cloudflare Pages (no build step due to submodules)
 build/
 
 # Environment files

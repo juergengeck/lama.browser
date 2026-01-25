@@ -137,10 +137,10 @@ export class SimpleBrowserInstance {
   }
   
   // Message operations (simplified)
-  async createMessage(conversationId: string, text: string): Promise<any> {
+  async createMessage(topicId: string, text: string): Promise<any> {
     const message = {
       id: `msg-${Date.now()}`,
-      conversationId,
+      topicId,
       text,
       sender: this.currentUser?.id || 'anonymous',
       timestamp: new Date().toISOString(),
@@ -155,10 +155,10 @@ export class SimpleBrowserInstance {
     return message
   }
   
-  async getMessages(conversationId: string, limit = 50): Promise<any[]> {
+  async getMessages(topicId: string, limit = 50): Promise<any[]> {
     const messages = this.getStoredMessages()
     return messages
-      .filter(m => m.conversationId === conversationId)
+      .filter(m => m.topicId === topicId)
       .slice(-limit)
   }
   

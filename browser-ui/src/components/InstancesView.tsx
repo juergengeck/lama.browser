@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react'
-import { Button } from '@lama/ui'
-import { Card, CardContent, CardHeader, CardTitle } from '@lama/ui'
-import { Badge } from '@lama/ui'
-import { Separator } from '@lama/ui'
+import { Button } from '@refinio/lama.ui'
+import { Card, CardContent, CardHeader, CardTitle } from '@refinio/lama.ui'
+import { Badge } from '@refinio/lama.ui'
+import { Separator } from '@refinio/lama.ui'
 import {
   Monitor,
   Smartphone,
@@ -24,7 +24,7 @@ import {
   ChevronRight
 } from 'lucide-react'
 import { useModel } from '@/model'
-import { usePlans } from '@lama/ui'
+import { usePlans } from '@refinio/lama.ui'
 
 interface Instance {
   id: string

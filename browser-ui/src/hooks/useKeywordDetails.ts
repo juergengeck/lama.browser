@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { usePlans } from '@lama/ui';
+import { usePlans } from '@refinio/lama.ui';
 import type {
   KeywordDetailData,
   KeywordDetailResponse

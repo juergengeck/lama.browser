@@ -5,16 +5,16 @@
  */
 
 import React, { useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lama/ui';
-import { Button } from '@lama/ui';
-import { Badge } from '@lama/ui';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@refinio/lama.ui';
+import { Button } from '@refinio/lama.ui';
+import { Badge } from '@refinio/lama.ui';
 import { X, RefreshCw, Loader2, Tag } from 'lucide-react';
 import { useKeywordDetails } from '../../hooks/useKeywordDetails.js';
 import { SortControls } from './SortControls.js';
 import { SubjectList } from './SubjectList.js';
 import { AccessControlList } from './AccessControlList.js';
 import { useModel } from '../../model/ModelContext.js';
-import { usePlans } from '@lama/ui';
+import { usePlans } from '@refinio/lama.ui';
 import type {
   SubjectSortMode,
   AccessStateValue,

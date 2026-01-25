@@ -11,7 +11,7 @@ export interface User {
 
 export interface Message {
   id: string;
-  conversationId: string;
+  topicId: string;
   text: string;
   sender: string;
   timestamp: string;
@@ -154,12 +154,12 @@ class IPCClient {
   }
   
   // Chat methods
-  async sendMessage(conversationId: string, text: string, attachments?: any[]): Promise<Message> {
+  async sendMessage(topicId: string, text: string, attachments?: any[]): Promise<Message> {
     if (!this.electronAPI) {
       // Mock for browser mode
       return {
         id: `msg-${Date.now()}`,
-        conversationId,
+        topicId,
         text,
         sender: 'user',
         timestamp: new Date().toISOString(),
@@ -167,16 +167,16 @@ class IPCClient {
       };
     }
     
-    const result = await this.electronAPI.invoke('chat:sendMessage', { conversationId, text, attachments });
+    const result = await this.electronAPI.invoke('chat:sendMessage', { topicId, text, attachments });
     return result.data || result;
   }
   
-  async getMessages(conversationId: string, limit = 50, offset = 0): Promise<{ messages: Message[]; total: number; hasMore: boolean }> {
+  async getMessages(topicId: string, limit = 50, offset = 0): Promise<{ messages: Message[]; total: number; hasMore: boolean }> {
     if (!this.electronAPI) {
       return { messages: [], total: 0, hasMore: false };
     }
     
-    const result = await this.electronAPI.invoke('chat:getMessages', { conversationId, limit, offset });
+    const result = await this.electronAPI.invoke('chat:getMessages', { topicId, limit, offset });
     return result.data || result;
   }
   

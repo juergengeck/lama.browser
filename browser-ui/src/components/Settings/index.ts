@@ -2,13 +2,13 @@
  * Settings Components - Browser Platform
  *
  * Consolidates settings panel components.
- * Re-exports from @lama/ui where components are platform-agnostic.
+ * Re-exports from @refinio/lama.ui where components are platform-agnostic.
  * Exports local implementations for browser-specific settings.
  */
 
-// Platform-agnostic settings from @lama/ui
-export { TopicPrioritySettings, AISettingsView } from '@lama/ui'
-export { ModelOnboarding, OllamaCorsHelp } from '@lama/ui'
+// Platform-agnostic settings from @refinio/lama.ui
+export { TopicPrioritySettings, AISettingsView } from '@refinio/lama.ui'
+export { ModelOnboarding, OllamaCorsHelp } from '@refinio/lama.ui'
 
 // Browser-specific settings panels (use local implementations)
 export { LLMSettings } from './LLMSettings'

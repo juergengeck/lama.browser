@@ -36,7 +36,7 @@ class LocalStorage {
         }
         if (!db.objectStoreNames.contains('messages')) {
           const messageStore = db.createObjectStore('messages', { keyPath: 'id' })
-          messageStore.createIndex('conversationId', 'conversationId', { unique: false })
+          messageStore.createIndex('topicId', 'topicId', { unique: false })
           messageStore.createIndex('timestamp', 'timestamp', { unique: false })
         }
         if (!db.objectStoreNames.contains('contacts')) {

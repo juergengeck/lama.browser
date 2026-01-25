@@ -7,16 +7,16 @@
  * 3. Cloud API Models (Anthropic/OpenAI/DeepSeek/Qwen)
  */
 
-import React, { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@lama/ui'
-import { Button } from '@lama/ui'
-import { Badge } from '@lama/ui'
-import { Textarea } from '@lama/ui'
-import { Input } from '@lama/ui'
-import { Label } from '@lama/ui'
+import { useState, useEffect } from 'react'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@refinio/lama.ui'
+import { Button } from '@refinio/lama.ui'
+import { Badge } from '@refinio/lama.ui'
+import { Textarea } from '@refinio/lama.ui'
+import { Input } from '@refinio/lama.ui'
+import { Label } from '@refinio/lama.ui'
 import { Brain, ChevronDown, ChevronRight, RefreshCw, Save, Bot, Key, Eye, EyeOff, Plus, ExternalLink, X } from 'lucide-react'
-import { Alert, AlertDescription } from '@lama/ui'
-import { Separator } from '@lama/ui'
+import { Alert, AlertDescription } from '@refinio/lama.ui'
+import { Separator } from '@refinio/lama.ui'
 import {
   Dialog,
   DialogContent,
@@ -24,7 +24,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@lama/ui'
+} from '@refinio/lama.ui'
+import { OllamaServersSection } from '@refinio/lama.ui'
 
 interface LLMConfig {
   id: string
@@ -60,18 +61,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
   const [regenerating, setRegenerating] = useState<string | null>(null)
   const [savingApiKey, setSavingApiKey] = useState<string | null>(null)
 
-  // Server configuration state
-  const [ollamaBaseUrl, setOllamaBaseUrl] = useState('http://localhost:11434')
-  const [lmstudioBaseUrl, setLmstudioBaseUrl] = useState('http://localhost:1234')
-  const [testingOllama, setTestingOllama] = useState(false)
-  const [testingLMStudio, setTestingLMStudio] = useState(false)
-  const [ollamaStatus, setOllamaStatus] = useState<{ success: boolean; message: string } | null>(null)
-  const [lmstudioStatus, setLMStudioStatus] = useState<{ success: boolean; message: string } | null>(null)
-
-  // Discovered models from test connections
-  const [ollamaModels, setOllamaModels] = useState<any[]>([])
-  const [lmstudioModels, setLMStudioModels] = useState<any[]>([])
-  const [registeringModel, setRegisteringModel] = useState<string | null>(null)
+  // Chat creation state
   const [creatingChat, setCreatingChat] = useState<string | null>(null)
 
   // Cloud provider management state
@@ -330,110 +320,6 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
 
   const isCloudProvider = (provider: string): boolean => {
     return needsApiKey(provider)
-  }
-
-  const testOllamaConnection = async () => {
-    setTestingOllama(true)
-    setOllamaStatus(null)
-    setOllamaModels([])
-
-    try {
-      const result = await llmConfig.testConnectionAndDiscoverModels({
-        baseUrl: ollamaBaseUrl,
-        serviceName: 'Ollama'
-      })
-
-      if (result.success) {
-        setOllamaStatus({
-          success: true,
-          message: `Connected! Version: ${result.version || 'unknown'}${result.models ? `, ${result.models.length} models available` : ''}`
-        })
-
-        // Save discovered models
-        if (result.models && result.models.length > 0) {
-          setOllamaModels(result.models)
-        }
-      } else {
-        setOllamaStatus({
-          success: false,
-          message: result.error || 'Connection failed'
-        })
-      }
-    } catch (error) {
-      setOllamaStatus({
-        success: false,
-        message: (error as Error).message || 'Connection test failed'
-      })
-    } finally {
-      setTestingOllama(false)
-    }
-  }
-
-  const testLMStudioConnection = async () => {
-    setTestingLMStudio(true)
-    setLMStudioStatus(null)
-    setLMStudioModels([])
-
-    try {
-      // LM Studio uses OpenAI-compatible API
-      const result = await llmConfig.testConnectionAndDiscoverModels({
-        server: lmstudioBaseUrl,
-        serviceName: 'LM Studio'
-      })
-
-      if (result.success) {
-        setLMStudioStatus({
-          success: true,
-          message: `Connected!${result.models ? ` ${result.models.length} models available` : ''}`
-        })
-
-        // Save discovered models
-        if (result.models && result.models.length > 0) {
-          setLMStudioModels(result.models)
-        }
-      } else {
-        setLMStudioStatus({
-          success: false,
-          message: result.error || 'Connection failed'
-        })
-      }
-    } catch (error) {
-      setLMStudioStatus({
-        success: false,
-        message: (error as Error).message || 'Connection test failed'
-      })
-    } finally {
-      setTestingLMStudio(false)
-    }
-  }
-
-  const registerModel = async (modelName: string, provider: 'ollama' | 'lmstudio', baseUrl: string) => {
-    setRegisteringModel(modelName)
-    try {
-      const result = await llmConfig.setConfig({
-        modelType: 'local',
-        baseUrl,
-        modelName,
-        setAsActive: false,
-        authType: 'none'
-      })
-
-      if (result.success) {
-        console.log(`[LLMSettings] Successfully registered model: ${modelName}`)
-        await loadLLMConfigs()
-      } else {
-        setStatusMessage({ type: 'error', message: `Failed to register model: ${result.error}` })
-      }
-    } catch (error) {
-      console.error('[LLMSettings] Failed to register model:', error)
-      setStatusMessage({ type: 'error', message: `Failed to register model: ${(error as Error).message}` })
-    } finally {
-      setRegisteringModel(null)
-    }
-  }
-
-  const isModelRegistered = (modelName: string): boolean => {
-    return llmConfigs.some(config => config.modelName === modelName || config.modelId === modelName)
   }
 
   const handleOpenProviderDialog = (providerId: string) => {
@@ -798,203 +684,11 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
 
         {localModels.length > 0 && <Separator />}
 
-        {/* Section 2: Server Configuration */}
-        <div className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <Brain className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <h3 className="text-sm font-semibold">Local Server Configuration</h3>
-          </div>
-
-          {/* Ollama Configuration */}
-          <Card className="border-2 border-dashed">
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="h-8 w-8 rounded bg-blue-100 dark:bg-blue-900 flex items-center justify-center">
-                    <span className="text-xs font-bold text-blue-600 dark:text-blue-400">OL</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Ollama Server</p>
-                    <p className="text-xs text-muted-foreground">Open-source local LLM server</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="ollama-url" className="text-xs">Server URL</Label>
-                <div className="flex space-x-2">
-                  <Input
-                    id="ollama-url"
-                    value={ollamaBaseUrl}
-                    onChange={(e) => setOllamaBaseUrl(e.target.value)}
-                    placeholder="http://localhost:11434"
-                    className="text-sm"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={testOllamaConnection}
-                    disabled={testingOllama}
-                  >
-                    {testingOllama ? (
-                      <>
-                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary mr-1" />
-                        Testing...
-                      </>
-                    ) : (
-                      'Test'
-                    )}
-                  </Button>
-                </div>
-
-                {ollamaStatus && (
-                  <Alert variant={ollamaStatus.success ? 'default' : 'destructive'}>
-                    <AlertDescription className="text-xs">
-                      {ollamaStatus.message}
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                {ollamaModels.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium">Available Models ({ollamaModels.length})</p>
-                    <div className="max-h-48 overflow-y-auto space-y-1">
-                      {ollamaModels.map((modelObj) => {
-                        const modelName = modelObj.name || modelObj.model || modelObj
-                        const isRegistered = isModelRegistered(modelName)
-                        return (
-                          <div key={modelName} className="flex items-center justify-between p-2 border rounded bg-muted/50">
-                            <div className="flex-1">
-                              <p className="text-xs font-medium">{modelName}</p>
-                              {modelObj.size && (
-                                <p className="text-xs text-muted-foreground">
-                                  Size: {(modelObj.size / 1e9).toFixed(2)} GB
-                                </p>
-                              )}
-                            </div>
-                            {isRegistered ? (
-                              <Badge variant="outline" className="text-xs">Registered</Badge>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => registerModel(modelName, 'ollama', ollamaBaseUrl)}
-                                disabled={registeringModel === modelName}
-                                className="text-xs"
-                              >
-                                {registeringModel === modelName ? 'Adding...' : 'Add'}
-                              </Button>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                <p className="text-xs text-muted-foreground">
-                  Install Ollama from <a href="https://ollama.ai" target="_blank" rel="noopener noreferrer" className="underline">ollama.ai</a>
-                  {' '}• Configure OLLAMA_ORIGINS for browser access
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* LM Studio Configuration */}
-          <Card className="border-2 border-dashed">
-            <CardContent className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div className="h-8 w-8 rounded bg-purple-100 dark:bg-purple-900 flex items-center justify-center">
-                    <span className="text-xs font-bold text-purple-600 dark:text-purple-400">LM</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">LM Studio</p>
-                    <p className="text-xs text-muted-foreground">Desktop app for running local LLMs</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="lmstudio-url" className="text-xs">Server URL</Label>
-                <div className="flex space-x-2">
-                  <Input
-                    id="lmstudio-url"
-                    value={lmstudioBaseUrl}
-                    onChange={(e) => setLmstudioBaseUrl(e.target.value)}
-                    placeholder="http://localhost:1234"
-                    className="text-sm"
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={testLMStudioConnection}
-                    disabled={testingLMStudio}
-                  >
-                    {testingLMStudio ? (
-                      <>
-                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-primary mr-1" />
-                        Testing...
-                      </>
-                    ) : (
-                      'Test'
-                    )}
-                  </Button>
-                </div>
-
-                {lmstudioStatus && (
-                  <Alert variant={lmstudioStatus.success ? 'default' : 'destructive'}>
-                    <AlertDescription className="text-xs">
-                      {lmstudioStatus.message}
-                    </AlertDescription>
-                  </Alert>
-                )}
-
-                {lmstudioModels.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-medium">Available Models ({lmstudioModels.length})</p>
-                    <div className="max-h-48 overflow-y-auto space-y-1">
-                      {lmstudioModels.map((modelObj) => {
-                        const modelName = modelObj.id || modelObj.name || modelObj.model || modelObj
-                        const isRegistered = isModelRegistered(modelName)
-                        return (
-                          <div key={modelName} className="flex items-center justify-between p-2 border rounded bg-muted/50">
-                            <div className="flex-1">
-                              <p className="text-xs font-medium">{modelName}</p>
-                              {modelObj.owned_by && (
-                                <p className="text-xs text-muted-foreground">
-                                  Owner: {modelObj.owned_by}
-                                </p>
-                              )}
-                            </div>
-                            {isRegistered ? (
-                              <Badge variant="outline" className="text-xs">Registered</Badge>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => registerModel(modelName, 'lmstudio', lmstudioBaseUrl)}
-                                disabled={registeringModel === modelName}
-                                className="text-xs"
-                              >
-                                {registeringModel === modelName ? 'Adding...' : 'Add'}
-                              </Button>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                <p className="text-xs text-muted-foreground">
-                  Download LM Studio from <a href="https://lmstudio.ai" target="_blank" rel="noopener noreferrer" className="underline">lmstudio.ai</a>
-                  {' '}• Enable local server in settings
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Section 2: Ollama Servers Configuration */}
+        <OllamaServersSection
+          onServersChanged={loadLLMConfigs}
+          onModelsDiscovered={loadLLMConfigs}
+        />
 
         <Separator />
 
@@ -1133,7 +827,7 @@ export function LLMSettings({ llmConfig, chat, aiAssistant, navigate, initialize
                   type="password"
                   value={providerApiKey}
                   onChange={(e) => setProviderApiKey(e.target.value)}
-                  placeholder={selectedProvider && cloudProviders.find(p => p.id === selectedProvider)?.apiKeyPlaceholder}
+                  placeholder={selectedProvider ? cloudProviders.find(p => p.id === selectedProvider)?.apiKeyPlaceholder : undefined}
                   className="font-mono text-sm"
                 />
               </div>

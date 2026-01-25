@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@lama/ui'
-import { Button } from '@lama/ui'
-import { Input } from '@lama/ui'
-import { Label } from '@lama/ui'
-import { Badge } from '@lama/ui'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@refinio/lama.ui'
+import { Button } from '@refinio/lama.ui'
+import { Input } from '@refinio/lama.ui'
+import { Label } from '@refinio/lama.ui'
+import { Badge } from '@refinio/lama.ui'
 import { Package, Plus, Trash2, RefreshCw, CheckCircle, Circle, Brain, Server, ChevronDown, ChevronRight } from 'lucide-react'
 import { useModel } from '@/model/ModelContext'
-import { Separator } from '@lama/ui'
+import { Separator } from '@refinio/lama.ui'
 import {
   Dialog,
   DialogContent,
@@ -14,7 +14,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@lama/ui'
+} from '@refinio/lama.ui'
 
 interface MCPServer {
   name: string

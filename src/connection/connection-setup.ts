@@ -7,8 +7,8 @@
  * This demonstrates the integration pattern that all platforms should follow.
  */
 
-import { ConnectionManager } from '@lama/connection.core';
-import type { PlatformDependencies } from '@lama/connection.core';
+import { ConnectionManager } from '@refinio/connection.core';
+import type { PlatformDependencies } from '@refinio/connection.core';
 import { BrowserTransportFactory } from './BrowserTransportFactory';
 import { BrowserIndexedDBStorage } from './BrowserStorage';
 import { BrowserUICallbacks } from './BrowserUICallbacks';

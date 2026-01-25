@@ -40,11 +40,11 @@ export default defineConfig({
       '@anthropic-ai/sdk': resolve(__dirname, './node_modules/@anthropic-ai/sdk'),
 
       // Local lama packages
-      '@lama/core': resolve(__dirname, '../lama.core'),
-      '@lama/connection.core': resolve(__dirname, '../connection.core'),
-      '@chat/core': resolve(__dirname, '../chat.core'),
-      '@trust/core': resolve(__dirname, '../trust.core'),
-      '@connection/core': resolve(__dirname, '../connection.core')
+      '@refinio/lama.core': resolve(__dirname, '../lama.core'),
+      '@refinio/connection.core': resolve(__dirname, '../connection.core'),
+      '@refinio/chat.core': resolve(__dirname, '../chat.core'),
+      '@refinio/trust.core': resolve(__dirname, '../trust.core'),
+      '@refinio/connection.core': resolve(__dirname, '../connection.core')
     },
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
     // CRITICAL: Dedupe ONE.core to ensure single recipe registry instance
@@ -53,11 +53,11 @@ export default defineConfig({
       'react-dom',
       '@refinio/one.core',
       '@refinio/one.models',
-      '@lama/core',
-      '@chat/core',
-      '@trust/core',
-      '@connection/core',
-      '@lama/connection.core'
+      '@refinio/lama.core',
+      '@refinio/chat.core',
+      '@refinio/trust.core',
+      '@refinio/connection.core',
+      '@refinio/connection.core'
     ]
   },
 

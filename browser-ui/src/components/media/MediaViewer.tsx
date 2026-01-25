@@ -7,19 +7,19 @@
 
 import React, { useState, useEffect, useMemo } from 'react'
 import { Search, Filter, Grid, List, Tag, Plus, X, Hash } from 'lucide-react'
-import { Button } from '@lama/ui'
-import { Input } from '@lama/ui'
-import { Badge } from '@lama/ui'
+import { Button } from '@refinio/lama.ui'
+import { Input } from '@refinio/lama.ui'
+import { Badge } from '@refinio/lama.ui'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@lama/ui'
+} from '@refinio/lama.ui'
 import type { MessageAttachment, BlobDescriptor } from '@/types/attachments'
 import { attachmentService } from '@/services/attachments/AttachmentService'
-import { createAttachmentView } from '@lama/ui'
+import { createAttachmentView } from '@refinio/lama.ui'
 import { formatFileSize, getAttachmentType } from '@/types/attachments'
 
 /**
@@ -42,7 +42,7 @@ export interface MediaItem {
   subjects: Subject[]
   addedAt: Date
   addedBy: string // Contact ID
-  conversationId?: string
+  topicId?: string
 }
 
 interface MediaViewerProps {

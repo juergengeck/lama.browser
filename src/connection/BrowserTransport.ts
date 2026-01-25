@@ -5,7 +5,7 @@
  * Demonstrates how platforms should implement transport layer.
  */
 
-import type { Transport, TransportState } from '@lama/connection.core';
+import type { Transport, TransportState } from '@refinio/connection.core';
 
 export class BrowserWebSocketTransport implements Transport {
   readonly type = 'websocket' as const;

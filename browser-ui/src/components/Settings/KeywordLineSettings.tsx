@@ -5,10 +5,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lama/ui';
-import { Input } from '@lama/ui';
-import { Label } from '@lama/ui';
-import { Button } from '@lama/ui';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@refinio/lama.ui';
+import { Input } from '@refinio/lama.ui';
+import { Label } from '@refinio/lama.ui';
+import { Button } from '@refinio/lama.ui';
 import { Save } from 'lucide-react';
 
 interface KeywordLineSettingsProps {

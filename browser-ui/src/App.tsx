@@ -4,22 +4,22 @@
  */
 
 import { useState, useEffect, useMemo, useRef } from 'react'
-import { ContactsView, LoginDeploy, ModelOnboarding, PlansProvider, BridgeProvider, ProfileEditor, ChatLayout, AssemblyJournalView, MemoryView, DevicesView, MobileBottomNav, MOBILE_NAV_HEIGHT, StatusBar, NavigateHomeProvider, AICreationLoader } from '@lama/ui'
-import { SettingsProvider, InstanceSettingsStorage } from '@settings/core'
+import { ContactsView, LoginDeploy, ModelOnboarding, PlansProvider, BridgeProvider, ProfileEditor, ChatLayout, AssemblyJournalView, MemoryView, MobileBottomNav, MOBILE_NAV_HEIGHT, StatusBar, NavigateHomeProvider, AICreationLoader } from '@refinio/lama.ui'
+import { SettingsProvider, InstanceSettingsStorage, DEFAULT_NETWORK_SETTINGS, DEFAULT_PRIVACY_SETTINGS, type NetworkSettings, type PrivacySettings } from '@refinio/settings.core'
 import type { SHA256IdHash } from '@refinio/one.core/lib/util/type-checks.js'
 import type { Instance } from '@refinio/one.core/lib/recipes.js'
-import type { AssemblyQueryOptions, AssemblyWithStory } from '@assembly/core'
-import type { DevicePlatformAdapter } from '@lama/ui'
-import type { NavTab } from '@lama/ui'
+import type { AssemblyQueryOptions, AssemblyWithStory } from '@refinio/assembly.core'
+import type { NavTab } from '@refinio/lama.ui'
 import { SettingsView } from '@/components/SettingsView'
 import { PurchaseView } from '@/components/PurchaseView'
 import { VerificationView } from '@/components/VerificationView'
 import { ConnectionsView } from '@/components/ConnectionsView'
-import type { LAMAPlansContext } from '@lama/ui'
+import type { LAMAPlansContext } from '@refinio/lama.ui'
 import { InvitationAcceptance } from '@/components/InvitationAcceptance'
 import { MODEL_OPTIONS } from '@/constants/model-options'
-import { MessageSquare, BookOpen, Users, Settings, Loader2, Smartphone, Brain } from 'lucide-react'
+import { MessageSquare, BookOpen, Users, Settings, Loader2, Brain } from 'lucide-react'
 import { sessionStorage } from '@/services/session-storage'
+import { clearStorage } from '@/services/storage'
 import { isValidInvitationUrl } from '@/utils/invitation-url-parser'
 import type Model from '@/model/Model.js'
 import { ModelProvider } from '@/model/ModelContext'
@@ -31,6 +31,7 @@ import { checkGPUCapability } from '@/utils/gpu-detection'
 // TTS Worker - use Vite's ?worker&url syntax for proper bundling
 // This bundles the worker and all its dependencies (including @huggingface/transformers)
 import ttsWorkerUrl from './workers/tts.worker.ts?worker&url'
+import { preloadTTSModel } from '@refinio/lama.ui'
 
 // Routing imports (re-exported from lama.core/ui/routing via lama.ui)
 import {
@@ -42,7 +43,7 @@ import {
   useParams,
   useQuery,
   useNavigationActions
-} from '@lama/ui'
+} from '@refinio/lama.ui'
 
 /**
  * Stub LocalModelsPlan for browser
@@ -99,100 +100,21 @@ function modelToPlans(model: Model): LAMAPlansContext {
     cube: model.cubePlan,
     localModels: browserLocalModelsPlan,
     ingestion: model.ingestionPlan || undefined,
+    onecore: {
+      async clearStorage() {
+        try {
+          await clearStorage()
+          window.location.reload()
+          return { success: true }
+        } catch (error) {
+          return { success: false, error: error instanceof Error ? error.message : 'Failed to clear storage' }
+        }
+      }
+    },
   }
 }
 
-import { browserSyncMonitor, initSyncMonitor } from '@/services/browser-sync-monitor'
-
-/**
- * Create browser-specific DevicePlatformAdapter
- * Browser doesn't support UDP discovery (Node.js only)
- */
-function createBrowserDeviceAdapter(model: Model): DevicePlatformAdapter {
-  return {
-    async getInstanceInfo() {
-      return {
-        success: true,
-        instance: {
-          id: 'browser-instance',
-          name: 'Browser Instance',
-          initialized: model.initialized,
-          hasPairing: false,
-          capabilities: {
-            network: false,
-            storage: true,
-            llm: true
-          },
-          // Include sync stats for traffic light visualization
-          syncStats: browserSyncMonitor.getStats()
-        }
-      }
-    },
-    async getContacts() {
-      try {
-        const result = await model.contactsPlan.getContacts()
-        return {
-          success: result.success,
-          contacts: result.contacts || []
-        }
-      } catch (error) {
-        return { success: false, contacts: [] }
-      }
-    },
-    async getTrustLevels() {
-      try {
-        const result = await model.trustPlan.getTrustLevels()
-        return {
-          success: result.success,
-          trustLevels: result.trustLevels || {}
-        }
-      } catch (error) {
-        return { success: false, trustLevels: {} }
-      }
-    },
-    async setTrustLevel(instanceId: string, trustLevel: string) {
-      try {
-        const result = await model.trustPlan.setTrustLevel({ instanceId, trustLevel })
-        return { success: result.success, error: result.error }
-      } catch (error) {
-        return { success: false, error: (error as Error).message }
-      }
-    },
-    async createInvitation(mode?: 'IoM' | 'IoP') {
-      try {
-        // ConnectionPlan uses createPairingInvitation() with mode
-        const result = await model.connectionPlan.createPairingInvitation({ mode: mode || 'IoP' })
-        return {
-          success: result.success,
-          invitation: result.invitation,
-          error: result.error
-        }
-      } catch (error) {
-        return { success: false, error: (error as Error).message }
-      }
-    },
-    async acceptInvitation(invitationUrl: string) {
-      try {
-        // ConnectionPlan uses acceptPairingInvitation()
-        const result = await model.connectionPlan.acceptPairingInvitation({ invitationUrl })
-        return {
-          success: result.success,
-          message: result.message,
-          error: result.error
-        }
-      } catch (error) {
-        return { success: false, error: (error as Error).message }
-      }
-    },
-    // Browser doesn't support UDP discovery
-    async getDiscoveredDevices() {
-      return { success: true, devices: [] }
-    },
-    async scanForDevices(_timeout: number) {
-      return { success: true, devices: [] }
-    }
-  }
-}
+import { initSyncMonitor } from '@/services/browser-sync-monitor'
 
 interface AppContentProps {
   model: Model
@@ -251,7 +173,80 @@ function AppContent({ model }: AppContentProps) {
 
   // Memoize plans context to prevent unnecessary re-renders of all PlansProvider consumers
   // CRITICAL: This must be before all early returns to satisfy React's rules of hooks
-  const plansContext = useMemo(() => modelToPlans(model), [model, model.ownerId])
+  const plansContext = useMemo(() => {
+    const basePlans = modelToPlans(model)
+
+    // Create settings adapter that wraps InstanceSettingsStorage
+    // Maps UI expected interface to settings.core module-based API
+    const settingsAdapter = settingsStorage ? {
+      async getProfile() {
+        // Profile comes from ONE.core, not settings storage
+        return { displayName: model.instanceName || '', publicKey: '' }
+      },
+      async updateProfile(params: { displayName: string }) {
+        // Profile update needs ONE.core - not implemented via settings storage
+        console.warn('[Settings] updateProfile requires ONE.core identity update')
+        return { success: true }
+      },
+      async getNetworkSettings() {
+        try {
+          const settings = await settingsStorage.getSection('network')
+          return settings || DEFAULT_NETWORK_SETTINGS
+        } catch {
+          return DEFAULT_NETWORK_SETTINGS
+        }
+      },
+      async updateNetworkSettings(config: Partial<NetworkSettings>) {
+        try {
+          await settingsStorage.updateSection('network', config)
+          return { success: true }
+        } catch (error) {
+          return { success: false, error: error instanceof Error ? error.message : 'Failed to update' }
+        }
+      },
+      async getPrivacySettings() {
+        try {
+          const settings = await settingsStorage.getSection('privacy')
+          return settings || DEFAULT_PRIVACY_SETTINGS
+        } catch {
+          return DEFAULT_PRIVACY_SETTINGS
+        }
+      },
+      async updatePrivacySettings(config: Partial<PrivacySettings>) {
+        try {
+          await settingsStorage.updateSection('privacy', config)
+          return { success: true }
+        } catch (error) {
+          return { success: false, error: error instanceof Error ? error.message : 'Failed to update' }
+        }
+      },
+      async getStorageStats() {
+        // Browser storage stats via navigator.storage API
+        if (navigator.storage && navigator.storage.estimate) {
+          const estimate = await navigator.storage.estimate()
+          return {
+            success: true,
+            data: {
+              used: estimate.usage || 0,
+              total: estimate.quota || 0,
+              breakdown: { messages: 0, files: 0, cache: 0 }
+            }
+          }
+        }
+        return { success: true, data: { used: 0, total: 0, breakdown: { messages: 0, files: 0, cache: 0 } } }
+      },
+      async runCleanup(_options: any) {
+        // Browser cleanup would involve IndexedDB operations
+        console.warn('[Settings] runCleanup not yet implemented for browser')
+        return { success: true }
+      }
+    } : undefined
+
+    return {
+      ...basePlans,
+      settings: settingsAdapter
+    }
+  }, [model, model.ownerId, settingsStorage])
 
   // Derive active tab from current route
   const activeTab = location.pathname.startsWith('/chat/')
@@ -259,7 +254,7 @@ function AppContent({ model }: AppContentProps) {
     : location.pathname.substring(1) || 'chats'
 
   // Derive selected conversation from route params
-  const selectedConversationId = params.conversationId
+  const selectedConversationId = params.topicId
 
   // Check for invitation in URL - reacts to location changes without page reload
   // Debug: log every location change to verify hashchange detection
@@ -670,7 +665,6 @@ function AppContent({ model }: AppContentProps) {
     { id: 'journal', label: 'Journal', icon: BookOpen },
     { id: 'contacts', label: 'Contacts', icon: Users },
     { id: 'memory', label: 'Memory', icon: Brain },
-    { id: 'devices', label: 'Devices', icon: Smartphone },
     { id: 'settings', label: null, icon: Settings },
   ]
 
@@ -680,13 +674,12 @@ function AppContent({ model }: AppContentProps) {
     journal: '/journal',
     contacts: '/contacts',
     memory: '/memory',
-    devices: '/devices',
     settings: '/settings',
   }
 
-  const handleNavigate = (tab: string, conversationId?: string, section?: string) => {
-    if (conversationId) {
-      navigate(`/chat/${conversationId}`)
+  const handleNavigate = (tab: string, topicId?: string, section?: string) => {
+    if (topicId) {
+      navigate(`/chat/${topicId}`)
     } else if (section) {
       navigate(`/settings/${section}`)
     } else if (tabPaths[tab]) {
@@ -708,7 +701,7 @@ function AppContent({ model }: AppContentProps) {
   const renderContent = () => {
     // Route-based rendering with appMenuItems and trafficLightSpace passed to views
     // Browser has no traffic lights (no Electron window controls)
-    // Only pass these props to components that support them (ChatLayout, JournalView, MemoryView, DevicesView)
+    // Only pass these props to components that support them (ChatLayout, JournalView, MemoryView)
     const headerProps = {
       appMenuItems,
       trafficLightSpace: false
@@ -740,11 +733,6 @@ function AppContent({ model }: AppContentProps) {
         return <ProfileEditor open={true} onOpenChange={() => {}} fullPage={true} onClose={() => navigate('/chats')} />
       case '/memory':
         return <MemoryView {...headerProps} />
-      case '/devices':
-        return <DevicesView
-          adapter={createBrowserDeviceAdapter(model)}
-          {...headerProps}
-        />
       case '/connections':
         return <ConnectionsView />
       case '/purchase':
@@ -852,6 +840,15 @@ interface AppProps {
 export default function App({ model }: AppProps) {
   // Create router adapter (only once)
   const [adapter] = useState(() => new BrowserHistoryAdapter(LAMA_ROUTES))
+
+  // Preload TTS model at app startup for faster first speech
+  // Uses singleton pattern so subsequent calls from useTTS are instant
+  useEffect(() => {
+    console.log('[App] Preloading TTS model at startup...')
+    preloadTTSModel(ttsWorkerUrl).catch(err => {
+      console.warn('[App] TTS preload failed (non-critical):', err.message)
+    })
+  }, [])
 
   return (
     <RouterProvider adapter={adapter}>

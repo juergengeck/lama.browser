@@ -7,7 +7,7 @@ import { FileText, Download, File, FileCode, FileSpreadsheet, ChevronDown } from
 import type { AttachmentViewProps } from '@/types/attachments'
 import { formatFileSize } from '@/types/attachments'
 import { useAttachmentDescriptor } from './AttachmentViewFactory'
-import { Button } from '@lama/ui'
+import { Button } from '@refinio/lama.ui'
 
 export const DocumentAttachmentView: React.FC<AttachmentViewProps> = ({
   attachment,

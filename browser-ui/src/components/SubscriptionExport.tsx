@@ -5,12 +5,12 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@lama/ui';
-import { Button } from '@lama/ui';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lama/ui';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@refinio/lama.ui';
+import { Button } from '@refinio/lama.ui';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@refinio/lama.ui';
 import { Download, Copy, Share2, ExternalLink, Check } from 'lucide-react';
 import QRCode from 'qrcode';
-import type { Certificate } from '@trust/core/recipes/Certificate';
+import type { Certificate } from '@refinio/trust.core/recipes/Certificate';
 import { exportCertificate, storeForVerification, downloadVC } from '@/services/vc-export';
 import type { CertificateExport } from '@/services/vc-export';
 

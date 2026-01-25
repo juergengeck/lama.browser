@@ -4,7 +4,7 @@
  * Uses @huggingface/transformers for browser-based inference.
  * Runs in a Web Worker to avoid blocking the UI thread.
  *
- * Tool calling support via @mcp/core/local-browser
+ * Tool calling support via @refinio/mcp.core/local-browser
  *
  * WebGPU status should be sent from main thread via 'webgpu-status' message
  * before loading models. If not received, falls back to local detection.
@@ -12,13 +12,13 @@
 
 import { pipeline, env, TextStreamer } from '@huggingface/transformers';
 import type { TextGenerationPipeline } from '@huggingface/transformers';
-import type { GraniteToolDefinition, ToolCall } from '@mcp/core';
+import type { GraniteToolDefinition, ToolCall } from '@refinio/mcp.core';
 
 // Configure for browser environment
 env.allowLocalModels = false; // Always download from HuggingFace
 env.useBrowserCache = true;   // Use IndexedDB for caching
 
-// Model registry (subset of @local/core for worker isolation)
+// Model registry (subset of @refinio/local.core for worker isolation)
 const TEXT_GEN_MODELS: Record<string, { huggingFaceRepo: string; contextLength: number; familyName: string }> = {
   'granite-4.0-350m': {
     huggingFaceRepo: 'onnx-community/granite-4.0-350m-ONNX-web',
@@ -78,7 +78,7 @@ interface ChatMessage {
   content: string;
 }
 
-// ToolDefinition and ToolCall types imported from @mcp/core
+// ToolDefinition and ToolCall types imported from @refinio/mcp.core
 
 interface WorkerMessage {
   type: 'load' | 'chat' | 'unload' | 'status' | 'webgpu-status';

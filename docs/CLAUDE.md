@@ -29,16 +29,16 @@ lama/
 
 ```bash
 # Root - Integration tests
-npm test
+pnpm test
 
 # *.core/ - Build platform-agnostic libraries
-npm run build          # TypeScript → JavaScript (in-place)
-npm run watch          # Watch mode
+pnpm build          # TypeScript → JavaScript (in-place)
+pnpm watch          # Watch mode
 
 # lama.cube (Electron)
-npm run electron       # Run app
-npm run build:all      # Build main + UI
-npm run dist           # Create installer
+pnpm electron       # Run app
+pnpm build:all      # Build main + UI
+pnpm dist           # Create installer
 ```
 
 ## Core Principles

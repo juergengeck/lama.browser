@@ -4,8 +4,8 @@
  * Exports subscription certificates as W3C Verifiable Credentials with verification URLs.
  */
 
-import type { Certificate } from '@trust/core/recipes/Certificate';
-import type { VerifiableCredential } from '@trust/core/recipes/VerifiableCredential';
+import type { Certificate } from '@refinio/trust.core/recipes/Certificate';
+import type { VerifiableCredential } from '@refinio/trust.core/recipes/VerifiableCredential';
 
 /**
  * Certificate export format

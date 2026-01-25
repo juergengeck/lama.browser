@@ -6,9 +6,9 @@
  */
 
 import React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lama/ui';
-import { Label } from '@lama/ui';
-import { Alert, AlertDescription } from '@lama/ui';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@refinio/lama.ui';
+import { Label } from '@refinio/lama.ui';
+import { Alert, AlertDescription } from '@refinio/lama.ui';
 import { Loader2 } from 'lucide-react';
 import { useProposalConfig } from '@/hooks/useProposalConfig';
 

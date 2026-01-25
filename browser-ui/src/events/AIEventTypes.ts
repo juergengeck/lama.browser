@@ -1,12 +1,12 @@
 /**
  * Type-safe AI event system for Browser
  *
- * Uses centralized event registry from @lama/core/events as source of truth.
+ * Uses centralized event registry from @refinio/lama.core/events as source of truth.
  * Provides platform-specific event emission via CustomEvent/window.dispatchEvent.
  */
 
-import { Events } from '@lama/core/events';
-import type { EventPayloads, EventName } from '@lama/core/events';
+import { Events } from '@refinio/lama.core/events';
+import type { EventPayloads, EventName } from '@refinio/lama.core/events';
 
 // Re-export for convenience
 export { Events };

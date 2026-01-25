@@ -13,11 +13,6 @@ export default defineConfig({
   ],
   resolve: {
     alias: [
-      // CRITICAL: Order matters - more specific paths must come first
-      // Map lama.ui's internal @/ imports to lama.ui (for ui components)
-      { find: /^@\/components\/ui\/(.*)$/, replacement: path.resolve(__dirname, '../../lama.ui/src/components/ui/$1') },
-      { find: '@/lib/utils', exact: true, replacement: path.resolve(__dirname, '../../lama.ui/src/lib/utils') },
-
       // Local aliases for browser-ui
       { find: '@', replacement: path.resolve(__dirname, './src') },
       { find: '@components', replacement: path.resolve(__dirname, './src/components') },
@@ -26,25 +21,11 @@ export default defineConfig({
       { find: '@services', replacement: path.resolve(__dirname, './src/services') },
       { find: '@model', replacement: path.resolve(__dirname, './src/model') },
 
-      // Shared directories
+      // Shared directories within this package
       { find: '@shared', replacement: path.resolve(__dirname, '../shared') },
       { find: '@worker', replacement: path.resolve(__dirname, '../worker') },
-      { find: /^@lama\/core\/(.*)$/, replacement: path.resolve(__dirname, '../../lama.core/dist/lama.core/$1') },
-      { find: '@lama/ui', replacement: path.resolve(__dirname, '../../lama.ui/src') },
-      { find: '@chat/core', replacement: path.resolve(__dirname, '../../chat.core') },
-      { find: '@connection/core', replacement: path.resolve(__dirname, '../../connection.core/dist/esm') },
-      { find: '@device/core', replacement: path.resolve(__dirname, '../../device.core/src') },
-      { find: '@trust/core', replacement: path.resolve(__dirname, '../../trust.core') },
-      { find: '@assembly/core', replacement: path.resolve(__dirname, '../../assembly.core') },
-      { find: /^@memory\/core\/(.*)$/, replacement: path.resolve(__dirname, '../../memory.core/dist/memory.core/src/$1') },
-      { find: /^@local\/core\/(.*)$/, replacement: path.resolve(__dirname, '../../local.core/src/$1') },
-      { find: '@local/core', replacement: path.resolve(__dirname, '../../local.core/src') },
 
-      // CRITICAL: Use the ONE.core packages directly - NO duplication
-      { find: '@refinio/one.core', replacement: path.resolve(__dirname, '../../one.core') },
-      { find: '@refinio/one.models', replacement: path.resolve(__dirname, '../../one.models') },
-
-      // Stub out Node.js modules for browser builds
+      // Stub out Node.js modules for browser builds (CORS restrictions)
       { find: '@anthropic-ai/sdk', replacement: path.resolve(__dirname, './src/stubs/claude-stub.ts') },
 
       // lamejs CJS modules have circular dependencies that break ESM bundling
@@ -53,7 +34,8 @@ export default defineConfig({
 
       // CRITICAL: Use the webpack-built transformers.js dist directly
       // The v4 alpha from GitHub needs webpack build - esbuild pre-bundling breaks Chatterbox registration
-      { find: '@huggingface/transformers', replacement: path.resolve(__dirname, './node_modules/@huggingface/transformers/dist/transformers.js') }
+      // Path is relative to monorepo root since pnpm hoists dependencies
+      { find: '@huggingface/transformers', replacement: path.resolve(__dirname, '../../../node_modules/@huggingface/transformers/dist/transformers.js') }
     ],
     extensions: ['.ts', '.tsx', '.js', '.jsx', '.json'],
     // CRITICAL: Dedupe ONE.core to ensure single recipe registry instance

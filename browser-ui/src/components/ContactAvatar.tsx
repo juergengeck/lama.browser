@@ -8,7 +8,7 @@
  * - LAMA logo fallback when no name/image
  */
 
-import { Avatar, AvatarFallback, AvatarImage } from '@lama/ui'
+import { Avatar, AvatarFallback, AvatarImage } from '@refinio/lama.ui'
 import { Bot } from 'lucide-react'
 import { useContactAvatar } from '@/hooks/useContactAvatar'
 import type { SHA256IdHash, Person } from '@refinio/one.core/lib/recipes.js'

@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lama/ui';
-import { Badge } from '@lama/ui';
-import { Button } from '@lama/ui';
-import { usePlans } from '@lama/ui';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@refinio/lama.ui';
+import { Badge } from '@refinio/lama.ui';
+import { Button } from '@refinio/lama.ui';
+import { usePlans } from '@refinio/lama.ui';
 import { RefreshCw, History, ChevronDown, ChevronUp, Loader2, Sparkles } from 'lucide-react';
 import { KeywordCloud } from './KeywordCloud.js';
 import { KeywordDetailPanel } from '../KeywordDetail/KeywordDetailPanel.js';

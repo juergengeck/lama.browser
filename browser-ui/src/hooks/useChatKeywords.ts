@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { getModel } from '../model';
-import { usePlans } from '@lama/ui';
+import { usePlans } from '@refinio/lama.ui';
 import { addAIEventListener, Events } from '../events/AIEventTypes';
 
 interface Message {

@@ -6,7 +6,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useModel } from '@/model/index.js'
-import { usePlans } from '@lama/ui'
+import { usePlans } from '@refinio/lama.ui'
 
 export interface Message {
   $type$: 'Message'
@@ -64,7 +64,7 @@ export function useMessages({
       // Platform-agnostic message fetching
       console.log(`[useMessages] 📞 Calling ChatPlan.getMessages...`);
       const response = await chat.getMessages({
-        conversationId: topicId,
+        topicId: topicId,
         limit,
         offset: 0
       })
@@ -136,7 +136,7 @@ export function useMessages({
       const newOffset = offset + limit
 
       const response = await chat.getMessages({
-        conversationId: topicId,
+        topicId: topicId,
         limit,
         offset: newOffset
       })
@@ -181,7 +181,7 @@ export function useMessages({
     try {
       // Send message via ChatPlan - AIMessageListener will trigger AI response automatically
       const response = await model.chatPlan.sendMessage({
-        conversationId: topicId,
+        topicId: topicId,
         content,
         attachments
       })

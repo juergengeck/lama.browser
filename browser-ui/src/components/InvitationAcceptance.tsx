@@ -7,13 +7,13 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Button } from '@lama/ui'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@lama/ui'
-import { Alert, AlertDescription } from '@lama/ui'
+import { Button } from '@refinio/lama.ui'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@refinio/lama.ui'
+import { Alert, AlertDescription } from '@refinio/lama.ui'
 import { Loader2, CheckCircle2, XCircle, UserPlus, Smartphone } from 'lucide-react'
 import { parseInvitationUrl, type InvitationMode } from '@/utils/invitation-url-parser'
 import { useModel } from '@/model'
-import { usePlans } from '@lama/ui'
+import { usePlans } from '@refinio/lama.ui'
 
 type InvitationAcceptanceProps = {
   invitationUrl: string

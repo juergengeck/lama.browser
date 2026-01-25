@@ -6,7 +6,7 @@
  * that run via transformers.js/ONNX in a Web Worker.
  */
 
-import type { ModelOption } from '@lama/ui'
+import type { ModelOption } from '@refinio/lama.ui'
 
 export const MODEL_OPTIONS: ModelOption[] = [
   // ======================

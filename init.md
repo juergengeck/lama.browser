@@ -82,7 +82,7 @@ await window.electronAPI.invoke('invitation:create')
 
 // 2. Node.js creates invitation
 const invitation = await nodeOneCore.connectionsModel.pairing.createInvitation()
-const url = `https://edda.dev.refinio.one/invites/invitePartner/?invited=true/#${token}`
+const url = `https://edda.dev.refinio.one/invites/invitePartner/?invited=true#${token}`
 
 // 3. User shares invitation URL
 

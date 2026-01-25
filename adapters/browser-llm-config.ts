@@ -5,7 +5,7 @@
  * Works with Ollama's HTTP API on localhost:11434 or remote servers.
  */
 
-import type { TestConnectionResponse } from '@lama/core/plans/LLMConfigPlan';
+import type { TestConnectionResponse } from '@refinio/lama.core/plans/LLMConfigPlan';
 import {
   createSymmetricKey,
   symmetricEncryptAndEmbedNonce,

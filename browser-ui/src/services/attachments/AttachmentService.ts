@@ -1,26 +1,16 @@
 /**
- * AttachmentService - Browser implementation using shared chat.core service
+ * AttachmentService - Browser implementation
  *
  * This is the STORAGE LAYER for browser platform.
- * Uses ONE.core BLOB/CLOB storage directly (IndexedDB) via chat.core's AttachmentService.
+ * Uses ONE.core BLOB/CLOB storage directly (IndexedDB).
  */
 
-import type { IAttachmentService, MessageAttachment, AttachmentMetadata } from '@lama/ui/services/attachments/AttachmentService'
-import { AttachmentService as CoreAttachmentService } from '@chat/core/services/AttachmentService.js'
+import type { IAttachmentService, MessageAttachment, AttachmentMetadata } from '@refinio/lama.ui/services/attachments/AttachmentService'
 import { storeArrayBufferAsBlob, readBlobAsArrayBuffer, storeUTF8Clob } from '@refinio/one.core/lib/storage-blob.js'
-import { createFileReadStream } from '@refinio/one.core/lib/system/storage-streams.js'
 import type { SHA256Hash } from '@refinio/one.core/lib/util/type-checks.js'
 
-// Create core service with injected ONE.core dependencies
-const coreService = new CoreAttachmentService({
-  storeArrayBufferAsBlob,
-  readBlobAsArrayBuffer,
-  storeUTF8Clob,
-  createFileReadStream,
-})
-
 /**
- * Browser implementation wrapping chat.core's AttachmentService
+ * Browser implementation of AttachmentService using ONE.core directly
  */
 class BrowserAttachmentService implements IAttachmentService {
   async storeAttachment(
@@ -31,7 +21,35 @@ class BrowserAttachmentService implements IAttachmentService {
       size?: number
     }
   ): Promise<MessageAttachment> {
-    const result = await coreService.storeAttachment(data, metadata)
+    let hash: string
+    let type: 'blob' | 'clob'
+    let size: number
+
+    if (typeof data === 'string') {
+      // Store as CLOB (UTF-8 text)
+      const result = await storeUTF8Clob(data)
+      hash = result.hash
+      type = 'clob'
+      size = new TextEncoder().encode(data).length
+    } else {
+      // Store as BLOB (binary)
+      const arrayBuffer = data instanceof Uint8Array
+        ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
+        : data
+      const result = await storeArrayBufferAsBlob(arrayBuffer as ArrayBuffer)
+      hash = result.hash
+      type = 'blob'
+      size = (arrayBuffer as ArrayBuffer).byteLength
+    }
+
+    const result = {
+      hash,
+      type,
+      mimeType: metadata.mimeType,
+      name: metadata.name,
+      size: metadata.size ?? size
+    }
+
     console.log(`[BrowserAttachmentService] Stored ${result.type.toUpperCase()}:`, {
       hash: result.hash.substring(0, 8),
       size: result.size,
@@ -53,7 +71,16 @@ class BrowserAttachmentService implements IAttachmentService {
       type: logType,
     })
 
-    const result = await coreService.getAttachment(hash, options)
+    const data = await readBlobAsArrayBuffer(hash as SHA256Hash<any>)
+
+    const result = {
+      data,
+      metadata: {
+        name: options?.name || 'attachment',
+        mimeType: options?.mimeType || 'application/octet-stream',
+        size: data.byteLength
+      }
+    }
 
     console.log('[BrowserAttachmentService] Retrieved attachment:', {
       hash: hash.substring(0, 8),
@@ -65,7 +92,12 @@ class BrowserAttachmentService implements IAttachmentService {
   }
 
   async getAttachmentMetadata(hash: string): Promise<AttachmentMetadata> {
-    return coreService.getAttachmentMetadata(hash)
+    const data = await readBlobAsArrayBuffer(hash as SHA256Hash<any>)
+    return {
+      name: 'attachment',
+      mimeType: 'application/octet-stream',
+      size: data.byteLength
+    }
   }
 
   async storeMultiple(
@@ -78,21 +110,30 @@ class BrowserAttachmentService implements IAttachmentService {
       }
     }>
   ): Promise<MessageAttachment[]> {
-    const results = await coreService.storeMultiple(attachments)
+    const results = await Promise.all(
+      attachments.map(({ data, metadata }) => this.storeAttachment(data, metadata))
+    )
     console.log('[BrowserAttachmentService] Stored multiple attachments:', results.length)
     return results
   }
 
   async processFile(file: File): Promise<MessageAttachment> {
-    return coreService.processFile(file)
+    const arrayBuffer = await file.arrayBuffer()
+    return this.storeAttachment(arrayBuffer, {
+      name: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      size: file.size
+    })
   }
 
   async processFiles(files: File[]): Promise<MessageAttachment[]> {
-    return coreService.processFiles(files)
+    return Promise.all(files.map(file => this.processFile(file)))
   }
 
   async getDataUrl(hash: string): Promise<string> {
-    return coreService.getDataUrl(hash)
+    const { data, metadata } = await this.getAttachment(hash)
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(data)))
+    return `data:${metadata.mimeType};base64,${base64}`
   }
 }
 

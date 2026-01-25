@@ -14,7 +14,7 @@ export interface AuditTrailViewProps {
   /** Topic ID to show audit trail for */
   topicId?: string;
   /** Conversation ID for journal entries */
-  conversationId?: string;
+  topicId?: string;
   className?: string;
   onNodeClick?: (node: AuditTreeNode) => void;
   /** Model instance for data fetching */
@@ -26,7 +26,7 @@ export interface AuditTreeNode {
   type: 'root' | 'attestation' | 'auditor' | 'signature' | 'journal-entry' | 'llm-call' | 'property';
   messageHash?: string;
   topicId?: string;
-  conversationId?: string;
+  topicId?: string;
   auditorId?: string;
   auditorName?: string;
   trustLevel?: number;
@@ -75,16 +75,16 @@ function renderAuditNode(node: TreeNode<AuditTreeNode>, level: number) {
         {data.type === 'root' && (
           <>
             <span className="font-semibold text-sm">
-              {data.conversationId ? 'Journal Audit Trail' : 'Message Audit Trail'}
+              {data.topicId ? 'Journal Audit Trail' : 'Message Audit Trail'}
             </span>
             {data.messageHash && (
               <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
                 {data.messageHash.substring(0, 8)}...
               </span>
             )}
-            {data.conversationId && (
+            {data.topicId && (
               <span className="text-xs text-gray-500 dark:text-gray-400">
-                {data.conversationId}
+                {data.topicId}
               </span>
             )}
           </>
@@ -185,7 +185,7 @@ function renderAuditNode(node: TreeNode<AuditTreeNode>, level: number) {
 export function AuditTrailView({
   messageHash,
   topicId,
-  conversationId,
+  topicId,
   className,
   onNodeClick,
   model,
@@ -293,9 +293,9 @@ export function AuditTrailView({
           }
         }
 
-        // Load journal entries if conversationId provided
+        // Load journal entries if topicId provided
         // Note: Journal plan not yet available in browser-ui, placeholder for future
-        if (conversationId) {
+        if (topicId) {
           children.push({
             id: 'journal-placeholder',
             data: {
@@ -327,7 +327,7 @@ export function AuditTrailView({
             type: 'root',
             messageHash,
             topicId,
-            conversationId,
+            topicId,
           },
           children,
         };
@@ -347,7 +347,7 @@ export function AuditTrailView({
       setError('Model not available');
       setLoading(false);
     }
-  }, [messageHash, topicId, conversationId, model]);
+  }, [messageHash, topicId, topicId, model]);
 
   if (loading) {
     return (

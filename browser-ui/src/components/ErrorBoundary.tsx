@@ -7,7 +7,7 @@
 
 import { Component, ErrorInfo, ReactNode } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
-import { Button } from '@lama/ui'
+import { Button } from '@refinio/lama.ui'
 
 interface Props {
   children: ReactNode

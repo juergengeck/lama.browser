@@ -166,6 +166,7 @@ this.topicGroupManager = new TopicGroupManager(
 - `llmManager` - LLM provider integration
 - `llmObjectManager` - LLM configuration storage
 - `topicGroupManager` - Group chat management
+- `instanceRegistryPlan` - Instance management (IoM/IoP)
 - `contentSharing` - Content sharing capabilities
 - `federationAPI` - Federation features
 - `accessRightsManager` - Access control

@@ -5,12 +5,12 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from '@lama/ui'
-import { ScrollArea } from '@lama/ui'
-import { Badge } from '@lama/ui'
-import { Progress } from '@lama/ui'
+} from '@refinio/lama.ui'
+import { ScrollArea } from '@refinio/lama.ui'
+import { Badge } from '@refinio/lama.ui'
+import { Progress } from '@refinio/lama.ui'
 import { useModel } from '@/model/index.js'
-import { usePlans } from '@lama/ui'
+import { usePlans } from '@refinio/lama.ui'
 import {
   ChevronRight,
   ChevronDown,
@@ -43,7 +43,7 @@ interface ObjectHierarchyDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   totalSize: number
-  onNavigate?: (tab: string, conversationId?: string) => void
+  onNavigate?: (tab: string, topicId?: string) => void
 }
 
 export function ObjectHierarchyDialog({ open, onOpenChange, totalSize, onNavigate }: ObjectHierarchyDialogProps) {

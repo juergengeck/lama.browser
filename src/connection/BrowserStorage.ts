@@ -5,7 +5,7 @@
  * Demonstrates how platforms should implement persistent storage.
  */
 
-import type { StorageAdapter, PeerIdentity, VersionedCredential } from '@lama/connection.core';
+import type { StorageAdapter, PeerIdentity, VersionedCredential } from '@refinio/connection.core';
 
 export class BrowserIndexedDBStorage implements StorageAdapter {
   private db: IDBDatabase | null = null;

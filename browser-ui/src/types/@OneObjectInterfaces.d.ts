@@ -14,8 +14,8 @@
 
 import type { SHA256IdHash, SHA256Hash } from '@refinio/one.core/lib/util/type-checks.js';
 import type { Person } from '@refinio/one.core/lib/recipes.js';
-import type { Story, Assembly, Plan } from '@assembly/core';
-import type { DimensionState, DimensionStateReference } from '@cube/core';
+import type { Story, Assembly, Plan } from '@refinio/assembly.core';
+import type { DimensionState, DimensionStateReference } from '@refinio/cube.core';
 
 declare module '@OneObjectInterfaces' {
     // ============================================================================

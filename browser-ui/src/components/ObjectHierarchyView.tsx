@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lama/ui'
-import { ScrollArea } from '@lama/ui'
-import { Badge } from '@lama/ui'
-import { Progress } from '@lama/ui'
-import { Button } from '@lama/ui'
-import { Input } from '@lama/ui'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@refinio/lama.ui'
+import { ScrollArea } from '@refinio/lama.ui'
+import { Badge } from '@refinio/lama.ui'
+import { Progress } from '@refinio/lama.ui'
+import { Button } from '@refinio/lama.ui'
+import { Input } from '@refinio/lama.ui'
 import { useModel } from '@/model/index.js'
-import { usePlans } from '@lama/ui'
+import { usePlans } from '@refinio/lama.ui'
 import {
   ChevronRight,
   ChevronDown,
@@ -41,7 +41,7 @@ interface ObjectInfo {
 }
 
 interface ObjectHierarchyViewProps {
-  onNavigate?: (tab: string, conversationId?: string, section?: string) => void
+  onNavigate?: (tab: string, topicId?: string, section?: string) => void
   onBack?: () => void
 }
 

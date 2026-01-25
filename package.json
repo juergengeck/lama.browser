@@ -1,5 +1,5 @@
 {
-  "name": "@lama/browser",
+  "name": "@refinio/lama.browser",
   "version": "1.1.0",
   "type": "module",
   "main": "browser-ui/src/modules/index.ts",
@@ -9,14 +9,19 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@chat/core": "file:../chat.core",
-    "@lama/core": "file:../lama.core",
-    "@refinio/api": "file:../refinio.api",
-    "@settings/core": "file:../settings.core"
+    "@refinio/chat.core": "workspace:*",
+    "@refinio/lama.core": "workspace:*",
+    "@refinio/local.core": "workspace:*",
+    "@refinio/api": "workspace:*"
   },
   "devDependencies": {
-    "vitest": "^1.0.0",
-    "typescript": "^5.0.0",
-    "@types/node": "^20.0.0"
+    "@refinio/one.core": "workspace:*",
+    "@refinio/trust.core": "workspace:*",
+    "@refinio/assembly.core": "workspace:*",
+    "@refinio/memory.core": "workspace:*",
+    "@refinio/mcp.core": "workspace:*",
+    "vitest": "catalog:",
+    "typescript": "catalog:",
+    "@types/node": "catalog:"
   }
 }

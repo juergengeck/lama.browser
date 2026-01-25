@@ -4,7 +4,7 @@
  * Creates WebSocket transports for browser environment.
  */
 
-import type { TransportFactory, Transport } from '@lama/connection.core';
+import type { TransportFactory, Transport } from '@refinio/connection.core';
 import { BrowserWebSocketTransport } from './BrowserTransport';
 
 export class BrowserTransportFactory implements TransportFactory {

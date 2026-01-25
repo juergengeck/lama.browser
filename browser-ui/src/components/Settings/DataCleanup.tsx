@@ -5,8 +5,8 @@
  */
 
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@lama/ui'
-import { Button } from '@lama/ui'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@refinio/lama.ui'
+import { Button } from '@refinio/lama.ui'
 import { Trash2, RefreshCw } from 'lucide-react'
 
 interface CleanupResult {

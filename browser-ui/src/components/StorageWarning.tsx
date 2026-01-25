@@ -6,8 +6,8 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Alert, AlertDescription } from '@lama/ui'
-import { Button } from '@lama/ui'
+import { Alert, AlertDescription } from '@refinio/lama.ui'
+import { Button } from '@refinio/lama.ui'
 import { AlertTriangle, X, HardDrive } from 'lucide-react'
 import { storagePermissions } from '@/services/storage-permissions'
 

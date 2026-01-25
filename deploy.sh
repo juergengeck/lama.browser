@@ -82,17 +82,16 @@ fi
 echo -e "${GREEN}✓ Build verified${NC}"
 echo ""
 
-# Step 4: Create packages
-echo -e "${BLUE}[4/4]${NC} 📦 Creating deployment packages..."
+# Step 4: Create archives (optional, for manual hosting)
+echo -e "${BLUE}[4/4]${NC} 📦 Creating deployment archives..."
 mkdir -p deploy
-rm -rf deploy/lama.browser deploy/lama-browser.tar.gz deploy/lama-browser.zip
-cp -r browser-ui/dist deploy/lama.browser
+rm -f deploy/lama-browser.tar.gz deploy/lama-browser.zip
 
-cd deploy
-tar -czf lama-browser.tar.gz lama.browser/
-zip -r lama-browser.zip lama.browser/
+cd browser-ui
+tar -czf ../deploy/lama-browser.tar.gz dist/
+zip -r ../deploy/lama-browser.zip dist/
 cd ..
-echo -e "${GREEN}✓ Packages created in deploy/${NC}"
+echo -e "${GREEN}✓ Archives created in deploy/${NC}"
 echo ""
 
 # Success message
@@ -100,13 +99,10 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║     ✓ Build Completed!                ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "${BLUE}📦 Deployment packages:${NC}"
-echo -e "   deploy/lama-browser.tar.gz"
-echo -e "   deploy/lama-browser.zip"
-echo -e "   deploy/lama.browser/ (directory)"
+echo -e "${BLUE}📁 Build output:${NC} browser-ui/dist/"
+echo -e "${BLUE}📦 Archives:${NC} deploy/lama-browser.{tar.gz,zip}"
 echo ""
-echo -e "${YELLOW}💡 Deploy Options:${NC}"
-echo -e "   ${BLUE}1.${NC} Production: ${GREEN}git push origin main${NC} (auto-deploys via Cloudflare Pages)"
-echo -e "   ${BLUE}2.${NC} Preview: ${GREEN}git push origin <branch>${NC} (creates preview deployment)"
-echo -e "   ${BLUE}3.${NC} Manual: Use deploy/lama-browser.tar.gz for your own hosting"
+echo -e "${YELLOW}💡 Deploy:${NC}"
+echo -e "   Cloudflare Pages serves from ${GREEN}browser-ui/dist/${NC}"
+echo -e "   Manual hosting: use deploy/lama-browser.tar.gz"
 echo ""

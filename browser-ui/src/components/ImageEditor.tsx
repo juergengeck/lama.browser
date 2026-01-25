@@ -17,9 +17,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@lama/ui'
-import { Button } from '@lama/ui'
-import { Label } from '@lama/ui'
+} from '@refinio/lama.ui'
+import { Button } from '@refinio/lama.ui'
+import { Label } from '@refinio/lama.ui'
 import { RotateCw, Move, ZoomIn } from 'lucide-react'
 
 interface ImageEditorProps {

@@ -4,10 +4,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@lama/ui';
-import { Badge } from '@lama/ui';
-import { Button } from '@lama/ui';
-import { usePlans } from '@lama/ui';
+import { Card, CardContent, CardHeader, CardTitle } from '@refinio/lama.ui';
+import { Badge } from '@refinio/lama.ui';
+import { Button } from '@refinio/lama.ui';
+import { usePlans } from '@refinio/lama.ui';
 import { Merge, Archive, MessageSquare, Clock } from 'lucide-react';
 import type { Subject, GetSubjectsResponse } from '../../types/topic-analysis.js';
 import { addAIEventListener, Events } from '../../events/AIEventTypes.js';

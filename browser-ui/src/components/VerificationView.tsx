@@ -6,9 +6,9 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@lama/ui';
-import { Badge } from '@lama/ui';
-import { Button } from '@lama/ui';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@refinio/lama.ui';
+import { Badge } from '@refinio/lama.ui';
+import { Button } from '@refinio/lama.ui';
 import { CheckCircle, XCircle, Clock, Shield, ExternalLink, Download } from 'lucide-react';
 import { retrieveByShortCode, downloadVC } from '@/services/vc-export';
 import type { CertificateExport } from '@/services/vc-export';

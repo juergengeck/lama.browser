@@ -4,7 +4,7 @@
  * Displays subscription balance, history, and links to purchase view
  */
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, Button, Badge } from '@lama/ui';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, Button, Badge } from '@refinio/lama.ui';
 import { CreditCard, ExternalLink, TrendingUp, Wallet } from 'lucide-react';
 import { useSubscription } from '@/hooks/useSubscription';
 

@@ -11,10 +11,13 @@ yarn-error.log*
 electron-ui/node_modules/@refinio/
 
 # Build outputs
-dist/
 build/
 release/
+deploy/lama.browser/
 *.log
+
+# Keep browser-ui/dist for Cloudflare Pages (no build step)
+!browser-ui/dist/
 
 # Development
 .DS_Store

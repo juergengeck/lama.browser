@@ -6,10 +6,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@lama/ui'
-import { Button } from '@lama/ui'
-import { Input } from '@lama/ui'
-import { Label } from '@lama/ui'
+} from '@refinio/lama.ui'
+import { Button } from '@refinio/lama.ui'
+import { Input } from '@refinio/lama.ui'
+import { Label } from '@refinio/lama.ui'
 import { User } from 'lucide-react'
 
 interface ProfileDialogProps {

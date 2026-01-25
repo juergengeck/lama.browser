@@ -10,8 +10,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@one': path.resolve(__dirname, '../one.discovery/src'),
-      '@lama/ui': path.resolve(__dirname, '../lama.ui/src'),
-      '@lama/core': path.resolve(__dirname, '../lama.core/dist'),
+      '@refinio/lama.ui': path.resolve(__dirname, '../lama.ui/src'),
+      '@refinio/lama.core': path.resolve(__dirname, '../lama.core/dist'),
       '@refinio/refinio-api': path.resolve(__dirname, '../refinio.api/dist'),
     },
   },

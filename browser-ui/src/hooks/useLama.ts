@@ -27,8 +27,8 @@ export function useLama() {
   }
 }
 
-export function useLamaMessages(conversationId: string) {
-  console.log('[useLamaMessages] 🎯 Hook called with conversationId:', conversationId)
+export function useLamaMessages(topicId: string) {
+  console.log('[useLamaMessages] 🎯 Hook called with topicId:', topicId)
   const model = useModel()
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
@@ -43,10 +43,10 @@ export function useLamaMessages(conversationId: string) {
       return
     }
 
-    console.log('🔄 Loading messages for:', conversationId)
+    console.log('🔄 Loading messages for:', topicId)
     try {
       setLoading(true)
-      const result = await model.chatPlan.getMessages({ conversationId })
+      const result = await model.chatPlan.getMessages({ topicId })
 
       if (!result.success || !result.messages) {
         setMessages([])
@@ -62,7 +62,7 @@ export function useLamaMessages(conversationId: string) {
         encrypted: false,
         isAI: msg.isAI || false,  // Use isAI from ChatPlan (AI detection happens server-side)
         attachments: msg.attachments,
-        topicId: conversationId
+        topicId: topicId
       }))
 
       console.log('✅ Loaded', msgs.length, 'messages')
@@ -74,12 +74,12 @@ export function useLamaMessages(conversationId: string) {
     } finally {
       setLoading(false)
     }
-  }, [model, conversationId])
+  }, [model, topicId])
 
   // Initial load
   useEffect(() => {
     loadMessages()
-  }, [conversationId, model.initialized]) // Reload when conversation changes or model initializes
+  }, [topicId, model.initialized]) // Reload when conversation changes or model initializes
 
   // Store loadMessages in a ref so subscription callback doesn't need it as dependency
   const loadMessagesRef = useRef(loadMessages)
@@ -106,14 +106,14 @@ export function useLamaMessages(conversationId: string) {
       return
     }
 
-    console.log(`[useLamaMessages] 📡 Subscribing to onTopicUpdated for conversation: ${conversationId.substring(0, 16)}`)
+    console.log(`[useLamaMessages] 📡 Subscribing to onTopicUpdated for conversation: ${topicId.substring(0, 16)}`)
     console.log(`[useLamaMessages] 📢 Current listener count: ${model.onTopicUpdated?.listenerCount?.() ?? 'N/A'}`)
 
     const unsubscribe = model.onTopicUpdated((updatedTopicId: string) => {
       console.log(`[useLamaMessages] 📬 onTopicUpdated fired for: ${updatedTopicId.substring(0, 16)}`)
 
       // Only respond to updates for our conversation
-      if (updatedTopicId !== conversationId) {
+      if (updatedTopicId !== topicId) {
         console.log(`[useLamaMessages] ⏭️ Skipping - not our conversation`)
         return
       }
@@ -128,7 +128,7 @@ export function useLamaMessages(conversationId: string) {
       console.log(`[useLamaMessages] 🔌 Unsubscribing from onTopicUpdated`)
       unsubscribe()
     }
-  }, [model.initialized, model.onTopicUpdated, conversationId])
+  }, [model.initialized, model.onTopicUpdated, topicId])
 
   const sendMessage = useCallback(async (topicId: string, content: string, attachments?: any[]) => {
     if (!model.initialized) {

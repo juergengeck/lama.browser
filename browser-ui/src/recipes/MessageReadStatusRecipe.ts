@@ -13,7 +13,7 @@ export const MessageReadStatusRecipe = {
             itemtype: { type: 'string', regexp: /^MessageReadStatus$/ }
         },
         {
-            itemprop: 'conversationId',
+            itemprop: 'topicId',
             itemtype: { type: 'string' },
             isId: true // Conversation ID is the unique identifier
         },

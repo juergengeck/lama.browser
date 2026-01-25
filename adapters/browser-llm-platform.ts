@@ -5,15 +5,15 @@
  * This adapter bridges lama.core's platform-agnostic LLM operations with
  * worker postMessage API to communicate with the main thread.
  *
- * Uses centralized event registry from @lama/core/events.
+ * Uses centralized event registry from @refinio/lama.core/events.
  * Manages local-llm.worker.ts for on-device text generation.
  */
 
-import type { LLMPlatform, ChatMessage, LocalChatOptions } from '@lama/core/services/llm-platform.js';
-import { Events } from '@lama/core/events';
+import type { LLMPlatform, ChatMessage, LocalChatOptions } from '@refinio/lama.core/services/llm-platform.js';
+import { Events } from '@refinio/lama.core/events';
 import { emitAIEvent } from '../browser-ui/src/events/AIEventTypes.js';
-import type { GraniteToolDefinition, ToolCall } from '@mcp/core';
-import { isWebGPUInitialized, getPreferredDevice, getWebGPUStatus } from '@local/core';
+import type { GraniteToolDefinition, ToolCall } from '@refinio/mcp.core';
+import { isWebGPUInitialized, getPreferredDevice, getWebGPUStatus } from '@refinio/local.core';
 
 // Re-export types for convenience
 export type { GraniteToolDefinition, ToolCall };

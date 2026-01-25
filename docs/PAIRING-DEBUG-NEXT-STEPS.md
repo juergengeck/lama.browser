@@ -14,7 +14,7 @@ After detailed code analysis, I've confirmed:
 - This URL is embedded in the invitation token (JSON stringified)
 
 ✅ **ConnectionPlan's webUrl parameter** is only for the browser UI link
-- Used for: `/invites/invitePartner/?invited=true/#<token>`
+- Used for: `/invites/invitePartner/?invited=true#<token>`
 - NOT used for: The actual WebSocket connection endpoint
 
 ## What We Need

@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useModel } from '@/model/index.js'
-import { usePlans } from '@lama/ui'
+import { usePlans } from '@refinio/lama.ui'
 import { storeVersionedObject } from '@refinio/one.core/lib/storage-versioned-objects.js'
 import { getObjectByIdHash } from '@refinio/one.core/lib/storage-versioned-objects.js'
 import { calculateIdHashOfObj } from '@refinio/one.core/lib/util/object.js'
@@ -15,13 +15,13 @@ import type { SHA256IdHash } from '@refinio/one.core/lib/util/type-checks.js'
 import type { MessageReadStatus } from '@OneObjectInterfaces'
 
 interface UnreadCounts {
-  [conversationId: string]: number
+  [topicId: string]: number
 }
 
 interface UseUnreadMessagesReturn {
   totalUnread: number
   unreadByConversation: UnreadCounts
-  markConversationRead: (conversationId: string) => Promise<void>
+  markConversationRead: (topicId: string) => Promise<void>
   markAllRead: () => Promise<void>
 }
 
@@ -36,14 +36,14 @@ export function useUnreadMessages(): UseUnreadMessagesReturn {
   /**
    * Get or create MessageReadStatus for a conversation
    */
-  const getReadStatus = useCallback(async (conversationId: string): Promise<MessageReadStatus | null> => {
+  const getReadStatus = useCallback(async (topicId: string): Promise<MessageReadStatus | null> => {
     if (!model.initialized || !model.ownerId) return null
 
     try {
       // Calculate ID hash for this status object
       const statusId: MessageReadStatus = {
         $type$: 'MessageReadStatus',
-        conversationId,
+        topicId,
         userId: model.ownerId,
         lastReadTimestamp: 0,
         unreadCount: 0,
@@ -63,13 +63,13 @@ export function useUnreadMessages(): UseUnreadMessagesReturn {
   /**
    * Update MessageReadStatus for a conversation
    */
-  const updateReadStatus = useCallback(async (conversationId: string, lastMessageHash?: string) => {
+  const updateReadStatus = useCallback(async (topicId: string, lastMessageHash?: string) => {
     if (!model.initialized || !model.ownerId) return
 
     try {
       // Get current messages to calculate unread count
       const response = await chat.getMessages({
-        conversationId,
+        topicId,
         limit: 100
       })
 
@@ -80,7 +80,7 @@ export function useUnreadMessages(): UseUnreadMessagesReturn {
       // Create or update status object
       const status: MessageReadStatus = {
         $type$: 'MessageReadStatus',
-        conversationId,
+        topicId,
         userId: model.ownerId,
         lastReadMessageHash: lastMessageHash || response.messages[response.messages.length - 1]?.hash,
         lastReadTimestamp: now,
@@ -94,7 +94,7 @@ export function useUnreadMessages(): UseUnreadMessagesReturn {
       // Update local state
       setUnreadByConversation(prev => ({
         ...prev,
-        [conversationId]: 0
+        [topicId]: 0
       }))
     } catch (e) {
       console.error('[useUnreadMessages] Failed to update read status:', e)
@@ -104,8 +104,8 @@ export function useUnreadMessages(): UseUnreadMessagesReturn {
   /**
    * Mark a conversation as read (update MessageReadStatus)
    */
-  const markConversationRead = useCallback(async (conversationId: string) => {
-    await updateReadStatus(conversationId)
+  const markConversationRead = useCallback(async (topicId: string) => {
+    await updateReadStatus(topicId)
   }, [updateReadStatus])
 
   /**
@@ -131,20 +131,20 @@ export function useUnreadMessages(): UseUnreadMessagesReturn {
   /**
    * Calculate unread count for a conversation based on MessageReadStatus
    */
-  const calculateUnreadCount = useCallback(async (conversationId: string): Promise<number> => {
+  const calculateUnreadCount = useCallback(async (topicId: string): Promise<number> => {
     if (!model.initialized) return 0
 
     try {
       // Get read status
-      const status = await getReadStatus(conversationId)
+      const status = await getReadStatus(topicId)
       if (!status) {
         // No status yet - all messages are unread
-        const response = await chat.getMessages({ conversationId, limit: 100 })
+        const response = await chat.getMessages({ topicId, limit: 100 })
         return response.success && response.messages ? response.messages.length : 0
       }
 
       // Get messages
-      const response = await chat.getMessages({ conversationId, limit: 100 })
+      const response = await chat.getMessages({ topicId, limit: 100 })
       if (!response.success || !response.messages) return 0
 
       // Count messages newer than last read
@@ -184,29 +184,29 @@ export function useUnreadMessages(): UseUnreadMessagesReturn {
         }
 
         // Calculate topic ID hash for use as conversation identifier
-        const conversationId = await calculateIdHashOfObj(topic)
+        const topicId = await calculateIdHashOfObj(topic)
 
         // Check if user is actively viewing this conversation
-        const status = await getReadStatus(conversationId)
+        const status = await getReadStatus(topicId)
         if (status) {
           const isActivelyViewing = (Date.now() - status.lastReadTimestamp) < 2000
           if (isActivelyViewing) {
             // Keep unread count at 0 for actively viewed conversations
             setUnreadByConversation(prev => ({
               ...prev,
-              [conversationId]: 0
+              [topicId]: 0
             }))
             return
           }
         }
 
         // Recalculate unread count
-        const unreadCount = await calculateUnreadCount(conversationId)
+        const unreadCount = await calculateUnreadCount(topicId)
 
         // Update local state
         setUnreadByConversation(prev => ({
           ...prev,
-          [conversationId]: unreadCount
+          [topicId]: unreadCount
         }))
       } catch (e) {
         console.error('[useUnreadMessages] Failed to update unread count:', e)

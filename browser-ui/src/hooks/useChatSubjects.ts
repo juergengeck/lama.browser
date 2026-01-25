@@ -6,7 +6,7 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Subject } from '../types/topic-analysis';
 import { getModel } from '../model';
-import { usePlans } from '@lama/ui';
+import { usePlans } from '@refinio/lama.ui';
 import { addAIEventListener, Events } from '../events/AIEventTypes';
 
 export function useChatSubjects(topicId: string) {

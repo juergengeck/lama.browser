@@ -8,7 +8,7 @@
 import { getModel } from '@/model'
 import type { SHA256IdHash } from '@refinio/one.core/lib/util/type-checks.js'
 import { Events, EventPayloads, addAIEventListener } from '@/events/AIEventTypes'
-import { AICreationService, CreationContextCollector, type CreationContextProvider } from '@lama/core/services'
+import { AICreationService, CreationContextCollector, type CreationContextProvider } from '@refinio/lama.core/services'
 
 /**
  * Browser implementation of CreationContextProvider
@@ -161,9 +161,9 @@ class LamaBridge {
     handlers?.forEach(handler => handler(data))
   }
 
-  async getMessages(conversationId: string): Promise<Message[]> {
+  async getMessages(topicId: string): Promise<Message[]> {
     const model = getModel()
-    const result = await model.chatPlan.getMessages({ conversationId })
+    const result = await model.chatPlan.getMessages({ topicId })
 
     console.log('[LamaBridge.getMessages] Raw result:', {
       success: result.success,
@@ -185,14 +185,14 @@ class LamaBridge {
       isAI: msg.isAI || false,  // Use isAI from ChatPlan (AI detection happens server-side)
       isOwn: msg.isOwn,  // Server-computed flag for current user's messages
       attachments: msg.attachments,
-      topicId: conversationId
+      topicId: topicId
     }))
   }
 
   async sendMessage(topicId: string, content: string, attachments?: any[]): Promise<string> {
     const model = getModel()
     const result = await model.chatPlan.sendMessage({
-      conversationId: topicId,
+      topicId: topicId,
       content,
       attachments
     })
@@ -202,7 +202,7 @@ class LamaBridge {
     if (result.success && messageId) {
       // Emit event for listeners
       this.emit('chat:newMessages', {
-        conversationId: topicId,
+        topicId: topicId,
         messages: await this.getMessages(topicId)
       })
       return messageId
@@ -345,6 +345,28 @@ class LamaBridge {
     return await model.topicAnalysisPlan.getSubjects({ topicId })
   }
 
+  async getSubjectResonance(subject: string): Promise<{ resonance: number; momentum: 'rising' | 'falling' | 'stable' }> {
+    // TODO: Implement via topicAnalysisPlan when available
+    return { resonance: 0.5, momentum: 'stable' }
+  }
+
+  async attachSubject(subject: string, hash: string, userId: string, confidence: number, topicId: string): Promise<void> {
+    // TODO: Implement via topicAnalysisPlan when available
+    console.warn('[LamaBridge] attachSubject not yet implemented')
+  }
+
+  async getLLMIdentity(contactId: string): Promise<{
+    name: string
+    topSubjects: Array<{ name: string; affinity: number }>
+    uniqueSubjects: string[]
+    messageCount: number
+    signatureHash: string
+    similarContacts: string[]
+  } | null> {
+    // TODO: Implement via aiAssistantPlan when available
+    return null
+  }
+
   async getAvailableModels(): Promise<Array<{ id: string; name: string }>> {
     const model = getModel()
     const result = await model.llmConfigPlan.getAvailableModels({})
@@ -352,6 +374,43 @@ class LamaBridge {
       return result.models.map((m: any) => ({ id: m.id || m.name, name: m.name }))
     }
     return []
+  }
+
+  /**
+   * Record feedback (like/dislike) for a subject
+   */
+  async recordFeedback(subjectId: string, feedbackType: 'like' | 'dislike'): Promise<{ success: boolean; error?: string }> {
+    console.log(`[LamaBridge] Recording ${feedbackType} for subject:`, subjectId)
+
+    try {
+      const { getObjectByIdHash, storeVersionedObject } = await import('@refinio/one.core/lib/storage-versioned-objects.js')
+
+      // Get the subject by ID
+      const result = await getObjectByIdHash(subjectId as any)
+      if (!result || !result.obj) {
+        console.error('[LamaBridge] Subject not found:', subjectId)
+        return { success: false, error: 'Subject not found' }
+      }
+
+      const subject = result.obj as any
+      console.log('[LamaBridge] Found subject:', subjectId, 'Current likes:', subject.likes, 'dislikes:', subject.dislikes)
+
+      // Update feedback counters
+      if (feedbackType === 'like') {
+        subject.likes = (subject.likes || 0) + 1
+      } else {
+        subject.dislikes = (subject.dislikes || 0) + 1
+      }
+
+      // Store updated subject
+      await storeVersionedObject(subject)
+      console.log('[LamaBridge] Subject updated with', feedbackType)
+
+      return { success: true }
+    } catch (error) {
+      console.error('[LamaBridge] Error recording feedback:', error)
+      return { success: false, error: (error as Error).message }
+    }
   }
 
   /**
@@ -364,7 +423,6 @@ class LamaBridge {
     success: boolean
     name?: string
     email?: string
-    creationContext?: { device: string; locale: string; time: number; app: string; creationStory?: string }
     error?: string
   }> {
     const startTime = performance.now()
@@ -441,8 +499,7 @@ class LamaBridge {
       return {
         success: true,
         name: result.name,
-        email: result.email,
-        creationContext: result.creationContext
+        email: result.email
       }
     } catch (error) {
       console.error('[LamaBridge] generateAIName FAILED after', (performance.now() - startTime).toFixed(0), 'ms:', error)
@@ -451,6 +508,43 @@ class LamaBridge {
         error: error instanceof Error ? error.message : 'Unknown error'
       }
     }
+  }
+
+  // Instance Management (IoM/IoP)
+  async getMyInstances(): Promise<any[]> {
+    const model = getModel()
+    if (!model?.instanceRegistryPlan) {
+      console.warn('[LamaBridge] InstanceRegistryPlan not available')
+      return []
+    }
+    const result = await model.instanceRegistryPlan.getMyInstances()
+    return result.instances
+  }
+
+  async getContactInstances(): Promise<Record<string, any[]>> {
+    const model = getModel()
+    if (!model?.instanceRegistryPlan) {
+      console.warn('[LamaBridge] InstanceRegistryPlan not available')
+      return {}
+    }
+    const result = await model.instanceRegistryPlan.getContactInstances()
+    return result.instancesByPerson
+  }
+
+  async getLocalInstance(): Promise<any | null> {
+    const model = getModel()
+    if (!model?.instanceRegistryPlan) {
+      console.warn('[LamaBridge] InstanceRegistryPlan not available')
+      return null
+    }
+    const result = await model.instanceRegistryPlan.getLocalInstance()
+    return result.instance
+  }
+
+  onInstancesChanged(handler: () => void): () => void {
+    // Listen for connection changes which indicate instance status changes
+    this.on('connections:changed', handler)
+    return () => this.off('connections:changed', handler)
   }
 }
 

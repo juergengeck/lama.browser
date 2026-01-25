@@ -5,8 +5,8 @@
 
 import React, { useState } from 'react';
 import { User, Users, Shield, Loader2 } from 'lucide-react';
-import { Badge } from '@lama/ui';
-import { ScrollArea } from '@lama/ui';
+import { Badge } from '@refinio/lama.ui';
+import { ScrollArea } from '@refinio/lama.ui';
 import type {
   KeywordAccessState,
   AccessStateValue,

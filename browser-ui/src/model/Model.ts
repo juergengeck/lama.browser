@@ -19,7 +19,7 @@ import {
 } from '@refinio/one.models/lib/recipes/reversemaps-experimental.js';
 
 // LAMA recipes
-import { LAMA_CORE_RECIPES } from '@lama/core/recipes';
+import { LAMA_CORE_RECIPES } from '@refinio/lama.core/recipes';
 
 // Local lama.browser recipes
 import { SubscriptionBalanceRecipe } from '../recipes/SubscriptionBalanceRecipe';
@@ -27,21 +27,63 @@ import { MessageReadStatusRecipe } from '../recipes/MessageReadStatusRecipe';
 import { AvatarPreferenceRecipe } from '../recipes/AvatarPreferenceRecipe';
 
 // Assembly recipes
-import { AssemblyCoreRecipes } from '@assembly/core';
+import { AssemblyCoreRecipes } from '@refinio/assembly.core';
+
+// MessageBus for debug logging
+import { createMessageBus } from '@refinio/one.core/lib/message-bus.js';
+
+// Set up MessageBus listener for CHUM/Connection debug messages
+const debugBus = createMessageBus('browser-model');
+const CHUM_DEBUG = true;
+
+debugBus.on('debug', (src: string, ...messages: unknown[]) => {
+    if (CHUM_DEBUG && (
+        src.includes('CHUM') ||
+        src.includes('Channel') ||
+        src.includes('Connection') ||
+        src.includes('Pairing') ||
+        src.includes('OBJECT_EVENTS') ||
+        src.includes('chum') ||
+        src.includes('WebSocket') ||
+        src.includes('Topic')
+    )) {
+        console.log(`[${src}]`, ...messages);
+    }
+});
+
+debugBus.on('log', (src: string, ...messages: unknown[]) => {
+    if (CHUM_DEBUG && (
+        src.includes('CHUM') ||
+        src.includes('Channel') ||
+        src.includes('Connection') ||
+        src.includes('Pairing') ||
+        src.includes('chum') ||
+        src.includes('WebSocket') ||
+        src.includes('LeuteConnections')
+    )) {
+        console.log(`[${src}]`, ...messages);
+    }
+});
+
+debugBus.on('error', (src: string, ...messages: unknown[]) => {
+    if (src.includes('CHUM') || src.includes('Channel') || src.includes('Connection') || src.includes('Pairing')) {
+        console.error(`[${src}] ERROR:`, ...messages);
+    }
+});
 
 // Instance tracking
-import { InstancePlan } from '@lama/core/plans/InstancePlan.js';
+import { InstancePlan } from '@refinio/lama.core/plans/InstancePlan.js';
 import { storeVersionedObject, getIdObject } from '@refinio/one.core/lib/storage-versioned-objects.js';
 import { getInstanceIdHash, getInstanceOwnerIdHash } from '@refinio/one.core/lib/instance.js';
 
 // Trust.core recipes
-import { AllRecipes as TrustCoreRecipes, AllReverseMaps as TrustCoreReverseMaps } from '@trust/core/recipes';
+import { AllRecipes as TrustCoreRecipes, AllReverseMaps as TrustCoreReverseMaps } from '@refinio/trust.core/recipes';
 
 // Cube.core recipes
-import { CubeCoreRecipes } from '@cube/core';
+import { CubeCoreRecipes } from '@refinio/cube.core';
 
 // Settings.core recipes (for IoM-compatible settings)
-import { SettingsRecipes } from '@settings/core';
+import { SettingsRecipes } from '@refinio/settings.core';
 
 // Module system
 import { ModuleRegistry } from '@refinio/api/plan-system';
@@ -56,14 +98,15 @@ import {
     DeviceModule,
     JournalModule,
     MCPModule,
+    InstanceModule,
     type LLMConfigAdapter
-} from '@lama/core/modules';
+} from '@refinio/lama.core/modules';
 
 // ExportPlan from lama.core (platform-agnostic, uses one.core implode)
-import { ExportPlan } from '@lama/core/plans/ExportPlan.js';
+import { ExportPlan } from '@refinio/lama.core/plans/ExportPlan.js';
 
 // IngestionPlan for document ingestion (PDF, etc.)
-import { IngestionPlan } from '@memory/core/plans/IngestionPlan.js';
+import { IngestionPlan } from '@refinio/memory.core/plans/IngestionPlan.js';
 
 // BLOB storage for attachments
 import { storeArrayBufferAsBlob } from '@refinio/one.core/lib/storage-blob.js';
@@ -152,6 +195,10 @@ export default class Model {
         this.modules.set('journal', new JournalModule());
         this.modules.set('mcp', new MCPModule());
 
+        // Create and register InstanceModule
+        const instanceModule = new InstanceModule();
+        this.modules.set('instance', instanceModule);
+
         // Register all modules with the registry
         for (const [name, module] of this.modules) {
             console.log(`[Model] Registering module: ${name}`);
@@ -227,6 +274,16 @@ export default class Model {
             this.ownerId = getInstanceOwnerIdHash() as string | null;
             this.instanceId = getInstanceIdHash() as string | null;
             console.log('[Model] Owner ID:', this.ownerId?.substring(0, 8));
+
+            // Configure InstanceModule with local instance info
+            const instanceModule = this.modules.get('instance') as InstanceModule;
+            if (instanceModule && this.instanceId) {
+                instanceModule.setLocalInstance(
+                    this.instanceId as any,
+                    'browser',
+                    ['AIAssistantPlan', 'ChatPlan', 'ConnectionPlan', 'MemoryPlan']
+                );
+            }
 
             // Create retroactive Assemblies for Instance and Owner (bootstrap problem)
             // Instance and Owner were created before StoryFactory existed
@@ -391,6 +448,9 @@ export default class Model {
     get mcpModule() { return this.modules.get('mcp'); }
     get mcpDemandManager() { return this.modules.get('mcp').demandManager; }
     get mcpRemoteClient() { return this.modules.get('mcp').remoteClient; }
+
+    // InstanceModule services (IoM/IoP)
+    get instanceRegistryPlan() { return this.modules.get('instance')?.instanceRegistryPlan; }
 
     // Additional services (to be moved to appropriate modules in future iterations)
     get cubeStorage() { return this.modules.get('ai').cubeStorage; }

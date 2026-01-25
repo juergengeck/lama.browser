@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from '@lama/ui';
+import { Card, CardHeader, CardTitle, CardContent } from '@refinio/lama.ui';
 
 /**
  * AppStateJournal - NOT AVAILABLE IN BROWSER

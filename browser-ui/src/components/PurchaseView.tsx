@@ -11,14 +11,14 @@
  */
 
 import { useState } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@lama/ui';
-import { Button } from '@lama/ui';
-import { Badge } from '@lama/ui';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@refinio/lama.ui';
+import { Button } from '@refinio/lama.ui';
+import { Badge } from '@refinio/lama.ui';
 import { Check, CreditCard, Shield } from 'lucide-react';
 import { useModel } from '@/model/ModelContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { SubscriptionExport } from '@/components/SubscriptionExport';
-import type { Certificate } from '@trust/core/recipes/Certificate';
+import type { Certificate } from '@refinio/trust.core/recipes/Certificate';
 
 export interface PurchaseViewProps {
   onPurchaseComplete?: () => void;

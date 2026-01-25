@@ -11,7 +11,7 @@ import type {
   ErrorUI,
   ConnectionStateValue,
   PairingMethod,
-} from '@lama/connection.core';
+} from '@refinio/connection.core';
 
 export class BrowserUICallbacks implements UICallbacks {
   /**
