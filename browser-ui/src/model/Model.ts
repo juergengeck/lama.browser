@@ -99,6 +99,7 @@ import {
     JournalModule,
     MCPModule,
     InstanceModule,
+    KnowledgeNavigatorModule,
     type LLMConfigAdapter
 } from '@refinio/lama.core/modules';
 
@@ -114,6 +115,9 @@ import { storeArrayBufferAsBlob } from '@refinio/one.core/lib/storage-blob.js';
 // Browser-specific adapters
 import { BrowserLLMPlatform } from '../../../adapters/browser-llm-platform';
 import { browserOllamaValidator, browserConfigManager } from '../../../adapters/browser-llm-config';
+
+// Browser-specific plans
+import { BrowserDocumentUploadPlan } from '../plans/DocumentUploadPlan';
 
 /**
  * Model - Main model class for LAMA Browser
@@ -139,6 +143,9 @@ export default class Model {
 
     // Document ingestion plan
     public ingestionPlan: IngestionPlan | null = null;
+
+    // Document upload plan (browser-specific wrapper for DocumentAIPlan and MessageAttachmentPlan)
+    public documentUploadPlan: BrowserDocumentUploadPlan | null = null;
 
     /**
      * Instance name getter for AISettingsManager compatibility
@@ -192,6 +199,7 @@ export default class Model {
         this.modules.set('connection', new ConnectionModule(commServerUrl, webUrl));
         this.modules.set('device', new DeviceModule());
         this.modules.set('memory', new MemoryModule());
+        this.modules.set('knowledgeNavigator', new KnowledgeNavigatorModule());
         this.modules.set('journal', new JournalModule());
         this.modules.set('mcp', new MCPModule());
 
@@ -350,6 +358,11 @@ export default class Model {
                 aiPlan: this.aiPlan
             });
             console.log('[Model] ✅ Ingestion plan initialized');
+
+            // Initialize document upload plan after AI and chat are ready
+            console.log('[Model] Initializing document upload plan...');
+            this.documentUploadPlan = new BrowserDocumentUploadPlan(this);
+            console.log('[Model] ✅ Document upload plan initialized');
 
             // CRITICAL: Start AI message listener after all initialization
             console.log('[Model] Starting AI message listener...');

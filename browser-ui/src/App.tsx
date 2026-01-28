@@ -3,8 +3,8 @@
  * Uses lama.ui routing abstraction with BrowserHistoryAdapter
  */
 
-import { useState, useEffect, useMemo, useRef } from 'react'
-import { ContactsView, LoginDeploy, ModelOnboarding, PlansProvider, BridgeProvider, ProfileEditor, ChatLayout, AssemblyJournalView, MemoryView, MobileBottomNav, MOBILE_NAV_HEIGHT, StatusBar, NavigateHomeProvider, AICreationLoader } from '@refinio/lama.ui'
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react'
+import { ContactsView, LoginDeploy, ModelOnboarding, PlansProvider, BridgeProvider, ProfileEditor, ChatLayout, AssemblyJournalView, MemoryView, MobileBottomNav, MOBILE_NAV_HEIGHT, StatusBar, NavigateHomeProvider, AICreationLoader, useTheme } from '@refinio/lama.ui'
 import { SettingsProvider, InstanceSettingsStorage, DEFAULT_NETWORK_SETTINGS, DEFAULT_PRIVACY_SETTINGS, type NetworkSettings, type PrivacySettings } from '@refinio/settings.core'
 import type { SHA256IdHash } from '@refinio/one.core/lib/util/type-checks.js'
 import type { Instance } from '@refinio/one.core/lib/recipes.js'
@@ -115,6 +115,15 @@ function modelToPlans(model: Model): LAMAPlansContext {
 }
 
 import { initSyncMonitor } from '@/services/browser-sync-monitor'
+
+/**
+ * Applies the theme class to <html> based on settings.
+ * Must be rendered inside SettingsProvider.
+ */
+function ThemeApplicator({ children }: { children: ReactNode }) {
+  useTheme()
+  return <>{children}</>
+}
 
 interface AppContentProps {
   model: Model
@@ -757,7 +766,7 @@ function AppContent({ model }: AppContentProps) {
   // Wrap children with SettingsProvider only when storage is ready
   const withSettingsProvider = (children: React.ReactNode) => {
     if (settingsStorage) {
-      return <SettingsProvider storage={settingsStorage}>{children}</SettingsProvider>
+      return <SettingsProvider storage={settingsStorage}><ThemeApplicator>{children}</ThemeApplicator></SettingsProvider>
     }
     return <>{children}</>
   }
