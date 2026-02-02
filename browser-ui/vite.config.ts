@@ -27,7 +27,8 @@ export default defineConfig({
 
       // Stub out Node.js modules for browser builds (CORS restrictions)
       { find: '@anthropic-ai/sdk', replacement: path.resolve(__dirname, './src/stubs/claude-stub.ts') },
-      // Stub out Node.js-only WhatsApp signal library
+      // Stub out Node.js-only WhatsApp libraries
+      { find: '@whiskeysockets/baileys', replacement: path.resolve(__dirname, './src/stubs/baileys-stub.ts') },
       { find: '@whiskeysockets/libsignal-node', replacement: path.resolve(__dirname, './src/stubs/libsignal-stub.ts') },
 
       // lamejs CJS modules have circular dependencies that break ESM bundling
@@ -75,9 +76,7 @@ export default defineConfig({
       // CRITICAL: Exclude transformers.js from esbuild pre-bundling
       // We alias it to the webpack-built dist which has proper Chatterbox registration
       '@huggingface/transformers',
-      // Node.js-only WhatsApp libraries - exclude from dev optimization
-      '@whiskeysockets/baileys',
-      '@whiskeysockets/libsignal-node',
+      // qrcode-terminal has legacy octal escapes that break strict mode
       'qrcode-terminal'
     ],
     esbuildOptions: {
@@ -107,8 +106,7 @@ export default defineConfig({
     rollupOptions: {
       external: [
         'ws',
-        // WhatsApp library with Node.js-only dependencies (qrcode-terminal has legacy octal escapes)
-        '@whiskeysockets/baileys',
+        // qrcode-terminal has legacy octal escapes that break strict mode
         'qrcode-terminal'
       ],
       output: {
