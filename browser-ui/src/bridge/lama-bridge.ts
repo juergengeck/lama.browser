@@ -143,12 +143,18 @@ class LamaBridge {
     )
   }
 
-  on(event: string, handler: Function) {
+  on(event: string, handler: Function): () => void {
     if (!this.eventHandlers.has(event)) {
       this.eventHandlers.set(event, new Set())
     }
     this.eventHandlers.get(event)!.add(handler)
     console.log(`[LamaBridge] on('${event}') registered, now ${this.eventHandlers.get(event)!.size} handlers`)
+
+    // Return unsubscribe function for proper cleanup
+    return () => {
+      this.eventHandlers.get(event)?.delete(handler)
+      console.log(`[LamaBridge] off('${event}') unregistered, now ${this.eventHandlers.get(event)?.size ?? 0} handlers`)
+    }
   }
 
   off(event: string, handler: Function) {
@@ -650,6 +656,90 @@ class LamaBridge {
     }).catch(err => {
       console.error('[LamaBridge] Failed to set up composing forwarding:', err)
     })
+  }
+
+  // Glue.one sharing
+  async shareToGlue(message: {
+    id: string;
+    text: string;
+    senderId: string;
+    senderName: string;
+    timestamp: Date;
+    isOwn: boolean;
+    topicName?: string;
+    subjects?: string[];
+    language?: string;
+  }, options?: {
+    attribution?: string;
+    includeSourceTopic?: boolean;
+  }): Promise<{ success: boolean; glueTopicId?: string; error?: string }> {
+    const model = getModel()
+
+    // Get the glue topic ID
+    const aiTopicManager = (model as any).aiTopicManager
+    if (!aiTopicManager) {
+      return { success: false, error: 'AITopicManager not available' }
+    }
+
+    let glueTopicId = aiTopicManager.getGlueTopicId?.()
+    if (!glueTopicId) {
+      // Ensure default chats are created
+      await aiTopicManager.ensureDefaultChats?.()
+      glueTopicId = aiTopicManager.getGlueTopicId?.()
+    }
+
+    if (!glueTopicId) {
+      return { success: false, error: 'Glue topic not available' }
+    }
+
+    // Format content
+    let content = message.text
+    if (options?.includeSourceTopic && message.topicName) {
+      content = `*Shared from "${message.topicName}"*\n\n${content}`
+    }
+    if (options?.attribution) {
+      content = `${content}\n\n— ${options.attribution}`
+    }
+
+    // Post to glue topic
+    try {
+      const result = await model.chatPlan.sendMessage({
+        topicId: glueTopicId,
+        content
+      })
+
+      if (result.success) {
+        return { success: true, glueTopicId }
+      } else {
+        return { success: false, error: result.error?.message || 'Failed to post to glue.one' }
+      }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+    }
+  }
+
+  async getGlueTopic(): Promise<{ success: boolean; topicId?: string; exists: boolean; error?: string }> {
+    const model = getModel()
+    const aiTopicManager = (model as any).aiTopicManager
+
+    if (!aiTopicManager) {
+      return { success: false, exists: false, error: 'AITopicManager not available' }
+    }
+
+    let glueTopicId = aiTopicManager.getGlueTopicId?.()
+    if (glueTopicId) {
+      return { success: true, topicId: glueTopicId, exists: true }
+    }
+
+    // Try to create it
+    await aiTopicManager.ensureDefaultChats?.()
+    glueTopicId = aiTopicManager.getGlueTopicId?.()
+
+    if (glueTopicId) {
+      return { success: true, topicId: glueTopicId, exists: true }
+    }
+
+    return { success: false, exists: false, error: 'Could not get or create glue topic' }
   }
 }
 
