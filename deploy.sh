@@ -83,7 +83,7 @@ echo -e "${GREEN}✓ Build verified${NC}"
 echo ""
 
 # Step 4: Create archives (optional, for manual hosting)
-echo -e "${BLUE}[4/4]${NC} 📦 Creating deployment archives..."
+echo -e "${BLUE}[4/5]${NC} 📦 Creating deployment archives..."
 mkdir -p deploy
 rm -f deploy/lama-browser.tar.gz deploy/lama-browser.zip
 
@@ -94,15 +94,28 @@ cd ..
 echo -e "${GREEN}✓ Archives created in deploy/${NC}"
 echo ""
 
+# Step 5: Deploy to Cloudflare Pages
+echo -e "${BLUE}[5/5]${NC} ☁️  Deploying to Cloudflare Pages..."
+if command -v npx &> /dev/null; then
+    if npx wrangler pages deploy browser-ui/dist --project-name=lama-browser --commit-dirty=true; then
+        echo -e "${GREEN}✓ Deployed to Cloudflare Pages${NC}"
+    else
+        echo -e "${RED}✗ Cloudflare deployment failed${NC}"
+        echo -e "${YELLOW}  Make sure you're logged in: npx wrangler login${NC}"
+        exit 1
+    fi
+else
+    echo -e "${RED}✗ npx not found${NC}"
+    exit 1
+fi
+echo ""
+
 # Success message
 echo -e "${GREEN}╔════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║     ✓ Build Completed!                ║${NC}"
+echo -e "${GREEN}║     ✓ Build & Deploy Completed!       ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "${BLUE}📁 Build output:${NC} browser-ui/dist/"
 echo -e "${BLUE}📦 Archives:${NC} deploy/lama-browser.{tar.gz,zip}"
-echo ""
-echo -e "${YELLOW}💡 Deploy:${NC}"
-echo -e "   Cloudflare Pages serves from ${GREEN}browser-ui/dist/${NC}"
-echo -e "   Manual hosting: use deploy/lama-browser.tar.gz"
+echo -e "${BLUE}☁️  Live at:${NC} https://lama-browser.pages.dev"
 echo ""
