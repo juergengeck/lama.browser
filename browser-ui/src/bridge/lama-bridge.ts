@@ -340,6 +340,32 @@ class LamaBridge {
     return model.aiAssistantPlan.getAIPersonForTopic(topicId)
   }
 
+  async stopStreaming(topicId: string): Promise<{ success: boolean }> {
+    const model = getModel()
+    try {
+      const cancelled = model.llmManager?.stopStreaming(topicId) ?? false
+      return { success: cancelled }
+    } catch (error) {
+      console.error('[LamaBridge] stopStreaming error:', error)
+      return { success: false }
+    }
+  }
+
+  async getActiveStream(topicId: string): Promise<{ success: boolean; data?: { content: string; modelId: string; modelName?: string } | null }> {
+    const model = getModel()
+    try {
+      const messageProcessor = model.aiAssistantPlan?.getMessageProcessor?.()
+      if (!messageProcessor?.getActiveStream) {
+        return { success: true, data: null }
+      }
+      const activeStream = messageProcessor.getActiveStream(topicId)
+      return { success: true, data: activeStream }
+    } catch (error) {
+      console.error('[LamaBridge] getActiveStream error:', error)
+      return { success: false, data: null }
+    }
+  }
+
   async getSubjects(topicId: string): Promise<{ success: boolean; data?: { subjects: any[] }; error?: string }> {
     const model = getModel()
     return await model.topicAnalysisPlan.getSubjects({ topicId })
@@ -545,6 +571,85 @@ class LamaBridge {
     // Listen for connection changes which indicate instance status changes
     this.on('connections:changed', handler)
     return () => this.off('connections:changed', handler)
+  }
+
+  /**
+   * Set composing state for the current user in a topic
+   * Updates Topic.composing which syncs via CHUM to other participants
+   */
+  async setComposing(topicId: string, isComposing: boolean): Promise<{ success: boolean; error?: string }> {
+    try {
+      const model = getModel()
+      if (!model.topicModel) {
+        return { success: false, error: 'TopicModel not available' }
+      }
+
+      const myId = await model.leuteModel.myMainIdentity()
+      await model.topicModel.setComposing(topicId as any, myId, isComposing)
+
+      return { success: true }
+    } catch (error) {
+      console.error('[LamaBridge] setComposing error:', error)
+      return { success: false, error: (error as Error).message }
+    }
+  }
+
+  /**
+   * Set up composing state change forwarding from Topic version updates
+   * Emits 'chat:composingChanged' events when composing state changes
+   */
+  private composingUnsubscribe: (() => void) | null = null
+  private composingState = new Map<string, Map<string, number>>()
+
+  setupComposingForwarding(): void {
+    if (this.composingUnsubscribe) return // Already set up
+
+    import('@refinio/one.models/lib/misc/ObjectEventDispatcher.js').then(({ objectEvents }) => {
+      this.composingUnsubscribe = objectEvents.onNewVersion(
+        async (result: { obj: any; idHash: string }) => {
+          if (result.obj.$type$ !== 'Topic') return
+
+          const topicIdHash = result.idHash
+          const topic = result.obj
+          const newComposing: Map<string, number> = topic.composing ?? new Map()
+          const prevComposing = this.composingState.get(topicIdHash) ?? new Map<string, number>()
+
+          // Detect changes
+          const changes: Array<{ personId: string; isComposing: boolean; timestamp?: number }> = []
+
+          // Who started composing
+          for (const [personId, timestamp] of newComposing) {
+            if (!prevComposing.has(personId)) {
+              changes.push({ personId, isComposing: true, timestamp })
+            }
+          }
+
+          // Who stopped composing
+          for (const [personId] of prevComposing) {
+            if (!newComposing.has(personId)) {
+              changes.push({ personId, isComposing: false })
+            }
+          }
+
+          // Update state
+          this.composingState.set(topicIdHash, new Map(newComposing))
+
+          // Emit events
+          for (const change of changes) {
+            this.emit('chat:composingChanged', {
+              topicId: topicIdHash,
+              ...change
+            })
+          }
+        },
+        'LamaBridge: composing changes',
+        'Topic'
+      )
+
+      console.log('[LamaBridge] Composing state forwarding set up')
+    }).catch(err => {
+      console.error('[LamaBridge] Failed to set up composing forwarding:', err)
+    })
   }
 }
 

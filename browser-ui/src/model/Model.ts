@@ -82,6 +82,12 @@ import { AllRecipes as TrustCoreRecipes, AllReverseMaps as TrustCoreReverseMaps 
 // Cube.core recipes
 import { CubeCoreRecipes } from '@refinio/cube.core';
 
+// Meaning.core recipes for semantic embedding dimension
+import { MeaningCoreRecipes } from '@refinio/meaning.core/recipes/index.js';
+
+// One.knowledge recipes for knowledge assembly (Artifact, KeywordClean)
+import { OneKnowledgeRecipes } from '@refinio/one.knowledge/lib/recipes/index.js';
+
 // Settings.core recipes (for IoM-compatible settings)
 import { SettingsRecipes } from '@refinio/settings.core';
 
@@ -105,6 +111,12 @@ import {
 
 // ExportPlan from lama.core (platform-agnostic, uses one.core implode)
 import { ExportPlan } from '@refinio/lama.core/plans/ExportPlan.js';
+
+// MeaningPlan for semantic similarity (knowledge navigation)
+import { MeaningPlan } from '@refinio/lama.core/plans/MeaningPlan.js';
+import { MeaningDimension } from '@refinio/meaning.core';
+import { setMeaningDimension } from '@refinio/lama.core/one-ai/models/Subject.js';
+import { OllamaEmbeddingProvider } from '@refinio/lama.core/services/ollama-embedding-provider.js';
 
 // IngestionPlan for document ingestion (PDF, etc.)
 import { IngestionPlan } from '@refinio/memory.core/plans/IngestionPlan.js';
@@ -230,6 +242,10 @@ export default class Model {
                 ...TrustCoreRecipes,
                 // Cube.core recipes
                 ...CubeCoreRecipes,
+                // Meaning.core recipes
+                ...MeaningCoreRecipes,
+                // One.knowledge recipes
+                ...(OneKnowledgeRecipes || []),
                 // Settings.core recipes (for IoM-compatible settings)
                 ...SettingsRecipes
             ],
@@ -272,6 +288,24 @@ export default class Model {
             // Must be done BEFORE initAll() so JournalModule receives it
             console.log('[Model] Setting up StoryFactory...');
             this.moduleRegistry.setStorageFunction(storeVersionedObject);
+
+            // Initialize MeaningDimension and MeaningPlan for semantic search
+            // KnowledgeNavigatorModule demands MeaningPlan, must be supplied before initAll()
+            console.log('[Model] Setting up MeaningDimension and MeaningPlan...');
+            const embeddingProvider = new OllamaEmbeddingProvider();
+            const meaningDimension = new MeaningDimension({
+                embeddingProvider
+            });
+            await meaningDimension.init();
+
+            // Wire MeaningDimension to Subject model for automatic embedding indexing
+            setMeaningDimension(meaningDimension);
+
+            const meaningPlan = new MeaningPlan(meaningDimension, embeddingProvider);
+            this.moduleRegistry.supply('MeaningDimension', meaningDimension);
+            this.moduleRegistry.supply('MeaningPlan', meaningPlan);
+            this.moduleRegistry.supply('EmbeddingProvider', embeddingProvider);
+            console.log('[Model] ✅ MeaningDimension and MeaningPlan supplied');
 
             // Use ModuleRegistry for automatic dependency-ordered initialization
             // CoreModule will initialize PlanObjectManager when OneCore Instance is ready

@@ -1,0 +1,8 @@
+name = "lama-browser"
+compatibility_date = "2024-01-01"
+
+# Cloudflare Pages static site deployment
+# Deploy with: wrangler pages deploy dist --project-name=lama-browser
+
+[site]
+bucket = "./dist"

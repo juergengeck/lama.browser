@@ -4,6 +4,14 @@
  */
 
 // ============================================================================
+// POLYFILLS: Browser compatibility for Node.js APIs used by lama.core
+// ============================================================================
+if (typeof globalThis.setImmediate === 'undefined') {
+  (globalThis as any).setImmediate = (fn: (...args: any[]) => void, ...args: any[]) => setTimeout(fn, 0, ...args);
+  (globalThis as any).clearImmediate = (id: number) => clearTimeout(id);
+}
+
+// ============================================================================
 // WARMUP: Pre-import dependencies that workers use to prevent Vite reload
 // This forces Vite to optimize these before workers discover them
 // ============================================================================

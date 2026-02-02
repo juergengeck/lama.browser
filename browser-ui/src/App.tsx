@@ -354,6 +354,9 @@ function AppContent({ model }: AppContentProps) {
       // Set up new topic forwarding for CHUM sync (topics received from peers)
       lamaBridge.setupNewTopicForwarding()
 
+      // Set up composing state forwarding for typing indicators
+      lamaBridge.setupComposingForwarding()
+
       if (pendingInvitation) {
         console.log('[App] Processing pending invitation')
       }

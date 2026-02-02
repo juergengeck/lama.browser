@@ -27,6 +27,8 @@ export default defineConfig({
 
       // Stub out Node.js modules for browser builds (CORS restrictions)
       { find: '@anthropic-ai/sdk', replacement: path.resolve(__dirname, './src/stubs/claude-stub.ts') },
+      // Stub out Node.js-only WhatsApp signal library
+      { find: '@whiskeysockets/libsignal-node', replacement: path.resolve(__dirname, './src/stubs/libsignal-stub.ts') },
 
       // lamejs CJS modules have circular dependencies that break ESM bundling
       // Use the pre-bundled version which self-contains all dependencies
@@ -43,6 +45,10 @@ export default defineConfig({
   },
   define: {
     global: 'globalThis',
+    // Required for Node.js polyfills (util, assert) that leak through baileys dependencies
+    'process.env': {},
+    'process.version': '"v20.0.0"',
+    'process.platform': '"browser"'
   },
   optimizeDeps: {
     // CRITICAL: Include worker files in entries so Vite scans them for dependencies
@@ -68,7 +74,11 @@ export default defineConfig({
       'electron',
       // CRITICAL: Exclude transformers.js from esbuild pre-bundling
       // We alias it to the webpack-built dist which has proper Chatterbox registration
-      '@huggingface/transformers'
+      '@huggingface/transformers',
+      // Node.js-only WhatsApp libraries - exclude from dev optimization
+      '@whiskeysockets/baileys',
+      '@whiskeysockets/libsignal-node',
+      'qrcode-terminal'
     ],
     esbuildOptions: {
       define: {
@@ -96,7 +106,10 @@ export default defineConfig({
     sourcemap: false,  // No source maps in production
     rollupOptions: {
       external: [
-        'ws'
+        'ws',
+        // WhatsApp library with Node.js-only dependencies (qrcode-terminal has legacy octal escapes)
+        '@whiskeysockets/baileys',
+        'qrcode-terminal'
       ],
       output: {
         format: 'es',
