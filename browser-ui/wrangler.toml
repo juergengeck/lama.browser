@@ -2,5 +2,9 @@ name = "lama-browser"
 compatibility_date = "2024-01-01"
 pages_build_output_dir = "./dist"
 
-# Cloudflare Pages static site deployment
-# Deploy with: npx wrangler pages deploy
+# Build configuration for Cloudflare Pages
+# Note: CF Pages builds from the monorepo root, not this directory
+# The build command must be run from the correct location
+[build]
+command = "cd packages/lama.browser && pnpm build"
+cwd = "../.."  # monorepo root (lama/)

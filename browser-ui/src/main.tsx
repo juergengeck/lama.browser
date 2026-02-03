@@ -17,6 +17,13 @@ if (typeof globalThis.setImmediate === 'undefined') {
 // ============================================================================
 import '@huggingface/transformers';
 
+// ============================================================================
+// EMBEDDING PRELOAD: Start loading nomic-embed-text model in background
+// This gives the model time to download/cache before it's needed
+// ============================================================================
+import { preloadBrowserEmbeddings } from './services/BrowserEmbeddingProvider';
+preloadBrowserEmbeddings();
+
 // Initialize API logger for test automation (dev mode only)
 import './services/api-logger';
 

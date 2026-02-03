@@ -675,17 +675,17 @@ class LamaBridge {
   }): Promise<{ success: boolean; glueTopicId?: string; error?: string }> {
     const model = getModel()
 
-    // Get the glue topic ID
-    const aiTopicManager = (model as any).aiTopicManager
-    if (!aiTopicManager) {
-      return { success: false, error: 'AITopicManager not available' }
+    // Get the glue topic ID via aiAssistantPlan
+    const aiAssistantPlan = model.aiAssistantPlan
+    if (!aiAssistantPlan) {
+      return { success: false, error: 'AIAssistantPlan not available' }
     }
 
-    let glueTopicId = aiTopicManager.getGlueTopicId?.()
+    let glueTopicId = aiAssistantPlan.getGlueTopicId?.()
     if (!glueTopicId) {
       // Ensure default chats are created
-      await aiTopicManager.ensureDefaultChats?.()
-      glueTopicId = aiTopicManager.getGlueTopicId?.()
+      await aiAssistantPlan.ensureDefaultChats?.()
+      glueTopicId = aiAssistantPlan.getGlueTopicId?.()
     }
 
     if (!glueTopicId) {
@@ -720,20 +720,20 @@ class LamaBridge {
 
   async getGlueTopic(): Promise<{ success: boolean; topicId?: string; exists: boolean; error?: string }> {
     const model = getModel()
-    const aiTopicManager = (model as any).aiTopicManager
+    const aiAssistantPlan = model.aiAssistantPlan
 
-    if (!aiTopicManager) {
-      return { success: false, exists: false, error: 'AITopicManager not available' }
+    if (!aiAssistantPlan) {
+      return { success: false, exists: false, error: 'AIAssistantPlan not available' }
     }
 
-    let glueTopicId = aiTopicManager.getGlueTopicId?.()
+    let glueTopicId = aiAssistantPlan.getGlueTopicId?.()
     if (glueTopicId) {
       return { success: true, topicId: glueTopicId, exists: true }
     }
 
     // Try to create it
-    await aiTopicManager.ensureDefaultChats?.()
-    glueTopicId = aiTopicManager.getGlueTopicId?.()
+    await aiAssistantPlan.ensureDefaultChats?.()
+    glueTopicId = aiAssistantPlan.getGlueTopicId?.()
 
     if (glueTopicId) {
       return { success: true, topicId: glueTopicId, exists: true }

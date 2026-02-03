@@ -1,3 +1,0 @@
-# Netlify/Cloudflare Pages SPA routing
-# All paths serve index.html (200 status, not redirect)
-/*    /index.html   200

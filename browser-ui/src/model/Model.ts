@@ -116,7 +116,8 @@ import { ExportPlan } from '@refinio/lama.core/plans/ExportPlan.js';
 import { MeaningPlan } from '@refinio/lama.core/plans/MeaningPlan.js';
 import { MeaningDimension } from '@refinio/meaning.core';
 import { setMeaningDimension } from '@refinio/lama.core/one-ai/models/Subject.js';
-import { OllamaEmbeddingProvider } from '@refinio/lama.core/services/ollama-embedding-provider.js';
+// Use browser-local embeddings instead of Ollama
+import { getBrowserEmbeddingProvider, preloadBrowserEmbeddings } from '../services/BrowserEmbeddingProvider';
 
 // IngestionPlan for document ingestion (PDF, etc.)
 import { IngestionPlan } from '@refinio/memory.core/plans/IngestionPlan.js';
@@ -208,7 +209,29 @@ export default class Model {
             llmPlatform, // Use shared instance
             { ollamaValidator: browserOllamaValidator }
         ));
-        this.modules.set('connection', new ConnectionModule(commServerUrl, webUrl));
+        // Create ConnectionModule with key mismatch handler
+    const connectionModule = new ConnectionModule(commServerUrl, webUrl);
+    connectionModule.setKeyMismatchHandler(async (remotePersonId: string, message: string) => {
+        console.warn('[Model] Key mismatch detected:', remotePersonId);
+
+        // Show browser confirmation dialog with security warning
+        const proceed = window.confirm(
+            '⚠️ SECURITY WARNING\n\n' +
+            message + '\n\n' +
+            'Click OK to trust the new key and proceed.\n' +
+            'Click Cancel to reject this connection.\n\n' +
+            '(If you did not expect this, click Cancel for safety)'
+        );
+
+        if (proceed) {
+            console.log('[Model] User approved key mismatch - proceeding with connection');
+        } else {
+            console.log('[Model] User rejected key mismatch - aborting connection');
+        }
+
+        return proceed;
+    });
+    this.modules.set('connection', connectionModule);
         this.modules.set('device', new DeviceModule());
         this.modules.set('memory', new MemoryModule());
         this.modules.set('knowledgeNavigator', new KnowledgeNavigatorModule());
@@ -270,10 +293,18 @@ export default class Model {
         console.log('[Model] Model construction complete - modules registered');
     }
 
+    private _initializing = false;
+
     async init(instanceName?: string, _secret?: string): Promise<void> {
         if (this.initialized) {
-            throw new Error('Model already initialized');
+            console.log('[Model] Already initialized, skipping');
+            return;
         }
+        if (this._initializing) {
+            console.log('[Model] Initialization already in progress, skipping');
+            return;
+        }
+        this._initializing = true;
 
         // Capture instance name from onLogin callback
         if (instanceName) {
@@ -292,7 +323,15 @@ export default class Model {
             // Initialize MeaningDimension and MeaningPlan for semantic search
             // KnowledgeNavigatorModule demands MeaningPlan, must be supplied before initAll()
             console.log('[Model] Setting up MeaningDimension and MeaningPlan...');
-            const embeddingProvider = new OllamaEmbeddingProvider();
+            // Use browser-local embeddings (transformers.js) instead of Ollama
+            const embeddingProvider = getBrowserEmbeddingProvider();
+            // Start loading model in background (don't await - let it load while other init happens)
+            console.log('[Model] Starting background load of nomic-embed-text model...');
+            embeddingProvider.load().then(() => {
+                console.log('[Model] ✅ Embedding model loaded and ready');
+            }).catch(error => {
+                console.warn('[Model] ⚠️ Embedding model failed to load:', error);
+            });
             const meaningDimension = new MeaningDimension({
                 embeddingProvider
             });
@@ -411,6 +450,7 @@ export default class Model {
         } catch (e) {
             console.error('[Model] Module initialization failed:', e);
             this.initialized = false;
+            this._initializing = false;
             await this.shutdown().catch(console.error);
             throw e;
         }
@@ -424,6 +464,7 @@ export default class Model {
         await this.moduleRegistry.shutdownAll();
 
         this.initialized = false;
+        this._initializing = false;
         this.ownerId = null;
 
         console.log('[Model] ✅ Shutdown complete');
@@ -470,6 +511,17 @@ export default class Model {
     get connectionPlan() { return this.modules.get('connection').connectionPlan; }
     get groupChatPlan() { return this.modules.get('connection').groupChatPlan; }
     get discoveryService() { return this.modules.get('connection').discoveryService; }
+
+    /**
+     * Update the display name advertised via mDNS discovery.
+     * This updates the TXT record name field - connections are not affected.
+     */
+    updateDiscoveryDisplayName(newName: string): void {
+        const connectionModule = this.modules.get('connection');
+        if (connectionModule?.updateDiscoveryDisplayName) {
+            connectionModule.updateDiscoveryDisplayName(newName);
+        }
+    }
 
     // TrustModule services
     get trustModel() { return this.modules.get('trust').trustModel; }

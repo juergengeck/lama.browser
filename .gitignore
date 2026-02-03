@@ -13,11 +13,9 @@ electron-ui/node_modules/@refinio/
 # Build outputs
 build/
 release/
-deploy/lama.browser/
+deploy/
+browser-ui/dist/
 *.log
-
-# Keep browser-ui/dist for Cloudflare Pages (no build step)
-!browser-ui/dist/
 
 # Development
 .DS_Store

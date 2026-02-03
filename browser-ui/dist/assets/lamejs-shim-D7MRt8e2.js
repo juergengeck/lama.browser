@@ -1,4 +1,0 @@
-let e=null,n=null;async function i(){const t=["/@fs/"+new URL("/assets/lame.all-C7RRJB7H.js",import.meta.url).pathname,new URL("/assets/lame.all-C7RRJB7H.js",import.meta.url).href,"/node_modules/lamejs/lame.all.js"];for(const a of t)try{const r=await fetch(a);if(r.ok)return await r.text()}catch{}throw new Error("Failed to load lamejs from any known path")}async function s(){return e||n||(n=(async()=>{const t=globalThis;if(t.lamejs?.Mp3Encoder)return e=t.lamejs,e;const r=`
-      ${await i()}
-      return lamejs;
-    `,o=new Function(r)();if(!o?.Mp3Encoder)throw new Error("lamejs failed to initialize - Mp3Encoder not found");return e=o,e})(),n)}const l={get Mp3Encoder(){if(!e)throw new Error("lamejs not initialized - use init() first or await the module");return e.Mp3Encoder},get WavHeader(){if(!e)throw new Error("lamejs not initialized - use init() first or await the module");return e.WavHeader},init:s};export{l as default,s as initLamejs};

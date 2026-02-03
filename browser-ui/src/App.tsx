@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react'
-import { ContactsView, LoginDeploy, ModelOnboarding, PlansProvider, BridgeProvider, ProfileEditor, ChatLayout, AssemblyJournalView, MemoryView, MobileBottomNav, MOBILE_NAV_HEIGHT, StatusBar, NavigateHomeProvider, AICreationLoader, useTheme } from '@refinio/lama.ui'
+import { ContactsView, LoginDeploy, ModelOnboarding, PlansProvider, BridgeProvider, ProfileEditor, ChatLayout, JournalView, MemoryView, MobileBottomNav, MOBILE_NAV_HEIGHT, StatusBar, NavigateHomeProvider, AICreationLoader, useTheme } from '@refinio/lama.ui'
 import { SettingsProvider, InstanceSettingsStorage, DEFAULT_NETWORK_SETTINGS, DEFAULT_PRIVACY_SETTINGS, type NetworkSettings, type PrivacySettings } from '@refinio/settings.core'
 import type { SHA256IdHash } from '@refinio/one.core/lib/util/type-checks.js'
 import type { Instance } from '@refinio/one.core/lib/recipes.js'
@@ -27,6 +27,7 @@ import { FaviconBadgeManager } from '@/components/FaviconBadgeManager'
 import { lamaBridge } from '@/bridge/lama-bridge'
 import { browserOllamaValidator } from '../../adapters/browser-llm-config'
 import { checkGPUCapability } from '@/utils/gpu-detection'
+import { useEmbeddingStatus } from '@/hooks/useEmbeddingStatus'
 
 // TTS Worker - use Vite's ?worker&url syntax for proper bundling
 // This bundles the worker and all its dependencies (including @huggingface/transformers)
@@ -46,32 +47,51 @@ import {
 } from '@refinio/lama.ui'
 
 /**
- * Stub LocalModelsPlan for browser
- * Browser Whisper requires transformers.js in WebWorker - not yet implemented
+ * Create LocalModelsPlan for browser using the Model's LLM platform
+ * Text-generation uses WebWorker + transformers.js via BrowserLLMPlatform
+ * Browser Whisper requires separate implementation (not yet done)
  */
-const browserLocalModelsPlan = {
-  async whisperIsReady() {
-    // Browser Whisper not yet implemented (requires WebWorker + transformers.js)
-    return { success: true, data: false }
-  },
+function createBrowserLocalModelsPlan(model: Model) {
+  return {
+    async whisperIsReady() {
+      // Browser Whisper not yet implemented (requires WebWorker + transformers.js)
+      return { success: true, data: false }
+    },
 
-  async whisperTranscribe(_params: { audio: number[]; language?: string }) {
-    return {
-      success: false,
-      error: 'Browser Whisper transcription not yet implemented. Use Electron for voice input.'
+    async whisperTranscribe(_params: { audio: number[]; language?: string }) {
+      return {
+        success: false,
+        error: 'Browser Whisper transcription not yet implemented. Use Electron for voice input.'
+      }
+    },
+
+    async getStatus(_modelId: string) {
+      return { status: 'unloaded' as const }
+    },
+
+    async loadModel(modelId: string) {
+      if (!model.llmPlatform?.loadLocalModel) {
+        return { success: false, error: 'LLM platform not initialized' }
+      }
+      try {
+        await model.llmPlatform.loadLocalModel(modelId)
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Failed to load model' }
+      }
+    },
+
+    async unloadModel(modelId: string) {
+      if (!model.llmPlatform?.unloadLocalModel) {
+        return { success: false, error: 'LLM platform not initialized' }
+      }
+      try {
+        await model.llmPlatform.unloadLocalModel(modelId)
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: error instanceof Error ? error.message : 'Failed to unload model' }
+      }
     }
-  },
-
-  async getStatus(_modelId: string) {
-    return { status: 'unloaded' as const }
-  },
-
-  async loadModel(_modelId: string) {
-    return { success: false, error: 'Browser local models not yet implemented' }
-  },
-
-  async unloadModel(_modelId: string) {
-    return { success: false, error: 'Browser local models not yet implemented' }
   }
 }
 
@@ -98,7 +118,7 @@ function modelToPlans(model: Model): LAMAPlansContext {
     connection: model.connectionPlan,
     memory: model.memoryPlan,
     cube: model.cubePlan,
-    localModels: browserLocalModelsPlan,
+    localModels: createBrowserLocalModelsPlan(model),
     ingestion: model.ingestionPlan || undefined,
     onecore: {
       async clearStorage() {
@@ -164,6 +184,9 @@ function AppContent({ model }: AppContentProps) {
   // Toolbar controls from active view
   const [toolbarControls, setToolbarControls] = useState<React.ReactNode>(null)
 
+  // Embedding model loading status (for status bar)
+  const embeddingStatus = useEmbeddingStatus()
+
   // Background model download state (preemptively download Granite)
   // Use refs for values that polling closures need to read (avoids stale closure problem)
   const bgDownloadProgressRef = useRef<number>(0)
@@ -193,9 +216,21 @@ function AppContent({ model }: AppContentProps) {
         return { displayName: model.instanceName || '', publicKey: '' }
       },
       async updateProfile(params: { displayName: string }) {
-        // Profile update needs ONE.core - not implemented via settings storage
-        console.warn('[Settings] updateProfile requires ONE.core identity update')
-        return { success: true }
+        // Update ONE.core profile via ContactsPlan
+        try {
+          if (model.ownerId && model.contactsPlan) {
+            await model.contactsPlan.updateProfile({
+              personId: model.ownerId,
+              name: params.displayName
+            })
+          }
+          // Also update mDNS discovery advertisement
+          model.updateDiscoveryDisplayName(params.displayName)
+          return { success: true }
+        } catch (error) {
+          console.error('[Settings] updateProfile failed:', error)
+          return { success: false, error: error instanceof Error ? error.message : 'Failed to update profile' }
+        }
       },
       async getNetworkSettings() {
         try {
@@ -710,6 +745,22 @@ function AppContent({ model }: AppContentProps) {
   // Browser has no traffic lights (no Electron window controls)
   const trafficLightSpace = false
 
+  // Handle sharing message to glue.one
+  const handleShareGlue = async (message: any) => {
+    try {
+      const result = await lamaBridge.shareToGlue(message, {
+        includeSourceTopic: true
+      })
+      if (!result.success) {
+        console.error('[App] Failed to share to glue.one:', result.error)
+      } else {
+        console.log('[App] Message shared to glue.one:', result.glueTopicId)
+      }
+    } catch (error) {
+      console.error('[App] Error sharing to glue.one:', error)
+    }
+  }
+
   const renderContent = () => {
     // Route-based rendering with appMenuItems and trafficLightSpace passed to views
     // Browser has no traffic lights (no Electron window controls)
@@ -723,17 +774,14 @@ function AppContent({ model }: AppContentProps) {
     const glueOneLogo = <img src="/assets/icons/glueone.svg" alt="glue.one" className="h-6" />
 
     if (location.pathname.startsWith('/chat/')) {
-      return <ChatLayout selectedConversationId={selectedConversationId} {...headerProps} ttsWorkerUrl={ttsWorkerUrl} logo={glueOneLogo} />
+      return <ChatLayout selectedConversationId={selectedConversationId} {...headerProps} ttsWorkerUrl={ttsWorkerUrl} logo={glueOneLogo} onShareGlue={handleShareGlue} />
     }
 
     switch (location.pathname) {
       case '/chats':
-        return <ChatLayout selectedConversationId={selectedConversationId} {...headerProps} ttsWorkerUrl={ttsWorkerUrl} logo={glueOneLogo} />
+        return <ChatLayout selectedConversationId={selectedConversationId} {...headerProps} ttsWorkerUrl={ttsWorkerUrl} logo={glueOneLogo} onShareGlue={handleShareGlue} />
       case '/journal':
-        return <AssemblyJournalView
-          queryAssemblies={async (options: AssemblyQueryOptions): Promise<AssemblyWithStory[]> => {
-            return await model.journalPlan.queryAssemblies(options)
-          }}
+        return <JournalView
           onSetToolbarControls={setToolbarControls}
           {...headerProps}
         />
@@ -762,7 +810,7 @@ function AppContent({ model }: AppContentProps) {
           // View another user's profile
           return <ProfileEditor open={true} onOpenChange={() => {}} fullPage={true} contactId={params.personId} onClose={() => navigate('/contacts')} />
         }
-        return <ChatLayout {...headerProps} ttsWorkerUrl={ttsWorkerUrl} logo={glueOneLogo} />
+        return <ChatLayout {...headerProps} ttsWorkerUrl={ttsWorkerUrl} logo={glueOneLogo} onShareGlue={handleShareGlue} />
     }
   }
 
@@ -815,6 +863,7 @@ function AppContent({ model }: AppContentProps) {
             <div className="shrink-0 hidden md:block">
               <StatusBar
                 version="LAMA Browser v1.0.0"
+                embeddingStatus={embeddingStatus.loading || embeddingStatus.error ? embeddingStatus : undefined}
                 responseLength={activeTab === 'chats' ? {
                   value: responseLengthPercent,
                   onChange: setResponseLengthPercent
