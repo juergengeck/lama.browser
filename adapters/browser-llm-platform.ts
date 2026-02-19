@@ -279,7 +279,9 @@ export class BrowserLLMPlatform implements LLMPlatform {
             // Add tool response to messages for next iteration
             currentMessages.push({
               role: 'tool_response' as any,
-              content: toolResult
+              content: typeof toolResult === 'string'
+                ? toolResult
+                : JSON.stringify(toolResult, null, 2)
             });
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : String(error);

@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react'
-import { ContactsView, LoginDeploy, ModelOnboarding, PlansProvider, BridgeProvider, ProfileEditor, ChatLayout, JournalView, MemoryView, MobileBottomNav, MOBILE_NAV_HEIGHT, StatusBar, NavigateHomeProvider, AICreationLoader, useTheme } from '@refinio/lama.ui'
+import { ContactsView, LoginDeploy, ModelOnboarding, PlansProvider, BridgeProvider, ProfileEditor, ChatLayout, JournalView, MemoryView, MobileBottomNav, MOBILE_NAV_HEIGHT, StatusBar, NavigateHomeProvider, AICreationLoader, useTheme, RecoverRoute } from '@refinio/lama.ui'
 import { SettingsProvider, InstanceSettingsStorage, DEFAULT_NETWORK_SETTINGS, DEFAULT_PRIVACY_SETTINGS, type NetworkSettings, type PrivacySettings } from '@refinio/settings.core'
 import type { SHA256IdHash } from '@refinio/one.core/lib/util/type-checks.js'
 import type { Instance } from '@refinio/one.core/lib/recipes.js'
@@ -120,6 +120,7 @@ function modelToPlans(model: Model): LAMAPlansContext {
     cube: model.cubePlan,
     localModels: createBrowserLocalModelsPlan(model),
     ingestion: model.ingestionPlan || undefined,
+    glueIdentity: model.glueIdentityPlan || undefined,
     onecore: {
       async clearStorage() {
         try {
@@ -558,6 +559,36 @@ function AppContent({ model }: AppContentProps) {
     return <VerificationView shortCode={params.shortCode} />
   }
 
+  // Recovery route — accessible regardless of auth state
+  if (location.pathname === '/recover') {
+    return (
+      <RecoverRoute
+        hash={window.location.hash}
+        onRecover={async (bundle) => {
+          // Shut down existing identity if active
+          if (model.initialized) {
+            await model.shutdown()
+          }
+          // MultiUser.register() accepts base64 strings directly for keys
+          const email = `${bundle.instanceName}@lama.local`
+          await model.one.register(
+            email,
+            'recovery',
+            bundle.instanceName,
+            bundle.secretEncryptionKey,
+            bundle.secretSigningKey
+          )
+        }}
+        onComplete={() => {
+          window.location.href = '/'  // Full reload to reinitialize
+        }}
+        onCancel={() => navigate('/chats')}
+        hasExistingIdentity={isAuthenticated}
+        appName={document.title || 'LAMA'}
+      />
+    )
+  }
+
   // Loading screen
   if (isLoading) {
     return (
@@ -683,11 +714,11 @@ function AppContent({ model }: AppContentProps) {
             console.error('[App] Error generating AI identity:', error)
             // Still proceed but without AI Person - user can retry later
           } finally {
+            // IMPORTANT: Set hasDefaultModel BEFORE clearing isCreatingAI
+            // to prevent brief flash of "Loading LAMA" screen
+            setHasDefaultModel(true)
             setIsCreatingAI(false)
           }
-
-          // Now show main UI - topics will be fetched with correct AI info
-          setHasDefaultModel(true)
         }}
       />
     )
@@ -784,6 +815,13 @@ function AppContent({ model }: AppContentProps) {
         return <JournalView
           onSetToolbarControls={setToolbarControls}
           {...headerProps}
+          onNavigateToEntity={(entityId, entityType) => {
+            if (entityType === 'contact') {
+              navigate(`/contact/${entityId}`)
+            } else if (entityType === 'chat') {
+              navigate(`/chat/${entityId}`)
+            }
+          }}
         />
       case '/contacts':
         return <ContactsView

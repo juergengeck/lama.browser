@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Button } from '@refinio/lama.ui'
 import { Input } from '@refinio/lama.ui'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@refinio/lama.ui'
@@ -12,20 +12,19 @@ interface LoginScreenProps {
 
 export function LoginScreen({ onLogin, onRegister }: LoginScreenProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login')
-  const [name, setName] = useState('')
-  const [password, setPassword] = useState('')
+  const [name, setName] = useState(() => {
+    const mode = localStorage.getItem('lama:loginPrefillMode') ?? 'demo'
+    if (mode === 'demo') return 'demo'
+    if (mode === 'lastUsed') return localStorage.getItem('lama:lastUsedUsername') ?? ''
+    return ''
+  })
+  const [password, setPassword] = useState(() => {
+    const mode = localStorage.getItem('lama:loginPrefillMode') ?? 'demo'
+    if (mode === 'demo') return 'demo'
+    return ''
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  // Force prefill credentials on mount
-  useEffect(() => {
-    setName('test')
-    setPassword('test')
-    console.log('LoginScreen: Force setting credentials to test/test')
-  }, [])
-
-  // Debug logging
-  console.log('LoginScreen rendered with:', { name, password, mode })
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,6 +37,8 @@ export function LoginScreen({ onLogin, onRegister }: LoginScreenProps) {
       } else {
         await onRegister(name, password)
       }
+      // Save last used username
+      localStorage.setItem('lama:lastUsedUsername', name)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred')
     } finally {
@@ -72,7 +73,9 @@ export function LoginScreen({ onLogin, onRegister }: LoginScreenProps) {
               <input
                 id="name"
                 type="text"
-                defaultValue="test"
+                name="username"
+                autoComplete="username"
+                value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder={mode === 'login' ? 'Your identity (public key or name)' : 'Choose an identity name'}
                 required
@@ -91,7 +94,9 @@ export function LoginScreen({ onLogin, onRegister }: LoginScreenProps) {
               <input
                 id="password"
                 type="password"
-                defaultValue="test"
+                name="password"
+                autoComplete="current-password"
+                value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Enter your password"
                 required

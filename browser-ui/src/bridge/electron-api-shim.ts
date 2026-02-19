@@ -287,6 +287,50 @@ const channelHandlers: Record<string, (model: any, ...args: any[]) => Promise<an
     // Browser doesn't track replication events the same way
     return { success: true, events: [] };
   },
+
+  // WhatsApp / Baileys (not available in browser — stubs for shared UI)
+  'baileys:connect': async () => {
+    return { success: false, error: 'WhatsApp not available in browser' };
+  },
+  'baileys:waitForConnection': async () => {
+    return { success: false, error: 'WhatsApp not available in browser' };
+  },
+  'baileys:disconnect': async () => {
+    return { success: false, error: 'WhatsApp not available in browser' };
+  },
+  'baileys:unlink': async () => {
+    return { success: false, error: 'WhatsApp not available in browser' };
+  },
+  'baileys:getStatus': async () => {
+    return { connected: false, error: 'WhatsApp not available in browser' };
+  },
+  'baileys:requestPairingCode': async () => {
+    return { success: false, error: 'WhatsApp not available in browser' };
+  },
+  'baileys:getQRCode': async () => {
+    return { success: false, qrCode: null };
+  },
+  'baileys:getPairingCode': async () => {
+    return { success: false, pairingCode: null };
+  },
+  'baileys:sendMessage': async () => {
+    return { success: false, error: 'WhatsApp not available in browser' };
+  },
+  'baileys:sendMessageToJid': async () => {
+    return { success: false, error: 'WhatsApp not available in browser' };
+  },
+  'baileys:getChats': async () => {
+    return { success: true, chats: [] };
+  },
+  'baileys:setChatPreference': async () => {
+    return { success: false, error: 'WhatsApp not available in browser' };
+  },
+  'baileys:setChatEnabled': async () => {
+    return { success: false, error: 'WhatsApp not available in browser' };
+  },
+  'baileys:confirmImport': async () => {
+    return { success: false, error: 'WhatsApp not available in browser' };
+  },
 };
 
 // Event listeners for IPC-style events

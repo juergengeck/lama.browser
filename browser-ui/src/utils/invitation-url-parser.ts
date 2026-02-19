@@ -129,7 +129,7 @@ export function isValidInvitationUrl(url: string): boolean {
 
 /**
  * Get invitation mode from URL without full parsing
- * 
+ *
  * @param url Invitation URL
  * @returns Invitation mode or undefined
  */
@@ -140,4 +140,4 @@ export function getInvitationMode(url: string): InvitationMode | undefined {
     return 'IoP';
   }
   return undefined;
-} 
+}

@@ -167,9 +167,9 @@ class LamaBridge {
     handlers?.forEach(handler => handler(data))
   }
 
-  async getMessages(topicId: string): Promise<Message[]> {
+  async getMessages(topicId: string, options?: { before?: number; limit?: number }): Promise<{ messages: Message[], hasMore: boolean }> {
     const model = getModel()
-    const result = await model.chatPlan.getMessages({ topicId })
+    const result = await model.chatPlan.getMessages({ topicId, limit: options?.limit, before: options?.before })
 
     console.log('[LamaBridge.getMessages] Raw result:', {
       success: result.success,
@@ -178,10 +178,10 @@ class LamaBridge {
     })
 
     if (!result.success || !result.messages) {
-      return []
+      return { messages: [], hasMore: false }
     }
 
-    return result.messages.map((msg: any) => ({
+    const messages = result.messages.map((msg: any) => ({
       id: msg.id || msg.hash,
       senderId: msg.sender || msg.senderId,
       senderName: msg.senderName,
@@ -193,6 +193,8 @@ class LamaBridge {
       attachments: msg.attachments,
       topicId: topicId
     }))
+
+    return { messages, hasMore: !!result.hasMore }
   }
 
   async sendMessage(topicId: string, content: string, attachments?: any[]): Promise<string> {
@@ -504,11 +506,12 @@ class LamaBridge {
         } else {
           // All other models: Use chat() which reads LLM object from storage
           // Provider is determined from the stored LLM object's provider field
+          // stream: false - AI name generation only needs final result, no streaming overhead
           console.log('[LamaBridge] Using chat() for storage-backed model:', reqModelId)
           const response = await model.llmManager.chat(
             chatMessages,
             reqModelId,
-            { disableTools: true }
+            { disableTools: true, stream: false }
           )
           console.log('[LamaBridge] chat() completed in', (performance.now() - llmStart).toFixed(0), 'ms')
 

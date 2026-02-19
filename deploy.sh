@@ -110,7 +110,7 @@ fi
 # Step 3: Deploy to Cloudflare Pages
 echo -e "${BLUE}[3/3]${NC} Deploying to Cloudflare Pages..."
 if command -v npx &> /dev/null; then
-    if npx wrangler pages deploy browser-ui/dist --project-name=lama-browser --commit-dirty=true; then
+    if npx wrangler pages deploy browser-ui/dist --project-name=lama-one --commit-dirty=true; then
         echo -e "${GREEN}✓ Deployed to Cloudflare Pages${NC}"
     else
         echo -e "${RED}✗ Cloudflare deployment failed${NC}"
@@ -129,5 +129,5 @@ echo -e "${GREEN}║     ✓ Deploy Completed!                ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "${BLUE}📁 Build output:${NC} browser-ui/dist/"
-echo -e "${BLUE}☁️  Live at:${NC} https://lama-browser.pages.dev"
+echo -e "${BLUE}☁️  Live at:${NC} https://lama-one.pages.dev"
 echo ""

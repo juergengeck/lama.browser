@@ -1,6 +1,21 @@
 /**
  * LAMA Browser Model - Modular Architecture
  *
+ * Orchestrates module lifecycle using demand/supply pattern:
+ *
+ * LIFECYCLE PHASES (mapped to class structure):
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ constructor()                                                               │
+ * │   PHASE 1: Supply platform adapters (LLMPlatform, ExportPlan, etc.)         │
+ * │   PHASE 2: Register modules (CoreModule, AIModule, ChatModule, etc.)        │
+ * │   PHASE 2.5: Setup ONE.core MultiUser with recipes                          │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ init() - called on login                                                    │
+ * │   PHASE 3: Setup providers (MeaningDimension, SettingsPlan, StoryFactory)   │
+ * │   PHASE 4: Initialize all modules (topological sort, dependency injection)  │
+ * │   PHASE 5: Post-init (instance assemblies, topic analysis, AI listener)     │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
  * Simplified model using ModuleRegistry to coordinate initialization.
  * Core functionality delegated to modules: Core, AI, Chat, Connection, Trust.
  */
@@ -32,7 +47,83 @@ import { AssemblyCoreRecipes } from '@refinio/assembly.core';
 // MessageBus for debug logging
 import { createMessageBus } from '@refinio/one.core/lib/message-bus.js';
 
-// Set up MessageBus listener for CHUM/Connection debug messages
+// Instance tracking
+import { InstancePlan } from '@refinio/lama.core/plans/InstancePlan.js';
+import { storeVersionedObject, getIdObject } from '@refinio/one.core/lib/storage-versioned-objects.js';
+import { getInstanceIdHash, getInstanceOwnerIdHash } from '@refinio/one.core/lib/instance.js';
+
+// Trust.core recipes
+import { AllRecipes as TrustCoreRecipes, AllReverseMaps as TrustCoreReverseMaps } from '@refinio/trust.core/recipes';
+
+// Cube.core recipes
+import { CubeCoreRecipes } from '@refinio/cube.core';
+
+// Meaning.core recipes for semantic embedding dimension
+import { MeaningCoreRecipes } from '@refinio/meaning.core/recipes/index.js';
+
+// One.knowledge recipes for knowledge assembly (Artifact, KeywordClean)
+import { OneKnowledgeRecipes } from '@refinio/one.knowledge/lib/recipes/index.js';
+
+// Settings.core recipes and plans (for IoM-compatible settings)
+import { SettingsRecipes, SettingsPlan, InstanceSettingsStorage } from '@refinio/settings.core';
+import { registerLamaCoreSettings } from '@refinio/lama.core/settings';
+import type { SHA256IdHash } from '@refinio/one.core/lib/util/type-checks.js';
+import type { Instance } from '@refinio/one.core/lib/recipes.js';
+
+// Module system
+import { ModuleRegistry } from '@refinio/api/plan-system';
+import { planRegistry } from '@refinio/api/registry';
+import type { SyncRule } from '@refinio/sync.core/types/sync-types.js';
+import {
+    CoreModule,
+    IndexModule,
+    AIModule,
+    ChatModule,
+    TrustModule,
+    ConnectionModule,
+    AnalysisModule,
+    MemoryModule,
+    DeviceModule,
+    JournalModule,
+    MCPModule,
+    InstanceModule,
+    KnowledgeNavigatorModule
+} from '@refinio/lama.core/modules';
+
+// ExportPlan from lama.core (platform-agnostic, uses one.core implode)
+import { ExportPlan } from '@refinio/lama.core/plans/ExportPlan.js';
+
+// MeaningPlan for semantic similarity (knowledge navigation)
+import { MeaningPlan } from '@refinio/lama.core/plans/MeaningPlan.js';
+import { MeaningDimension } from '@refinio/meaning.core';
+import { setMeaningDimension } from '@refinio/lama.core/one-ai/models/Subject.js';
+
+// Use browser-local embeddings instead of Ollama
+import { getBrowserEmbeddingProvider } from '../services/BrowserEmbeddingProvider';
+
+// IngestionPlan for document ingestion (PDF, etc.)
+import { IngestionPlan } from '@refinio/memory.core/plans/IngestionPlan.js';
+
+// GlueIdentityPlan for glue.one publication identity management
+import { GlueIdentityPlan } from '@refinio/lama.core/plans/GlueIdentityPlan.js';
+import { getDefaultSecretKeysAsBase64, getDefaultKeys } from '@refinio/one.core/lib/keychain/keychain.js';
+import { getPublicKeys } from '@refinio/one.core/lib/keychain/key-storage-public.js';
+import { sign, ensureSecretSignKey } from '@refinio/one.core/lib/crypto/sign.js';
+import { uint8arrayToHexString } from '@refinio/one.core/lib/util/arraybuffer-to-and-from-hex-string.js';
+import { calculateIdHashOfObj } from '@refinio/one.core/lib/util/object.js';
+import { fromByteArray as toBase64, toByteArray as fromBase64 } from 'base64-js';
+
+// Browser-specific adapters
+import { BrowserLLMPlatform } from '../../../adapters/browser-llm-platform';
+import { browserOllamaValidator, browserConfigManager } from '../../../adapters/browser-llm-config';
+
+// Browser-specific plans
+import { BrowserDocumentUploadPlan } from '../plans/DocumentUploadPlan';
+
+// =============================================================================
+// DEBUG LOGGING SETUP
+// =============================================================================
+
 const debugBus = createMessageBus('browser-model');
 const CHUM_DEBUG = true;
 
@@ -71,66 +162,9 @@ debugBus.on('error', (src: string, ...messages: unknown[]) => {
     }
 });
 
-// Instance tracking
-import { InstancePlan } from '@refinio/lama.core/plans/InstancePlan.js';
-import { storeVersionedObject, getIdObject } from '@refinio/one.core/lib/storage-versioned-objects.js';
-import { getInstanceIdHash, getInstanceOwnerIdHash } from '@refinio/one.core/lib/instance.js';
-
-// Trust.core recipes
-import { AllRecipes as TrustCoreRecipes, AllReverseMaps as TrustCoreReverseMaps } from '@refinio/trust.core/recipes';
-
-// Cube.core recipes
-import { CubeCoreRecipes } from '@refinio/cube.core';
-
-// Meaning.core recipes for semantic embedding dimension
-import { MeaningCoreRecipes } from '@refinio/meaning.core/recipes/index.js';
-
-// One.knowledge recipes for knowledge assembly (Artifact, KeywordClean)
-import { OneKnowledgeRecipes } from '@refinio/one.knowledge/lib/recipes/index.js';
-
-// Settings.core recipes (for IoM-compatible settings)
-import { SettingsRecipes } from '@refinio/settings.core';
-
-// Module system
-import { ModuleRegistry } from '@refinio/api/plan-system';
-import {
-    CoreModule,
-    AIModule,
-    ChatModule,
-    TrustModule,
-    ConnectionModule,
-    AnalysisModule,
-    MemoryModule,
-    DeviceModule,
-    JournalModule,
-    MCPModule,
-    InstanceModule,
-    KnowledgeNavigatorModule,
-    type LLMConfigAdapter
-} from '@refinio/lama.core/modules';
-
-// ExportPlan from lama.core (platform-agnostic, uses one.core implode)
-import { ExportPlan } from '@refinio/lama.core/plans/ExportPlan.js';
-
-// MeaningPlan for semantic similarity (knowledge navigation)
-import { MeaningPlan } from '@refinio/lama.core/plans/MeaningPlan.js';
-import { MeaningDimension } from '@refinio/meaning.core';
-import { setMeaningDimension } from '@refinio/lama.core/one-ai/models/Subject.js';
-// Use browser-local embeddings instead of Ollama
-import { getBrowserEmbeddingProvider, preloadBrowserEmbeddings } from '../services/BrowserEmbeddingProvider';
-
-// IngestionPlan for document ingestion (PDF, etc.)
-import { IngestionPlan } from '@refinio/memory.core/plans/IngestionPlan.js';
-
-// BLOB storage for attachments
-import { storeArrayBufferAsBlob } from '@refinio/one.core/lib/storage-blob.js';
-
-// Browser-specific adapters
-import { BrowserLLMPlatform } from '../../../adapters/browser-llm-platform';
-import { browserOllamaValidator, browserConfigManager } from '../../../adapters/browser-llm-config';
-
-// Browser-specific plans
-import { BrowserDocumentUploadPlan } from '../plans/DocumentUploadPlan';
+// =============================================================================
+// MODEL CLASS
+// =============================================================================
 
 /**
  * Model - Main model class for LAMA Browser
@@ -139,15 +173,20 @@ import { BrowserDocumentUploadPlan } from '../plans/DocumentUploadPlan';
  * Modules handle their own initialization and dependencies.
  */
 export default class Model {
+    // Public events
     public onOneModelsReady = new OEvent<() => void>();
     public onContactsChanged = new OEvent<() => void>();
     public onTopicsChanged = new OEvent<() => void>();
     public onConnectionsChanged = new OEvent<() => void>();
+
+    // State
     public initialized: boolean = false;
     public ownerId: string | null = null;
     public instanceId: string | null = null;
     private _instanceName: string = 'default';
+    private _initializing = false;
 
+    // Module system
     private moduleRegistry: ModuleRegistry;
     private modules: Map<string, any> = new Map();
 
@@ -157,8 +196,20 @@ export default class Model {
     // Document ingestion plan
     public ingestionPlan: IngestionPlan | null = null;
 
+    // Glue.one identity plan
+    public glueIdentityPlan: GlueIdentityPlan | null = null;
+
+    // Settings plan reference (for plans that need it post-init)
+    private _settingsPlan: SettingsPlan | null = null;
+
     // Document upload plan (browser-specific wrapper for DocumentAIPlan and MessageAttachmentPlan)
     public documentUploadPlan: BrowserDocumentUploadPlan | null = null;
+
+    // Browser-specific adapters (stored for Phase 2)
+    private _llmPlatformInstance: BrowserLLMPlatform;
+
+    // MeaningPlan shell (supplied in Phase 1, filled in Phase 3)
+    private _meaningPlan: MeaningPlan;
 
     /**
      * Instance name getter for AISettingsManager compatibility
@@ -185,14 +236,42 @@ export default class Model {
         // Initialize module registry
         this.moduleRegistry = new ModuleRegistry();
 
+        // PHASE 1: Supply platform adapters
+        this.supplyPlatformAdapters();
+
+        // PHASE 2: Register modules
+        this.registerModules();
+
+        // PHASE 2.5: Setup ONE.core MultiUser with recipes
+        this.setupOneCore();
+
+        console.log('[Model] Construction complete - modules registered');
+    }
+
+    // =========================================================================
+    // PHASE 1: SUPPLY PLATFORM ADAPTERS
+    // =========================================================================
+
+    private supplyPlatformAdapters(): void {
+        console.log('[Model] Phase 1: Supplying platform adapters...');
+
         // Supply Model instance as "OneCore" for modules that need it
         this.moduleRegistry.supply('OneCore', this);
 
-        // Create single BrowserLLMPlatform instance to be shared
-        const llmPlatform = new BrowserLLMPlatform();
+        // SyncRules — ConnectionModule optionally demands these for CHUM import filtering.
+        // RoleCertificate must be accepted from any known peer (not unknown).
+        const syncRules = new Map<string, SyncRule>([
+            ['RoleCertificate', {
+                canImport: (context) => context.peerTrustLevel !== 'unknown'
+            }]
+        ]);
+        this.moduleRegistry.supply('SyncRules', syncRules);
 
-        // Supply browser-specific adapters before module registration
-        this.moduleRegistry.supply('LLMPlatform', llmPlatform);
+        // Create single BrowserLLMPlatform instance to be shared
+        this._llmPlatformInstance = new BrowserLLMPlatform();
+
+        // Supply browser-specific adapters
+        this.moduleRegistry.supply('LLMPlatform', this._llmPlatformInstance);
         this.moduleRegistry.supply('OllamaValidator', browserOllamaValidator);
         this.moduleRegistry.supply('LLMConfigManager', browserConfigManager);
 
@@ -200,47 +279,83 @@ export default class Model {
         const exportPlan = new ExportPlan();
         this.moduleRegistry.supply('ExportPlan', exportPlan);
 
-        // Create and register modules
-        this.modules.set('core', new CoreModule(commServerUrl));
+        // Supply MeaningPlan synchronously (empty shell).
+        // Modules that demand MeaningPlan get the shared instance immediately.
+        // It becomes operational after login when supplyMeaningDimension() fills it.
+        this._meaningPlan = new MeaningPlan();
+        this.moduleRegistry.supply('MeaningPlan', this._meaningPlan);
+
+        console.log('[Model] Phase 1 complete');
+    }
+
+    // =========================================================================
+    // PHASE 2: REGISTER MODULES
+    // =========================================================================
+
+    private registerModules(): void {
+        console.log('[Model] Phase 2: Registering modules...');
+
+        // Core models (LeuteModel, ChannelManager, TopicModel)
+        this.modules.set('core', new CoreModule(this.commServerUrl));
+
+        // Dimensional indexing (O(1) contact/topic lookups - depends on LeuteModel, TopicModel)
+        this.modules.set('index', new IndexModule());
+
+        // Trust management
         this.modules.set('trust', new TrustModule());
+
+        // Chat functionality
         this.modules.set('chat', new ChatModule());
+
+        // Topic analysis
         this.modules.set('analysis', new AnalysisModule());
+
+        // AI functionality
         this.modules.set('ai', new AIModule(
-            llmPlatform, // Use shared instance
+            this._llmPlatformInstance,
             { ollamaValidator: browserOllamaValidator }
         ));
-        // Create ConnectionModule with key mismatch handler
-    const connectionModule = new ConnectionModule(commServerUrl, webUrl);
-    connectionModule.setKeyMismatchHandler(async (remotePersonId: string, message: string) => {
-        console.warn('[Model] Key mismatch detected:', remotePersonId);
 
-        // Show browser confirmation dialog with security warning
-        const proceed = window.confirm(
-            '⚠️ SECURITY WARNING\n\n' +
-            message + '\n\n' +
-            'Click OK to trust the new key and proceed.\n' +
-            'Click Cancel to reject this connection.\n\n' +
-            '(If you did not expect this, click Cancel for safety)'
-        );
+        // P2P connections with key mismatch handler
+        const connectionModule = new ConnectionModule(this.commServerUrl, this.webUrl);
+        connectionModule.setKeyMismatchHandler(async (remotePersonId: string, message: string) => {
+            console.warn('[Model] Key mismatch detected:', remotePersonId);
 
-        if (proceed) {
-            console.log('[Model] User approved key mismatch - proceeding with connection');
-        } else {
-            console.log('[Model] User rejected key mismatch - aborting connection');
-        }
+            const proceed = window.confirm(
+                'SECURITY WARNING\n\n' +
+                message + '\n\n' +
+                'Click OK to trust the new key and proceed.\n' +
+                'Click Cancel to reject this connection.\n\n' +
+                '(If you did not expect this, click Cancel for safety)'
+            );
 
-        return proceed;
-    });
-    this.modules.set('connection', connectionModule);
+            if (proceed) {
+                console.log('[Model] User approved key mismatch - proceeding with connection');
+            } else {
+                console.log('[Model] User rejected key mismatch - aborting connection');
+            }
+
+            return proceed;
+        });
+        this.modules.set('connection', connectionModule);
+
+        // Device management
         this.modules.set('device', new DeviceModule());
+
+        // Memory management
         this.modules.set('memory', new MemoryModule());
+
+        // Knowledge navigation
         this.modules.set('knowledgeNavigator', new KnowledgeNavigatorModule());
+
+        // Journal/audit trail
         this.modules.set('journal', new JournalModule());
+
+        // MCP (remote MCP via chat)
         this.modules.set('mcp', new MCPModule());
 
-        // Create and register InstanceModule
-        const instanceModule = new InstanceModule();
-        this.modules.set('instance', instanceModule);
+        // Instance registry
+        this.modules.set('instance', new InstanceModule());
 
         // Register all modules with the registry
         for (const [name, module] of this.modules) {
@@ -248,7 +363,16 @@ export default class Model {
             this.moduleRegistry.register(module);
         }
 
-        // Setup ONE.core MultiUser with all recipes
+        console.log('[Model] Phase 2 complete');
+    }
+
+    // =========================================================================
+    // PHASE 2.5: SETUP ONE.CORE
+    // =========================================================================
+
+    private setupOneCore(): void {
+        console.log('[Model] Phase 2.5: Setting up ONE.core...');
+
         this.one = new MultiUser({
             directory: 'lama.browser.storage',
             recipes: [
@@ -290,10 +414,12 @@ export default class Model {
         this.one.onLogin(this.init.bind(this));
         this.one.onLogout(this.shutdown.bind(this));
 
-        console.log('[Model] Model construction complete - modules registered');
+        console.log('[Model] Phase 2.5 complete');
     }
 
-    private _initializing = false;
+    // =========================================================================
+    // INIT (PHASES 3-5) - Called on login
+    // =========================================================================
 
     async init(instanceName?: string, _secret?: string): Promise<void> {
         if (this.initialized) {
@@ -313,142 +439,33 @@ export default class Model {
         }
 
         try {
-            console.log('[Model] ===== Initializing all modules via ModuleRegistry =====');
+            console.log('[Model] ===== Starting initialization (Phases 3-5) =====');
 
-            // Create StoryFactory and auto-supply to all modules that demand it
-            // Must be done BEFORE initAll() so JournalModule receives it
-            console.log('[Model] Setting up StoryFactory...');
-            this.moduleRegistry.setStorageFunction(storeVersionedObject);
+            // PHASE 3: Setup providers
+            await this.setupProviders();
 
-            // Initialize MeaningDimension and MeaningPlan for semantic search
-            // KnowledgeNavigatorModule demands MeaningPlan, must be supplied before initAll()
-            console.log('[Model] Setting up MeaningDimension and MeaningPlan...');
-            // Use browser-local embeddings (transformers.js) instead of Ollama
-            const embeddingProvider = getBrowserEmbeddingProvider();
-            // Start loading model in background (don't await - let it load while other init happens)
-            console.log('[Model] Starting background load of nomic-embed-text model...');
-            embeddingProvider.load().then(() => {
-                console.log('[Model] ✅ Embedding model loaded and ready');
-            }).catch(error => {
-                console.warn('[Model] ⚠️ Embedding model failed to load:', error);
-            });
-            const meaningDimension = new MeaningDimension({
-                embeddingProvider
-            });
-            await meaningDimension.init();
-
-            // Wire MeaningDimension to Subject model for automatic embedding indexing
-            setMeaningDimension(meaningDimension);
-
-            const meaningPlan = new MeaningPlan(meaningDimension, embeddingProvider);
-            this.moduleRegistry.supply('MeaningDimension', meaningDimension);
-            this.moduleRegistry.supply('MeaningPlan', meaningPlan);
-            this.moduleRegistry.supply('EmbeddingProvider', embeddingProvider);
-            console.log('[Model] ✅ MeaningDimension and MeaningPlan supplied');
-
-            // Use ModuleRegistry for automatic dependency-ordered initialization
-            // CoreModule will initialize PlanObjectManager when OneCore Instance is ready
+            // PHASE 4: Initialize all modules
+            console.log('[Model] Phase 4: Initializing all modules...');
             await this.moduleRegistry.initAll();
 
-            // Set ownerId and instanceId from ONE.core after login
-            // These are available after CoreModule initializes leuteModel
-            this.ownerId = getInstanceOwnerIdHash() as string | null;
-            this.instanceId = getInstanceIdHash() as string | null;
-            console.log('[Model] Owner ID:', this.ownerId?.substring(0, 8));
-
-            // Configure InstanceModule with local instance info
-            const instanceModule = this.modules.get('instance') as InstanceModule;
-            if (instanceModule && this.instanceId) {
-                instanceModule.setLocalInstance(
-                    this.instanceId as any,
-                    'browser',
-                    ['AIAssistantPlan', 'ChatPlan', 'ConnectionPlan', 'MemoryPlan']
-                );
+            // Check for genuinely unsatisfied demands after init
+            const unsatisfied = this.moduleRegistry.getUnsatisfiedDemands();
+            if (unsatisfied.length > 0) {
+                console.warn('[Model] Unsatisfied demands after init:', unsatisfied.map((d: any) => d.targetType));
             }
 
-            // Create retroactive Assemblies for Instance and Owner (bootstrap problem)
-            // Instance and Owner were created before StoryFactory existed
-            try {
-                const storyFactory = this.moduleRegistry.getStoryFactory();
-                if (storyFactory && this.ownerId && this.instanceId) {
-                    const instancePlan = new InstancePlan({
-                        storyFactory,
-                        ownerId: this.ownerId as any,
-                        instanceId: this.instanceId as any,
-                        instanceName: this.one.currentlyLoggedInInstanceName || 'lama-browser'
-                    });
-                    await instancePlan.init();
-                    await instancePlan.recordInstanceCreation();
-                    console.log('[Model] ✅ Instance and Owner assemblies created in journal');
-                } else {
-                    console.warn('[Model] Cannot record instance creation - missing StoryFactory or IDs');
-                    console.warn('[Model] ownerId:', !!this.ownerId, 'instanceId:', !!this.instanceId);
-                }
-            } catch (error) {
-                console.error('[Model] Failed to record instance creation:', error);
-                // Non-critical - continue without instance assembly
-            }
+            console.log('[Model] Phase 4 complete');
 
-            // Initialize topic analysis (creates TopicAnalysisModel, ProposalsPlan, etc.)
-            console.log('[Model] Initializing topic analysis...');
-            const aiModule = this.modules.get('ai');
-            await aiModule.initTopicAnalysis();
-            console.log('[Model] ✅ Topic analysis initialized');
-
-            // Discover and register local models from BrowserLLMPlatform
-            console.log('[Model] Discovering local models...');
-            const platform = aiModule.llmManager.platform;
-            if (platform?.getAvailableLocalModels) {
-                const localModels = await platform.getAvailableLocalModels();
-                if (localModels.length > 0) {
-                    await aiModule.llmManager.discoverLocalModels(localModels.map(m => ({
-                        id: m.id,
-                        name: m.name,
-                        familyName: m.name.split(' ')[0], // "Granite", "Phi"
-                        type: 'text-generation' as const,
-                        contextLength: 4096,
-                        status: 'available' as const,
-                        sizeBytes: m.size
-                    })));
-                    console.log(`[Model] ✅ Registered ${localModels.length} local models`);
-                }
-            }
+            // PHASE 5: Post-init
+            await this.postInit();
 
             // Mark as initialized
             this.initialized = true;
-
-            // CRITICAL: Scan existing conversations to register AI topics BEFORE starting listener
-            console.log('[Model] Scanning existing conversations for AI topics...');
-            const registeredCount = await this.aiAssistantPlan.scanExistingConversations();
-            console.log(`[Model] ✅ Registered ${registeredCount} AI topics`);
-
-            // Initialize ingestion plan after AI is ready
-            console.log('[Model] Initializing ingestion plan...');
-            this.ingestionPlan = new IngestionPlan({
-                topicModel: this.topicModel,
-                leuteModel: this.leuteModel,
-                aiAssistantPlan: this.aiAssistantPlan,
-                aiPlan: this.aiPlan
-            });
-            console.log('[Model] ✅ Ingestion plan initialized');
-
-            // Initialize document upload plan after AI and chat are ready
-            console.log('[Model] Initializing document upload plan...');
-            this.documentUploadPlan = new BrowserDocumentUploadPlan(this);
-            console.log('[Model] ✅ Document upload plan initialized');
-
-            // CRITICAL: Start AI message listener after all initialization
-            console.log('[Model] Starting AI message listener...');
-            await aiModule.startMessageListener(this.ownerId);
-            console.log('[Model] ✅ AI message listener started');
-
-            // Note: Channel update listener is now in CoreModule (onTopicUpdated event)
-            // UI components subscribe to coreModule.onTopicUpdated via this.onTopicUpdated getter
-
-            console.log('[Model] ✅ All modules initialized');
+            console.log('[Model] ===== All phases complete =====');
             this.onOneModelsReady.emit();
+
         } catch (e) {
-            console.error('[Model] Module initialization failed:', e);
+            console.error('[Model] Initialization failed:', e);
             this.initialized = false;
             this._initializing = false;
             await this.shutdown().catch(console.error);
@@ -456,21 +473,293 @@ export default class Model {
         }
     }
 
+    // =========================================================================
+    // PHASE 3: SETUP PROVIDERS
+    // =========================================================================
+
+    private async setupProviders(): Promise<void> {
+        console.log('[Model] Phase 3: Setting up providers...');
+
+        // StoryFactory for journal tracking (must be before initAll)
+        this.moduleRegistry.setStorageFunction(storeVersionedObject);
+
+        // MeaningDimension — run in background so it doesn't block login.
+        // MeaningPlan was already supplied (empty) in Phase 1; setDimension()
+        // fills it when the embedding model finishes loading.
+        this.supplyMeaningDimension().catch(error => {
+            console.warn('[Model] Background MeaningDimension init failed:', error);
+        });
+
+        // SettingsPlan (requires instanceId)
+        await this.supplySettingsPlan();
+
+        console.log('[Model] Phase 3 complete');
+    }
+
+    /**
+     * Initialize MeaningDimension in the background.
+     * The shared MeaningPlan instance is supplied synchronously in Phase 1
+     * so modules can init immediately. This fills it when ready.
+     */
+    private async supplyMeaningDimension(): Promise<void> {
+        console.log('[Model] Setting up MeaningDimension (background)...');
+
+        // Use browser-local embeddings (transformers.js) instead of Ollama
+        const embeddingProvider = getBrowserEmbeddingProvider();
+
+        // Start loading model in background (don't await - let it load while other init happens)
+        console.log('[Model] Starting background load of nomic-embed-text model...');
+        embeddingProvider.load().then(() => {
+            console.log('[Model] Embedding model loaded and ready');
+        }).catch(error => {
+            console.warn('[Model] Embedding model failed to load:', error);
+        });
+
+        const meaningDimension = new MeaningDimension({
+            embeddingProvider
+        });
+        await meaningDimension.init();
+
+        // Wire MeaningDimension to Subject model for automatic embedding indexing
+        setMeaningDimension(meaningDimension);
+
+        // Fill the shared MeaningPlan instance (modules already hold a reference)
+        this._meaningPlan.setDimension(meaningDimension, embeddingProvider);
+
+        // Supply remaining deps to registry
+        this.moduleRegistry.supply('MeaningDimension', meaningDimension);
+        this.moduleRegistry.supply('EmbeddingProvider', embeddingProvider);
+
+        console.log('[Model] MeaningDimension supplied');
+    }
+
+    private async supplySettingsPlan(): Promise<void> {
+        const instanceId = getInstanceIdHash();
+        if (!instanceId) {
+            console.warn('[Model] Cannot create SettingsPlan - instanceId not available');
+            return;
+        }
+
+        try {
+            // Register lama.core settings sections before creating storage
+            registerLamaCoreSettings();
+
+            // Create InstanceSettingsStorage with instanceIdHash
+            const instanceSettingsStorage = new InstanceSettingsStorage({
+                instanceIdHash: instanceId as SHA256IdHash<Instance>
+            });
+
+            // Create and supply SettingsPlan
+            const settingsPlan = new SettingsPlan(instanceSettingsStorage);
+            this._settingsPlan = settingsPlan;
+            this.moduleRegistry.supply('SettingsPlan', settingsPlan);
+
+            console.log('[Model] SettingsPlan supplied');
+        } catch (error) {
+            console.warn('[Model] SettingsPlan creation failed:', error);
+        }
+    }
+
+    // =========================================================================
+    // PHASE 5: POST-INIT
+    // =========================================================================
+
+    private async postInit(): Promise<void> {
+        console.log('[Model] Phase 5: Post-init...');
+
+        // Set ownerId and instanceId from ONE.core
+        this.ownerId = getInstanceOwnerIdHash() as string | null;
+        this.instanceId = getInstanceIdHash() as string | null;
+        console.log('[Model] Owner ID:', this.ownerId?.substring(0, 8));
+
+        // Configure InstanceModule with local instance info
+        this.configureInstanceModule();
+
+        // Create retroactive Assemblies for Instance and Owner
+        await this.createInstanceAssemblies();
+
+        // Initialize topic analysis (creates TopicAnalysisPlan, ProposalsPlan, AIPlan)
+        await this.initializeTopicAnalysis();
+
+        // Discover local models
+        await this.discoverLocalModels();
+
+        // Load AI/LLM data from storage (LLMObjectManager + AIAssistantPlan.init)
+        await this.loadAIData();
+
+        // Initialize document plans
+        this.initializeDocumentPlans();
+
+        // Initialize glue identity plan
+        this.initializeGlueIdentityPlan();
+
+        // Start AI message listener (includes scanning existing conversations)
+        await this.startAIMessageListener();
+
+        // Auto-connect to glue.one server (fire-and-forget, non-fatal)
+        const connectionModule = this.modules.get('connection') as ConnectionModule;
+        connectionModule?.connectToGlueServer().catch(err =>
+            console.warn('[Model] glue.one auto-connect failed:', err));
+
+        console.log('[Model] Phase 5 complete');
+    }
+
+    private configureInstanceModule(): void {
+        const instanceModule = this.modules.get('instance') as InstanceModule;
+        if (instanceModule && this.instanceId) {
+            instanceModule.setLocalInstance(
+                this.instanceId as any,
+                'browser',
+                ['AIAssistantPlan', 'ChatPlan', 'ConnectionPlan', 'MemoryPlan']
+            );
+        }
+    }
+
+    private async createInstanceAssemblies(): Promise<void> {
+        try {
+            const storyFactory = this.moduleRegistry.getStoryFactory();
+            if (!storyFactory || !this.ownerId || !this.instanceId) {
+                console.warn('[Model] Cannot record instance creation - missing StoryFactory or IDs');
+                return;
+            }
+
+            const instancePlan = new InstancePlan({
+                storyFactory,
+                ownerId: this.ownerId as any,
+                instanceId: this.instanceId as any,
+                instanceName: this.one.currentlyLoggedInInstanceName || 'lama-browser'
+            });
+            await instancePlan.init();
+            await instancePlan.recordInstanceCreation();
+            console.log('[Model] Instance assemblies created');
+        } catch (error) {
+            console.error('[Model] Failed to record instance creation:', error);
+            // Non-critical - continue without instance assembly
+        }
+    }
+
+    private async initializeTopicAnalysis(): Promise<void> {
+        console.log('[Model] Initializing topic analysis...');
+        const aiModule = this.modules.get('ai');
+        await aiModule.initTopicAnalysis();
+        console.log('[Model] Topic analysis initialized');
+    }
+
+    private async discoverLocalModels(): Promise<void> {
+        console.log('[Model] Discovering local models...');
+        const aiModule = this.modules.get('ai');
+        const platform = aiModule.llmManager.platform;
+
+        if (platform?.getAvailableLocalModels) {
+            const localModels = await platform.getAvailableLocalModels();
+            if (localModels.length > 0) {
+                await aiModule.llmManager.discoverLocalModels(localModels.map((m: any) => ({
+                    id: m.id,
+                    name: m.name,
+                    familyName: m.name.split(' ')[0],
+                    type: 'text-generation' as const,
+                    contextLength: 4096,
+                    status: 'available' as const,
+                    sizeBytes: m.size
+                })));
+                console.log(`[Model] Registered ${localModels.length} local models`);
+            }
+        }
+    }
+
+    private async loadAIData(): Promise<void> {
+        console.log('[Model] Loading AI/LLM data from storage...');
+        const aiModule = this.modules.get('ai') as AIModule;
+        await aiModule.loadData();
+        console.log('[Model] AI data loaded');
+    }
+
+    private initializeDocumentPlans(): void {
+        // Initialize ingestion plan
+        console.log('[Model] Initializing ingestion plan...');
+        this.ingestionPlan = new IngestionPlan({
+            topicModel: this.topicModel,
+            leuteModel: this.leuteModel,
+            aiAssistantPlan: this.aiAssistantPlan,
+            aiPlan: this.aiPlan
+        });
+        console.log('[Model] Ingestion plan initialized');
+
+        // Initialize document upload plan
+        console.log('[Model] Initializing document upload plan...');
+        this.documentUploadPlan = new BrowserDocumentUploadPlan(this);
+        console.log('[Model] Document upload plan initialized');
+    }
+
+    private initializeGlueIdentityPlan(): void {
+        try {
+            if (!this._settingsPlan || !this.leuteModel) {
+                console.warn('[Model] Cannot create GlueIdentityPlan - dependencies not ready');
+                return;
+            }
+
+            this.glueIdentityPlan = new GlueIdentityPlan({
+                leuteModel: this.leuteModel,
+                settingsPlan: this._settingsPlan,
+                getDefaultSecretKeysAsBase64,
+                getDefaultKeys,
+                getPublicKeys,
+                sign,
+                ensureSecretSignKey,
+                uint8arrayToHexString,
+                calculateIdHashOfObj,
+                fromBase64,
+                toBase64,
+            });
+            console.log('[Model] GlueIdentityPlan initialized');
+        } catch (error) {
+            console.warn('[Model] GlueIdentityPlan creation failed:', error);
+        }
+    }
+
+    private async startAIMessageListener(): Promise<void> {
+        console.log('[Model] Starting AI message listener...');
+        const aiModule = this.modules.get('ai');
+        await aiModule.startMessageListener(this.ownerId);
+        console.log('[Model] AI message listener started');
+    }
+
+    // =========================================================================
+    // SHUTDOWN
+    // =========================================================================
+
     async shutdown(): Promise<void> {
         console.log('[Model] Shutting down all modules...');
 
         // Use ModuleRegistry for automatic reverse-order shutdown
-        // Note: Channel update listener cleanup is handled by CoreModule
         await this.moduleRegistry.shutdownAll();
 
         this.initialized = false;
         this._initializing = false;
         this.ownerId = null;
 
-        console.log('[Model] ✅ Shutdown complete');
+        console.log('[Model] Shutdown complete');
     }
 
-    // Expose module services via getters
+    // =========================================================================
+    // UTILITY METHODS
+    // =========================================================================
+
+    /**
+     * Update the display name advertised via mDNS discovery.
+     * This updates the TXT record name field - connections are not affected.
+     */
+    updateDiscoveryDisplayName(newName: string): void {
+        const connectionModule = this.modules.get('connection');
+        if (connectionModule?.updateDiscoveryDisplayName) {
+            connectionModule.updateDiscoveryDisplayName(newName);
+        }
+    }
+
+    // =========================================================================
+    // GETTERS - Module Services
+    // =========================================================================
+
     // CoreModule services
     get leuteModel() { return this.modules.get('core').leuteModel; }
     get channelManager() { return this.modules.get('core').channelManager; }
@@ -512,17 +801,6 @@ export default class Model {
     get groupChatPlan() { return this.modules.get('connection').groupChatPlan; }
     get discoveryService() { return this.modules.get('connection').discoveryService; }
 
-    /**
-     * Update the display name advertised via mDNS discovery.
-     * This updates the TXT record name field - connections are not affected.
-     */
-    updateDiscoveryDisplayName(newName: string): void {
-        const connectionModule = this.modules.get('connection');
-        if (connectionModule?.updateDiscoveryDisplayName) {
-            connectionModule.updateDiscoveryDisplayName(newName);
-        }
-    }
-
     // TrustModule services
     get trustModel() { return this.modules.get('trust').trustModel; }
     get trustPlan() { return this.modules.get('trust').trustPlan; }
@@ -551,12 +829,18 @@ export default class Model {
     // InstanceModule services (IoM/IoP)
     get instanceRegistryPlan() { return this.modules.get('instance')?.instanceRegistryPlan; }
 
+    // PlanRegistry (global singleton)
+    get planRegistry() { return planRegistry; }
+
     // Additional services (to be moved to appropriate modules in future iterations)
     get cubeStorage() { return this.modules.get('ai').cubeStorage; }
     get cubePlan() { return this.modules.get('ai').cubePlan; }
 }
 
-// TODO: Remove these stubs when modular architecture is fully implemented
+// =============================================================================
+// GLOBAL MODEL SINGLETON
+// =============================================================================
+
 let globalModel: Model | null = null;
 
 export function getModel(): Model | null {

@@ -12,7 +12,8 @@
     "@refinio/api": "workspace:*",
     "@refinio/chat.core": "workspace:*",
     "@refinio/lama.core": "workspace:*",
-    "@refinio/local.core": "workspace:*"
+    "@refinio/local.core": "workspace:*",
+    "@refinio/one.knowledge": "workspace:*"
   },
   "devDependencies": {
     "@refinio/assembly.core": "workspace:*",
